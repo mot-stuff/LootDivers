@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { measureCanvasViewport } from "../../src/adapters/browser/canvas-viewport";
-import { isCanvasKeyboardCaptureAllowed } from "../../src/adapters/browser/keyboard-capture";
+import {
+  captureCanvasKeyboardEvent,
+  isCanvasKeyboardCaptureAllowed,
+} from "../../src/adapters/browser/keyboard-capture";
 import { createReadModelChannel } from "../../src/adapters/ui/read-model-channel";
 
 describe("UI shell boundaries", () => {
@@ -71,6 +74,7 @@ describe("UI shell boundaries", () => {
       ctrlKey: false,
       isComposing: false,
       metaKey: false,
+      shiftKey: false,
     };
 
     expect(isCanvasKeyboardCaptureAllowed(canvas, canvas, plainEvent)).toBe(
@@ -91,5 +95,40 @@ describe("UI shell boundaries", () => {
         code: "Tab",
       }),
     ).toBe(false);
+  });
+
+  it("emits no intents for focus-navigation modifier sequences", () => {
+    const canvas = {} as HTMLCanvasElement;
+    const emit = vi.fn();
+    const baseEvent = {
+      altKey: false,
+      code: "Tab",
+      ctrlKey: false,
+      isComposing: false,
+      metaKey: false,
+      preventDefault: vi.fn(),
+      shiftKey: false,
+      stopPropagation: vi.fn(),
+    };
+    const focusNavigationSequence = [
+      { ...baseEvent, code: "ShiftLeft", shiftKey: true },
+      { ...baseEvent, shiftKey: true },
+      { ...baseEvent, code: "ControlLeft", ctrlKey: true },
+      { ...baseEvent, ctrlKey: true },
+      { ...baseEvent, code: "AltLeft", altKey: true },
+      { ...baseEvent, altKey: true },
+      { ...baseEvent, code: "MetaLeft", metaKey: true },
+      { ...baseEvent, metaKey: true },
+    ];
+
+    for (const event of focusNavigationSequence) {
+      expect(captureCanvasKeyboardEvent(canvas, canvas, event, { emit })).toBe(
+        false,
+      );
+    }
+
+    expect(emit).not.toHaveBeenCalled();
+    expect(baseEvent.preventDefault).not.toHaveBeenCalled();
+    expect(baseEvent.stopPropagation).not.toHaveBeenCalled();
   });
 });

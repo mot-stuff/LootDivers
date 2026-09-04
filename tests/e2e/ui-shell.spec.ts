@@ -53,9 +53,22 @@ test("DOM focus does not leak keyboard input into canvas capture", async ({
   await expect(page.getByTestId("keyboard-count")).toHaveText("1");
   await expect(page.getByTestId("intent-count")).toHaveText("2");
 
-  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("link", { name: "Skip canvas" })).toBeFocused();
+  await expect(page.getByTestId("keyboard-count")).toHaveText("1");
+  await expect(page.getByTestId("intent-count")).toHaveText("2");
   await page.keyboard.press("w");
   await expect(page.getByTestId("keyboard-count")).toHaveText("1");
+  await expect(page.getByTestId("intent-count")).toHaveText("2");
+
+  await canvas.focus();
+  await page.keyboard.press("Tab");
+  await expect(diagnosticButton).toBeFocused();
+  await expect(page.getByTestId("keyboard-count")).toHaveText("1");
+  await expect(page.getByTestId("intent-count")).toHaveText("2");
+  await page.keyboard.press("w");
+  await expect(page.getByTestId("keyboard-count")).toHaveText("1");
+  await expect(page.getByTestId("intent-count")).toHaveText("2");
   expect(failures).toEqual([]);
 });
 

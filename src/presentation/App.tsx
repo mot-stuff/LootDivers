@@ -61,17 +61,16 @@ export function App({ bindings }: AppProps) {
             <dd data-testid="keyboard-count">{model.capturedKeyboardCount}</dd>
           </div>
         </dl>
-        <section
-          class={
-            model.phase.kind === "error" ? "boot-status error" : "boot-status"
-          }
-          aria-live="polite"
-          data-testid="boot-status"
-        >
-          {model.phase.kind === "loading" && model.phase.message}
-          {model.phase.kind === "ready" && "Foundation ready"}
-          {model.phase.kind === "error" && model.phase.heading}
-        </section>
+        {model.phase.kind === "ready" && (
+          <section
+            class="boot-status"
+            role="status"
+            aria-live="polite"
+            data-testid="boot-status"
+          >
+            Foundation ready
+          </section>
+        )}
       </header>
 
       <section class="game-region" aria-label="Renderer diagnostic">
@@ -144,9 +143,7 @@ export function App({ bindings }: AppProps) {
         >
           Send diagnostic intent
         </button>
-        <output aria-live="polite">
-          Last intent: {model.lastIntentType ?? "none"}
-        </output>
+        <output>Last intent: {model.lastIntentType ?? "none"}</output>
       </section>
     </main>
   );

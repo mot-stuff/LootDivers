@@ -6,7 +6,7 @@ export function isCanvasKeyboardCaptureAllowed(
   canvas: HTMLCanvasElement,
   event: Pick<
     KeyboardEvent,
-    "altKey" | "code" | "ctrlKey" | "isComposing" | "metaKey"
+    "altKey" | "code" | "ctrlKey" | "isComposing" | "metaKey" | "shiftKey"
   >,
 ): boolean {
   return (
@@ -15,8 +15,38 @@ export function isCanvasKeyboardCaptureAllowed(
     !event.isComposing &&
     !event.altKey &&
     !event.ctrlKey &&
-    !event.metaKey
+    !event.metaKey &&
+    !event.shiftKey
   );
+}
+
+export function captureCanvasKeyboardEvent(
+  activeElement: Element | null,
+  canvas: HTMLCanvasElement,
+  event: Pick<
+    KeyboardEvent,
+    | "altKey"
+    | "code"
+    | "ctrlKey"
+    | "isComposing"
+    | "metaKey"
+    | "preventDefault"
+    | "shiftKey"
+    | "stopPropagation"
+  >,
+  intents: IntentSink<ShellIntent>,
+): boolean {
+  if (!isCanvasKeyboardCaptureAllowed(activeElement, canvas, event)) {
+    return false;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  intents.emit({
+    type: "shell.canvas-keyboard-observed",
+    code: event.code,
+  });
+  return true;
 }
 
 export function installKeyboardCapture(
@@ -28,18 +58,7 @@ export function installKeyboardCapture(
   };
 
   const capture = (event: KeyboardEvent): void => {
-    if (
-      !isCanvasKeyboardCaptureAllowed(document.activeElement, canvas, event)
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    intents.emit({
-      type: "shell.canvas-keyboard-observed",
-      code: event.code,
-    });
+    captureCanvasKeyboardEvent(document.activeElement, canvas, event, intents);
   };
 
   canvas.addEventListener("pointerdown", focusCanvas);

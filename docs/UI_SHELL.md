@@ -24,15 +24,17 @@ into gameplay behavior as part of Phase 0.
 
 The canvas is keyboard-focusable, labelled, and described by visible keyboard
 instructions. Window-level keyboard capture accepts an event only while the
-canvas itself is `document.activeElement`. It ignores composing or modified
-events and lets `Tab` leave the canvas. Focus on a DOM control therefore cannot
-reach the canvas input sink.
+canvas itself is `document.activeElement`. It ignores composing events, `Tab`,
+and every shifted or modifier-key sequence. This includes the modifier keydown
+that occurs before `Shift+Tab`, so focus navigation emits no canvas intent
+before focus leaves. Focus on a DOM control cannot reach the canvas input sink.
 
 The shell includes:
 
 - a keyboard-visible skip link;
 - semantic heading, diagnostic list, renderer region, buttons, and output;
-- polite loading status and assertive error alerts;
+- one polite loading status or one assertive error alert, without a duplicate
+  live-region summary;
 - visible focus indicators;
 - actionable WebGL2 failure guidance and retry intent;
 - no color-only loading or error message.
@@ -59,8 +61,10 @@ Run this review against the production build with browser zoom at 100%:
 3. Focus **Send diagnostic intent**, press `W`, then `Space`. Confirm `W` does
    not increase **Canvas keys**, while `Space` activates the button once.
 4. Focus the canvas and press `W`. Confirm **Canvas keys** increments once.
-5. Press `Tab` from the canvas, then `W`. Confirm focus leaves the canvas and
-   **Canvas keys** no longer increments.
+5. Press `Shift+Tab` from the canvas. Confirm neither **Intents** nor **Canvas
+   keys** increments before focus moves to the skip link. Repeat with `Tab`
+   toward the diagnostic button, then press `W` and confirm both counts remain
+   unchanged.
 6. Force or encounter WebGL2 failure. Confirm the error is announced, all
    guidance is readable, and **Retry renderer** is keyboard operable.
 7. Repeat at 1024×768 and 1920×1080. Confirm no horizontal scrolling, clipping,
