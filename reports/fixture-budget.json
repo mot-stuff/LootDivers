@@ -1,0 +1,31 @@
+{
+  "task": "TASK-P0-008",
+  "command": "node scripts/report-fixture-budget.mjs",
+  "files": [
+    {
+      "path": "public/assets/technical-entities.svg",
+      "rawBytes": 2280,
+      "brotliBytes": 469,
+      "sha256": "0345926f4d4bb4b4d4c0b8384f3e1dfc546e1a61956286a30d542cfceefdfb8a"
+    },
+    {
+      "path": "public/zones/technical-isometric.zone.json",
+      "rawBytes": 10139,
+      "brotliBytes": 648,
+      "sha256": "836fe1b01659874d7a589bde79128b3900f1d03e3c3e8de2cd6b8edb5336fb8b"
+    },
+    {
+      "path": "public/zones/technical-navigation.grid.json",
+      "rawBytes": 65817,
+      "brotliBytes": 268,
+      "sha256": "e2caa1d3d25939d433cd4dc3df4aa38ab557879ed691eca70a2e46f8af9e7921"
+    }
+  ],
+  "fixtureBrotliBytes": 1385,
+  "shellBrotliBytes": 307947,
+  "combinedBrotliBytes": 309332,
+  "gates": {
+    "fixtureAtMost8MiB": "PASS",
+    "combinedAtMost10MiB": "PASS"
+  }
+}

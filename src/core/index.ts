@@ -27,6 +27,16 @@ export {
   type RuntimeEntityId,
   type RuntimeEntityIdSource,
 } from "./ids";
+export {
+  PresentationComponentStore,
+  PresentationKind,
+  TECHNICAL_UPDATE_ORDER,
+  TechnicalEntityLifecycle,
+  TransformComponentStore,
+  type EntityLifecycleDiagnostics,
+  type TechnicalUpdateStage,
+  type TransformWrite,
+} from "./entity-lifecycle";
 export type {
   CommandEnvelope,
   CommandSource,
@@ -84,3 +94,20 @@ export {
   type SpatialAllocationDiagnostics,
   type SpatialRecord,
 } from "./spatial";
+export {
+  SYNTHETIC_ACTOR_COUNT,
+  SYNTHETIC_CAMERA_HEIGHT,
+  SYNTHETIC_CAMERA_WIDTH,
+  SYNTHETIC_ENTITY_COUNT,
+  SYNTHETIC_FIXTURE_SCHEMA,
+  SYNTHETIC_FIXTURE_SEED,
+  SYNTHETIC_LOOT_COUNT,
+  SYNTHETIC_PARTICLE_COUNT,
+  SYNTHETIC_PROJECTILE_COUNT,
+  SYNTHETIC_WORLD_SIZE,
+  SyntheticLifecycleFixture,
+  type FixturePathDiagnostics,
+  type FixtureStageTimings,
+  type FixtureTimer,
+  type SyntheticFixtureDiagnostics,
+} from "./synthetic-lifecycle-fixture";

@@ -18,6 +18,11 @@ import {
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
+import type {
+  FrameSampleSummary,
+  RawFrameSamples,
+  SyntheticPresentationDiagnostics,
+} from "./adapters/phaser/synthetic-lifecycle-presentation";
 import { createReadModelChannel } from "./adapters/ui/read-model-channel";
 import {
   PersistenceFixtureService,
@@ -34,12 +39,26 @@ import type {
 import "./presentation/styles.css";
 
 declare global {
+  const __RARPG_BUILD_COMMIT__: string;
+  const __RARPG_BUILD_DIRTY__: boolean;
+
   interface Window {
     __RARPG_WORLD_TEST__?: {
       diagnostics: () => ZoneLifecycleDiagnostics;
       load: (url?: string) => Promise<void>;
       pick: (screenX: number, screenY: number) => void;
       unload: () => void;
+    };
+    __RARPG_FIXTURE_TEST__?: {
+      readonly buildCommit: string;
+      readonly buildDirty: boolean;
+      diagnostics: () => SyntheticPresentationDiagnostics | null;
+      beginSample: () => void;
+      endSample: () => FrameSampleSummary;
+      dispose: () => void;
+      reset: () => Promise<void>;
+      resetAtStep: (steps: number) => Promise<void>;
+      rawSamples: () => RawFrameSamples;
     };
   }
 }
@@ -56,6 +75,7 @@ function requireElement<T extends Element>(selector: string): T {
 
 const fixtureParameters = new URLSearchParams(window.location.search);
 const worldAutomation = fixtureParameters.has("automation");
+const fullFixture = fixtureParameters.has("fullFixture");
 const persistenceAutomation = fixtureParameters.has("persistenceTest");
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,
@@ -175,7 +195,7 @@ const support = preflightWebGL2(canvas);
 if (!support.supported) {
   fail(support.reason);
 } else {
-  void bootPhaser(canvas, support.context)
+  void bootPhaser(canvas, support.context, { fullFixture })
     .then((renderer) => {
       const diagnostics = renderer.world.diagnostics();
       if (diagnostics.zoneId === null) {
@@ -195,6 +215,23 @@ if (!support.supported) {
           unload: () => {
             renderer.world.unload();
           },
+        };
+      }
+      if (fullFixture) {
+        window.__RARPG_FIXTURE_TEST__ = {
+          buildCommit: __RARPG_BUILD_COMMIT__,
+          buildDirty: __RARPG_BUILD_DIRTY__,
+          diagnostics: () => renderer.fixture.diagnostics(),
+          beginSample: () => {
+            renderer.fixture.beginSample();
+          },
+          endSample: () => renderer.fixture.endSample(),
+          dispose: () => {
+            renderer.fixture.dispose();
+          },
+          reset: () => renderer.fixture.reset(),
+          resetAtStep: (steps) => renderer.fixture.resetAtStep(steps),
+          rawSamples: () => renderer.fixture.rawSamples(),
         };
       }
       document.body.dataset.appState = "ready";
