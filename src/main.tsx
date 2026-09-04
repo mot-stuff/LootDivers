@@ -11,6 +11,7 @@ declare global {
     __RARPG_WORLD_TEST__?: {
       diagnostics: () => ZoneLifecycleDiagnostics;
       load: () => Promise<void>;
+      pick: (screenX: number, screenY: number) => void;
       unload: () => void;
     };
   }
@@ -58,6 +59,9 @@ if (!support.supported) {
         window.__RARPG_WORLD_TEST__ = {
           diagnostics: () => world.diagnostics(),
           load: () => world.load(),
+          pick: (screenX, screenY) => {
+            world.pick(screenX, screenY);
+          },
           unload: () => {
             world.unload();
           },

@@ -45,6 +45,7 @@ class TechnicalWorldScene extends Phaser.Scene {
 export interface TechnicalWorldController {
   diagnostics(): ZoneLifecycleDiagnostics;
   load(): Promise<void>;
+  pick(screenX: number, screenY: number): void;
   unload(): void;
 }
 

@@ -8,8 +8,8 @@ import {
 } from "../../world/contracts";
 import {
   compareFootDepth,
+  pickAuthoredCell,
   projectIsometric,
-  unprojectIsometric,
 } from "../../world/projection";
 
 const FIXTURE_URL = "/zones/technical-isometric.zone.json";
@@ -75,7 +75,7 @@ export class IsometricZoneAdapter {
     this.#createMarkerTexture();
     this.#renderLayers(candidate);
     this.#renderMarkers(candidate);
-    this.#installPicking(candidate);
+    this.#installPicking();
   }
 
   public unload(): void {
@@ -103,6 +103,18 @@ export class IsometricZoneAdapter {
       assetCount: this.#scene.textures.exists(MARKER_TEXTURE) ? 1 : 0,
       pickedCell: this.#pickedCell,
     };
+  }
+
+  public pick(screenX: number, screenY: number): void {
+    if (this.#bundle === null || this.#pickLabel === null) {
+      throw new Error("Technical zone must be ready before picking.");
+    }
+    const picked = pickAuthoredCell({ x: screenX, y: screenY }, this.#bundle);
+    this.#pickedCell =
+      picked === null
+        ? "outside"
+        : `${picked.x},${picked.y},e${picked.elevation}`;
+    this.#pickLabel.setText(`Pick: ${this.#pickedCell}`);
   }
 
   #createMarkerTexture(): void {
@@ -189,7 +201,7 @@ export class IsometricZoneAdapter {
     });
   }
 
-  #installPicking(bundle: CompiledZoneBundle): void {
+  #installPicking(): void {
     this.#pickLabel = this.#scene.add
       .text(16, 510, "Pick: click a diamond", {
         color: "#e8f1ff",
@@ -199,18 +211,7 @@ export class IsometricZoneAdapter {
       .setDepth(4_000_000);
     this.#objects.push(this.#pickLabel);
     this.#pointerHandler = (pointer) => {
-      const point = unprojectIsometric(
-        { x: pointer.worldX, y: pointer.worldY },
-        0,
-        bundle.projection,
-      );
-      const x = Math.floor(point.x);
-      const y = Math.floor(point.y);
-      this.#pickedCell =
-        x >= 0 && y >= 0 && x < bundle.width && y < bundle.height
-          ? `${x},${y},e0`
-          : "outside";
-      this.#pickLabel?.setText(`Pick: ${this.#pickedCell}`);
+      this.pick(pointer.worldX, pointer.worldY);
     };
     this.#scene.input.on("pointerdown", this.#pointerHandler);
   }

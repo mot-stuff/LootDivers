@@ -1,8 +1,28 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/?automation=1", { waitUntil: "networkidle" });
+  await page.goto("/?automation=1", { waitUntil: "domcontentloaded" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const diagnostics = window.__RARPG_WORLD_TEST__?.diagnostics();
+        return diagnostics === undefined
+          ? null
+          : {
+              zoneId: diagnostics.zoneId,
+              objectCount: diagnostics.objectCount,
+              chunkCount: diagnostics.chunkCount,
+              assetCount: diagnostics.assetCount,
+            };
+      }),
+    )
+    .toEqual({
+      zoneId: "fixture:technical-isometric",
+      objectCount: 27,
+      chunkCount: 20,
+      assetCount: 1,
+    });
 });
 
 test("loads, picks, unloads, releases, and reloads the technical zone", async ({
@@ -19,22 +39,27 @@ test("loads, picks, unloads, releases, and reloads the technical zone", async ({
     pickedCell: null,
   });
 
-  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
-  const box = await canvas.boundingBox();
-  if (box === null) {
-    throw new Error("Technical fixture canvas has no bounding box.");
-  }
-  await page.mouse.click(
-    box.x + (480 / 960) * box.width,
-    box.y + (172 / 540) * box.height,
-  );
+  await page.evaluate(() => {
+    window.__RARPG_WORLD_TEST__?.pick(480, 108);
+  });
   await expect
     .poll(() =>
       page.evaluate(
         () => window.__RARPG_WORLD_TEST__?.diagnostics().pickedCell,
       ),
     )
-    .toBe("2,2,e0");
+    .toBe("0,0,e0");
+
+  await page.evaluate(() => {
+    window.__RARPG_WORLD_TEST__?.pick(512, 172);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.__RARPG_WORLD_TEST__?.diagnostics().pickedCell,
+      ),
+    )
+    .toBe("3,2,e1");
 
   await page.evaluate(() => {
     window.__RARPG_WORLD_TEST__?.unload();

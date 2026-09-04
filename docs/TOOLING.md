@@ -162,4 +162,9 @@ Run `budget` before `budget:world`; the latter enforces both the 8 MiB technical
 zone limit and the 10 MiB combined shell-plus-zone limit. `test:smoke` remains
 the pinned Chromium production-artifact gate, while `test:browser` exercises
 configured Chromium, branded Chrome, branded Edge, Firefox, and WebKit projects
-when their binaries are available.
+when their binaries are available. These scripts launch Playwright through
+`scripts/run-playwright.mjs`, which allocates one free loopback preview port per
+invocation and shares it with every worker. Browser artifacts are isolated
+under that port's test-results directory. Direct `playwright test` remains
+available for debugging and uses port 4174 unless `RARPG_PLAYWRIGHT_PORT` is
+provided.

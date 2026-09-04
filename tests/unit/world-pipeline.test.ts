@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { compileTiledMap, serializeZoneBundle } from "../../src/world/compiler";
 import {
   compareFootDepth,
+  pickAuthoredCell,
   projectIsometric,
   unprojectIsometric,
 } from "../../src/world/projection";
@@ -77,6 +78,29 @@ describe("isometric projection convention", () => {
       "fixture:z",
       "fixture:elevated",
     ]);
+  });
+
+  it("picks the highest authored discrete surface at screen coordinates", () => {
+    const bundle = compileTiledMap(fixture(), "technical-isometric.json");
+    const elevatedScreen = projectIsometric(
+      { x: 3.5, y: 2.5, elevation: 1 },
+      bundle.projection,
+    );
+    expect(pickAuthoredCell(elevatedScreen, bundle)).toEqual({
+      x: 3,
+      y: 2,
+      elevation: 1,
+    });
+
+    const groundScreen = projectIsometric(
+      { x: 0.5, y: 0.5, elevation: 0 },
+      bundle.projection,
+    );
+    expect(pickAuthoredCell(groundScreen, bundle)).toEqual({
+      x: 0,
+      y: 0,
+      elevation: 0,
+    });
   });
 });
 
@@ -172,6 +196,88 @@ describe("Tiled technical-zone compiler", () => {
     data[0] = 99;
     expect(() => compileTiledMap(invalid, "unknown-gid.json")).toThrow(
       'unknown-gid.json: layer "ground" references an unknown gid',
+    );
+  });
+
+  it.each([
+    ["width", 5],
+    ["height", 7],
+  ])("rejects tile-layer %s that differs from the map", (field, value) => {
+    const invalid = fixture();
+    const layers = invalid["layers"] as Record<string, unknown>[];
+    const ground = layers[0];
+    if (ground === undefined) {
+      throw new Error("Fixture ground layer missing.");
+    }
+    ground[field] = value;
+    expect(() => compileTiledMap(invalid, "bad-dimensions.json")).toThrow(
+      'bad-dimensions.json: layer "ground" dimensions must match the 6x6 map',
+    );
+  });
+
+  it("rejects duplicate and additional object metadata layers", () => {
+    const duplicate = fixture();
+    const duplicateLayers = duplicate["layers"] as Record<string, unknown>[];
+    const markers = duplicateLayers.at(-1);
+    if (markers === undefined) {
+      throw new Error("Fixture marker layer missing.");
+    }
+    duplicateLayers.push(structuredClone(markers));
+    expect(() => compileTiledMap(duplicate, "duplicate-markers.json")).toThrow(
+      'duplicate-markers.json: exactly one object metadata layer named "markers" is required',
+    );
+
+    const additional = fixture();
+    const additionalLayers = additional["layers"] as Record<string, unknown>[];
+    additionalLayers.push({
+      name: "other-metadata",
+      objects: [],
+      type: "objectgroup",
+    });
+    expect(() => compileTiledMap(additional, "extra-objects.json")).toThrow(
+      'extra-objects.json: exactly one object metadata layer named "markers" is required',
+    );
+  });
+
+  it("rejects duplicate Tiled object IDs and undeclared metadata", () => {
+    const duplicateId = fixture();
+    const layers = duplicateId["layers"] as Record<string, unknown>[];
+    const markerLayer = layers.at(-1);
+    const objects = markerLayer?.["objects"] as
+      Record<string, unknown>[] | undefined;
+    if (objects?.[1] === undefined) {
+      throw new Error("Fixture marker objects missing.");
+    }
+    objects[1]["id"] = 1;
+    expect(() =>
+      compileTiledMap(duplicateId, "duplicate-object-id.json"),
+    ).toThrow("duplicate-object-id.json: duplicate Tiled object id 1");
+
+    const extraProperty = fixture();
+    const metadata = extraProperty["properties"] as Record<string, unknown>[];
+    metadata.push({ name: "unexpected", type: "string", value: "invalid" });
+    expect(() => compileTiledMap(extraProperty, "extra-property.json")).toThrow(
+      "extra-property.json: map properties must be exactly",
+    );
+
+    const invalidSurface = fixture();
+    const surfaceLayers = invalidSurface["layers"] as Record<string, unknown>[];
+    const surfaceMarkerLayer = surfaceLayers.at(-1);
+    const surfaceObjects = surfaceMarkerLayer?.["objects"] as
+      Record<string, unknown>[] | undefined;
+    const markerProperties = surfaceObjects?.[0]?.["properties"] as
+      Record<string, unknown>[] | undefined;
+    const markerElevation = markerProperties?.find(
+      (entry) => entry["name"] === "elevation",
+    );
+    if (markerElevation === undefined) {
+      throw new Error("Fixture marker elevation missing.");
+    }
+    markerElevation["value"] = 9;
+    expect(() =>
+      compileTiledMap(invalidSurface, "invalid-surface.json"),
+    ).toThrow(
+      'invalid-surface.json: marker "fixture:marker/amber" must reference an authored surface',
     );
   });
 });

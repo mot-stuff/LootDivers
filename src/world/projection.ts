@@ -1,4 +1,8 @@
-import type { IsoProjection, ZoneMarker } from "./contracts";
+import type {
+  CompiledZoneBundle,
+  IsoProjection,
+  ZoneMarker,
+} from "./contracts";
 
 export interface GridPoint {
   readonly x: number;
@@ -7,6 +11,11 @@ export interface GridPoint {
 }
 
 export interface ScreenPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface PickedZoneCell extends GridPoint {
   readonly x: number;
   readonly y: number;
 }
@@ -48,4 +57,42 @@ export function compareFootDepth(left: ZoneMarker, right: ZoneMarker): number {
   const leftKey = footDepthKey(left);
   const rightKey = footDepthKey(right);
   return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+export function pickAuthoredCell(
+  point: ScreenPoint,
+  bundle: CompiledZoneBundle,
+): PickedZoneCell | null {
+  const surfaceLayers = bundle.layers.filter(
+    ({ name }) => name !== "overhang" && name !== "foreground",
+  );
+  const elevations = [
+    ...new Set(
+      surfaceLayers.flatMap(({ chunks }) =>
+        chunks.flatMap(({ tiles }) => tiles.map(({ elevation }) => elevation)),
+      ),
+    ),
+  ].sort((left, right) => right - left);
+
+  for (const elevation of elevations) {
+    const grid = unprojectIsometric(point, elevation, bundle.projection);
+    const x = Math.floor(grid.x);
+    const y = Math.floor(grid.y);
+    if (x < 0 || y < 0 || x >= bundle.width || y >= bundle.height) {
+      continue;
+    }
+    const authored = surfaceLayers.some(({ chunks }) =>
+      chunks.some(({ tiles }) =>
+        tiles.some(
+          (tile) =>
+            tile.x === x && tile.y === y && tile.elevation === elevation,
+        ),
+      ),
+    );
+    if (authored) {
+      return { x, y, elevation };
+    }
+  }
+
+  return null;
 }

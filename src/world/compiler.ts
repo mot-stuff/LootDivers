@@ -17,6 +17,8 @@ interface TiledProperty {
 interface TiledLayer {
   readonly type?: unknown;
   readonly name?: unknown;
+  readonly width?: unknown;
+  readonly height?: unknown;
   readonly data?: unknown;
   readonly objects?: unknown;
   readonly properties?: unknown;
@@ -96,6 +98,25 @@ function property<T>(
   return check(values.get(name), source, `property.${name}`);
 }
 
+function requireExactProperties(
+  values: ReadonlyMap<string, unknown>,
+  expected: readonly string[],
+  source: string,
+  owner: string,
+): void {
+  const actual = [...values.keys()].sort();
+  const required = [...expected].sort();
+  if (
+    actual.length !== required.length ||
+    required.some((name, index) => actual[index] !== name)
+  ) {
+    fail(
+      source,
+      `${owner} properties must be exactly: ${required.join(", ")}.`,
+    );
+  }
+}
+
 function chunks(
   data: readonly number[],
   width: number,
@@ -171,6 +192,12 @@ export function compileTiledMap(
   }
 
   const metadata = properties(map.properties, source);
+  requireExactProperties(
+    metadata,
+    ["zoneId", "chunkWidth", "chunkHeight", "elevationUnit"],
+    source,
+    "map",
+  );
   const zoneId = property(metadata, "zoneId", source, text);
   if (!/^fixture:[a-z0-9][a-z0-9._/-]*$/.test(zoneId)) {
     fail(source, '"property.zoneId" must use the synthetic fixture namespace.');
@@ -192,7 +219,13 @@ export function compileTiledMap(
   if (!Array.isArray(map.layers)) {
     fail(source, '"layers" must be an array.');
   }
-  const tiledLayers = map.layers as TiledLayer[];
+  const tiledLayers = map.layers.map((value, index): TiledLayer => {
+    const layer = record(value);
+    if (layer === undefined) {
+      fail(source, `layers[${index}] must be an object.`);
+    }
+    return layer;
+  });
   const visualLayers = tiledLayers.filter(
     (layer) => layer.type === "tilelayer",
   );
@@ -205,6 +238,12 @@ export function compileTiledMap(
   }
 
   const layers = visualLayers.map((layer, index) => {
+    if (layer.width !== width || layer.height !== height) {
+      fail(
+        source,
+        `layer "${String(layer.name)}" dimensions must match the ${width}x${height} map.`,
+      );
+    }
     if (!Array.isArray(layer.data) || layer.data.length !== width * height) {
       fail(source, `layer "${String(layer.name)}" data must cover the map.`);
     }
@@ -215,6 +254,12 @@ export function compileTiledMap(
       fail(source, `layer "${String(layer.name)}" references an unknown gid.`);
     }
     const layerProperties = properties(layer.properties, source);
+    requireExactProperties(
+      layerProperties,
+      ["elevation"],
+      source,
+      `layer "${String(layer.name)}"`,
+    );
     const elevation = property(layerProperties, "elevation", source, integer);
     return {
       name: ISO_LAYER_ORDER[index] as IsoLayerName,
@@ -223,17 +268,48 @@ export function compileTiledMap(
     };
   });
 
-  const markerLayer = tiledLayers.find(
+  const markerLayers = tiledLayers.filter(
     (layer) => layer.type === "objectgroup" && layer.name === "markers",
   );
+  const objectLayers = tiledLayers.filter(
+    (layer) => layer.type === "objectgroup",
+  );
+  if (
+    markerLayers.length !== 1 ||
+    objectLayers.length !== 1 ||
+    tiledLayers.length !== ISO_LAYER_ORDER.length + 1
+  ) {
+    fail(
+      source,
+      'exactly one object metadata layer named "markers" is required.',
+    );
+  }
+  const markerLayer = markerLayers[0];
   if (markerLayer === undefined || !Array.isArray(markerLayer.objects)) {
     fail(source, 'one object layer named "markers" is required.');
   }
   const seenIds = new Set<string>();
+  const seenObjectIds = new Set<number>();
   const markers: ZoneMarker[] = markerLayer.objects.map((value, index) => {
     const object = record(value);
     if (object === undefined) {
       fail(source, `markers.objects[${index}] must be an object.`);
+    }
+    const objectId = integer(
+      object["id"],
+      source,
+      `markers.objects[${index}].id`,
+      1,
+    );
+    if (seenObjectIds.has(objectId)) {
+      fail(source, `duplicate Tiled object id ${objectId}.`);
+    }
+    seenObjectIds.add(objectId);
+    if (object["type"] !== "technical-marker") {
+      fail(
+        source,
+        `markers.objects[${index}].type must be "technical-marker".`,
+      );
     }
     const id = text(object["name"], source, `markers.objects[${index}].name`);
     if (!/^fixture:[a-z0-9][a-z0-9._/-]*$/.test(id) || seenIds.has(id)) {
@@ -241,7 +317,13 @@ export function compileTiledMap(
     }
     seenIds.add(id);
     const values = properties(object["properties"], source);
-    return {
+    requireExactProperties(
+      values,
+      ["gridX", "gridY", "elevation", "color", "label"],
+      source,
+      `marker "${id}"`,
+    );
+    const marker = {
       id,
       gridX: property(values, "gridX", source, integer),
       gridY: property(values, "gridY", source, integer),
@@ -249,6 +331,29 @@ export function compileTiledMap(
       color: property(values, "color", source, text),
       label: property(values, "label", source, text),
     };
+    if (
+      marker.gridX >= width ||
+      marker.gridY >= height ||
+      !/^#[0-9a-fA-F]{6}$/.test(marker.color)
+    ) {
+      fail(source, `marker "${id}" has invalid grid bounds or color metadata.`);
+    }
+    const onAuthoredSurface = layers
+      .filter(({ name }) => name !== "overhang" && name !== "foreground")
+      .some(({ chunks }) =>
+        chunks.some(({ tiles }) =>
+          tiles.some(
+            (tile) =>
+              tile.x === marker.gridX &&
+              tile.y === marker.gridY &&
+              tile.elevation === marker.elevation,
+          ),
+        ),
+      );
+    if (!onAuthoredSurface) {
+      fail(source, `marker "${id}" must reference an authored surface.`);
+    }
+    return marker;
   });
 
   const canonicalSource = `${JSON.stringify(input)}\n`;
