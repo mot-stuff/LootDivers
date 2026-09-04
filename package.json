@@ -1,0 +1,45 @@
+{
+  "name": "rarpg",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser-first RARPG technical foundation",
+  "type": "module",
+  "engines": {
+    "node": "24.20.0",
+    "npm": "11.19.0"
+  },
+  "packageManager": "npm@11.19.0",
+  "volta": {
+    "node": "24.20.0",
+    "npm": "11.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.core.json && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:smoke": "playwright test --project=chromium",
+    "budget": "node scripts/report-transfer-budget.mjs"
+  },
+  "dependencies": {
+    "phaser": "4.2.1",
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@preact/preset-vite": "2.10.6",
+    "@types/node": "24.13.3",
+    "eslint": "10.10.0",
+    "globals": "17.12.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  }
+}

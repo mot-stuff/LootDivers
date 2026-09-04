@@ -39,6 +39,6 @@ Architecture work must also review:
 Task structure, branch policy, verification requirements, and asset rules are
 defined in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-The runnable browser toolchain is established by TASK-P0-003. Until then, this
-repository intentionally contains documentation and project-governance files
-only.
+The runnable browser toolchain is documented in
+[`docs/TOOLING.md`](docs/TOOLING.md). It provides only the Phase 0 diagnostic
+foundation; gameplay remains out of scope.

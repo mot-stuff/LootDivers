@@ -1,0 +1,104 @@
+:root {
+  color: #e8f1ff;
+  background: #08111f;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(1rem, 3vw, 2.5rem);
+}
+
+.diagnostic-shell,
+.game-region {
+  width: min(100%, 1080px);
+  margin-inline: auto;
+}
+
+.diagnostic-shell {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: #76b8ff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.8rem);
+}
+
+.diagnostics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.diagnostics div,
+.boot-status {
+  padding: 0.85rem 1rem;
+  border: 1px solid #29405e;
+  border-radius: 0.55rem;
+  background: #101a2b;
+}
+
+.diagnostics dt {
+  color: #91a8c6;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.diagnostics dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.boot-status {
+  border-color: #267657;
+  color: #b9f6dc;
+}
+
+.boot-status.error {
+  border-color: #a64a4a;
+  color: #ffd0d0;
+}
+
+#game-host {
+  overflow: hidden;
+  border: 1px solid #29405e;
+  border-radius: 0.7rem;
+  background: #101a2b;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 30%);
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+#game-canvas[hidden] {
+  display: none;
+}
