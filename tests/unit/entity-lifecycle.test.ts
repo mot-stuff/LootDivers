@@ -110,6 +110,7 @@ describe("P0-002 lifecycle fixture", () => {
         diagnostics.paths.budgetExhausted +
         diagnostics.paths.invalid,
     );
+    expect(diagnostics.paths.invalid).toBe(0);
     expect(diagnostics.projectAllocations.structuralAfterWarmup).toBe(0);
 
     fixture.dispose();

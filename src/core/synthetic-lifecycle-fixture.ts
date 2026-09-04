@@ -411,6 +411,7 @@ export class SyntheticLifecycleFixture {
         grid,
         (gridX + 9 + actor) % grid.width,
         (gridY + 13 + actor * 3) % grid.height,
+        start.elevation,
       );
       this.#pathRequests.push({ requesterId: id, start, goal });
     }
@@ -493,13 +494,6 @@ export class SyntheticLifecycleFixture {
       let dx = targetX - x;
       let dy = targetY - y;
       const distance = Math.hypot(dx, dy);
-      if (distance < 3) {
-        this.#actorWaypoint[actor] =
-          ((this.#actorWaypoint[actor] ?? 0) + 1) % WAYPOINTS_PER_ACTOR;
-        continue;
-      }
-      dx /= distance;
-      dy /= distance;
       const id = this.actorIds[actor] as RuntimeEntityId;
       computeLocalSeparation(
         this.#spatial,
@@ -514,6 +508,13 @@ export class SyntheticLifecycleFixture {
       );
       this.#actorQueries += 1;
       this.#actorCandidates += this.#actorQuery.count;
+      if (distance < 3) {
+        this.#actorWaypoint[actor] =
+          ((this.#actorWaypoint[actor] ?? 0) + 1) % WAYPOINTS_PER_ACTOR;
+        continue;
+      }
+      dx /= distance;
+      dy /= distance;
       const velocityX = (dx + this.#separation.x) * ACTOR_SPEED;
       const velocityY = (dy + this.#separation.y) * ACTOR_SPEED;
       transforms.x[transformIndex] = clamp(
@@ -689,11 +690,16 @@ function nearestWalkable(
   grid: NavigationGrid,
   startX: number,
   startY: number,
+  requiredElevation?: number,
 ): GridPoint {
   for (let offset = 0; offset < grid.size; offset += 1) {
     const index = (startY * grid.width + startX + offset) % grid.size;
     const point = grid.pointAt(index);
-    if (grid.isWalkable(point.x, point.y, point.elevation)) {
+    if (
+      (requiredElevation === undefined ||
+        point.elevation === requiredElevation) &&
+      grid.isWalkable(point.x, point.y, point.elevation)
+    ) {
       return point;
     }
   }
