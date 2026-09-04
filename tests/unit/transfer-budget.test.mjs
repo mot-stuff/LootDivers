@@ -22,13 +22,15 @@ async function createFixture(files) {
 }
 
 describe("initial transfer graph", () => {
-  it("follows initial dependencies and excludes lazy chunks", async () => {
+  it("follows minified static imports and excludes dynamic imports", async () => {
     const directory = await createFixture({
       "index.html":
         '<link rel="stylesheet" href="/style.css"><link rel="manifest" href="/manifest.json"><script type="module" src="/entry.js"></script>',
-      "entry.js": 'import "./initial.js"; void import("./lazy.js");',
+      "entry.js":
+        'import"./initial.js";void import("./lazy.js");export*from"./reexport.js";',
       "initial.js": "export const ready = true;",
       "lazy.js": "export const deferred = true;",
+      "reexport.js": "export const shared = true;",
       "style.css": '@font-face { src: url("./font.woff2"); }',
       "font.woff2": "fixture-font",
       "manifest.json": '{"icons":[{"src":"icon.png"}]}',
@@ -49,6 +51,7 @@ describe("initial transfer graph", () => {
         "index.html",
         "initial.js",
         "manifest.json",
+        "reexport.js",
         "style.css",
       ]);
       expect(report.entries.some((entry) => entry.path === "lazy.js")).toBe(

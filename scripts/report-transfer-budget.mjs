@@ -98,8 +98,8 @@ function htmlReferences(source) {
 function javascriptReferences(source) {
   const references = [];
   const patterns = [
-    /\bimport\s+(?:[\w*${}\s,]+\s+from\s*)?["']([^"']+)["']/g,
-    /\bexport\s+(?:[\w*${}\s,]+\s+from\s*)["']([^"']+)["']/g,
+    /\bimport(?!\s*\()(?:(?:[^;"']*?)\bfrom\s*)?\s*["']([^"']+)["']/g,
+    /\bexport(?:[^;"']*?)\bfrom\s*["']([^"']+)["']/g,
   ];
 
   for (const pattern of patterns) {

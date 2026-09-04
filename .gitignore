@@ -7,7 +7,7 @@ node_modules/
 dist/
 coverage/
 playwright-report/
-reports/
+/reports/transfer-budget.json
 test-results/
 .vitest/
 
