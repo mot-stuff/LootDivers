@@ -45,16 +45,25 @@ export default tseslint.config(
     rules: {
       "no-restricted-globals": [
         "error",
-        { name: "document", message: "Core must not depend on the DOM." },
-        { name: "navigator", message: "Core must not depend on browser APIs." },
-        { name: "window", message: "Core must not depend on the DOM." },
+        ...Object.keys(globals.browser).map((name) => ({
+          name,
+          message: "Core must not depend on DOM or browser globals.",
+        })),
       ],
       "no-restricted-imports": [
         "error",
         {
           patterns: [
             {
-              group: ["phaser", "phaser/*", "preact", "preact/*"],
+              group: [
+                "phaser",
+                "phaser/*",
+                "preact",
+                "preact/*",
+                "node:*",
+                "**/adapters/**",
+                "**/presentation/**",
+              ],
               message: "Core must remain framework-free.",
             },
           ],

@@ -40,4 +40,59 @@ describe("core boundary configuration", () => {
     expect(config.compilerOptions.lib).toEqual(["ES2023"]);
     expect(config.compilerOptions.types).toEqual([]);
   });
+
+  it("rejects framework, adapter, presentation, and Node imports in core", async () => {
+    const eslint = new ESLint({ cwd: repositoryRoot });
+    const [result] = await eslint.lintText(
+      [
+        'import "phaser";',
+        'import "preact";',
+        'import "node:fs";',
+        'import "../adapters/phaser/boot";',
+        'import "../presentation/App";',
+      ].join("\n"),
+      { filePath: "src/core/index.ts" },
+    );
+    const restrictedImports =
+      result?.messages.filter(
+        (message) => message.ruleId === "no-restricted-imports",
+      ) ?? [];
+
+    expect(restrictedImports).toHaveLength(5);
+  });
+
+  it("rejects representative DOM and browser globals in core", async () => {
+    const eslint = new ESLint({ cwd: repositoryRoot });
+    const [result] = await eslint.lintText(
+      [
+        "window;",
+        "document;",
+        "navigator;",
+        "localStorage;",
+        "fetch;",
+        "requestAnimationFrame;",
+      ].join("\n"),
+      { filePath: "src/core/index.ts" },
+    );
+    const rejectedNames = new Set(
+      result?.messages
+        .filter(
+          (message) =>
+            message.ruleId === "no-restricted-globals" ||
+            message.ruleId === "no-undef",
+        )
+        .map((message) => message.message.match(/'([^']+)'/)?.[1]),
+    );
+
+    expect(rejectedNames).toEqual(
+      new Set([
+        "window",
+        "document",
+        "navigator",
+        "localStorage",
+        "fetch",
+        "requestAnimationFrame",
+      ]),
+    );
+  });
 });
