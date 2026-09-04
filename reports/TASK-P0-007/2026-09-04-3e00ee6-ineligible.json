@@ -1,0 +1,1352 @@
+{
+  "schemaVersion": "1.0.0",
+  "task": "TASK-P0-007",
+  "gateState": "INELIGIBLE",
+  "acceptanceClaim": false,
+  "startUtc": "2026-09-04T23:32:41.641Z",
+  "endUtc": "2026-09-04T23:32:55.560Z",
+  "commit": "3e00ee653e743fb911463be18e339cc73604792b",
+  "dirtyState": "",
+  "seed": "0x5EED2008",
+  "fixture": {
+    "gridId": "fixture:technical-navigation",
+    "gridSourceHash": "a793955c99df2a8fbd1587bec2fb5f5e00bb52939d4b8320e22f321e49a524ab",
+    "gridSize": [128, 128],
+    "repetitions": 5,
+    "warmupSteps": 1800,
+    "sampleSteps": 7200,
+    "sampleSeconds": 120,
+    "agents": 200,
+    "neighborRadius": 96,
+    "neighborQueriesPerStep": 200,
+    "segmentQueriesPerStep": 500,
+    "pathRequestIntervalSteps": 3,
+    "pathRequestsPerSecond": 20,
+    "pathExpansionCap": 2048
+  },
+  "machine": {
+    "platform": "win32",
+    "release": "10.0.26200",
+    "architecture": "x64",
+    "cpuModel": "AMD Ryzen 7 9800X3D 8-Core Processor           ",
+    "logicalProcessors": 16,
+    "totalMemoryBytes": 33346146304,
+    "node": "v24.20.0"
+  },
+  "p0_002Metadata": {
+    "windows": {
+      "TimestampUtc": "2026-09-04T23:32:43.7073958Z",
+      "ComputerName": "NE-299202512",
+      "Manufacturer": "Micro-Star International Co., Ltd.",
+      "Model": "MS-7E71",
+      "OS": "Microsoft Windows 11 Home",
+      "OSVersion": "10.0.26200",
+      "OSBuild": "26200",
+      "CPU": ["AMD Ryzen 7 9800X3D 8-Core Processor           "],
+      "PhysicalCores": 8,
+      "LogicalProcessors": 16,
+      "RAMBytes": 33346146304,
+      "GPU": [
+        {
+          "Name": "NVIDIA GeForce RTX 5070 Ti",
+          "DriverVersion": "32.0.16.1088",
+          "DriverDate": "2026-07-21",
+          "CurrentHorizontalResolution": 1920,
+          "CurrentVerticalResolution": 1080,
+          "CurrentRefreshRate": 74
+        },
+        {
+          "Name": "AMD Radeon(TM) Graphics",
+          "DriverVersion": "32.0.21030.2001",
+          "DriverDate": "2025-09-24",
+          "CurrentHorizontalResolution": null,
+          "CurrentVerticalResolution": null,
+          "CurrentRefreshRate": null
+        }
+      ],
+      "PowerScheme": "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)",
+      "ACPower": "unavailable-no-battery",
+      "WindowsScalePercent": null,
+      "BrowserZoomPercent": null,
+      "AmbientTemperature": null,
+      "Network": [
+        {
+          "Name": "VMware Network Adapter VMnet8",
+          "InterfaceDescription": "VMware Virtual Ethernet Adapter for VMnet8",
+          "LinkSpeed": "100 Mbps"
+        },
+        {
+          "Name": "Ethernet",
+          "InterfaceDescription": "Realtek PCIe 5GbE Family Controller",
+          "LinkSpeed": "1 Gbps"
+        },
+        {
+          "Name": "VMware Network Adapter VMnet1",
+          "InterfaceDescription": "VMware Virtual Ethernet Adapter for VMnet1",
+          "LinkSpeed": "100 Mbps"
+        }
+      ],
+      "Processes": [
+        {
+          "Name": "Memory Compression",
+          "Id": 3936,
+          "CPUSeconds": null,
+          "WorkingSetBytes": 3859881984
+        },
+        {
+          "Name": "TheBazaar",
+          "Id": 46492,
+          "CPUSeconds": 42159.71875,
+          "WorkingSetBytes": 2059878400
+        },
+        {
+          "Name": "Cursor",
+          "Id": 56656,
+          "CPUSeconds": 3981.875,
+          "WorkingSetBytes": 1199656960
+        },
+        {
+          "Name": "firefox",
+          "Id": 29072,
+          "CPUSeconds": 2805.984375,
+          "WorkingSetBytes": 896040960
+        },
+        {
+          "Name": "firefox",
+          "Id": 33624,
+          "CPUSeconds": 1184.125,
+          "WorkingSetBytes": 836382720
+        },
+        {
+          "Name": "node",
+          "Id": 55784,
+          "CPUSeconds": 238.109375,
+          "WorkingSetBytes": 801853440
+        },
+        {
+          "Name": "MsMpEng",
+          "Id": 21732,
+          "CPUSeconds": null,
+          "WorkingSetBytes": 508510208
+        },
+        {
+          "Name": "Discord",
+          "Id": 37960,
+          "CPUSeconds": 29013.375,
+          "WorkingSetBytes": 499851264
+        },
+        {
+          "Name": "Cursor",
+          "Id": 54036,
+          "CPUSeconds": 262.921875,
+          "WorkingSetBytes": 466321408
+        },
+        {
+          "Name": "firefox",
+          "Id": 15460,
+          "CPUSeconds": 10003.046875,
+          "WorkingSetBytes": 388661248
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 32220,
+          "CPUSeconds": 2643.5,
+          "WorkingSetBytes": 383287296
+        },
+        {
+          "Name": "explorer",
+          "Id": 9172,
+          "CPUSeconds": 2384.828125,
+          "WorkingSetBytes": 210952192
+        },
+        {
+          "Name": "Cursor",
+          "Id": 56668,
+          "CPUSeconds": 81.796875,
+          "WorkingSetBytes": 190828544
+        },
+        {
+          "Name": "Cursor",
+          "Id": 37956,
+          "CPUSeconds": 76,
+          "WorkingSetBytes": 188207104
+        },
+        {
+          "Name": "Cursor",
+          "Id": 9724,
+          "CPUSeconds": 230.875,
+          "WorkingSetBytes": 180383744
+        },
+        {
+          "Name": "Cursor",
+          "Id": 17528,
+          "CPUSeconds": 87.15625,
+          "WorkingSetBytes": 155054080
+        },
+        {
+          "Name": "powershell",
+          "Id": 77404,
+          "CPUSeconds": 0.796875,
+          "WorkingSetBytes": 137674752
+        },
+        {
+          "Name": "node",
+          "Id": 72248,
+          "CPUSeconds": 0.359375,
+          "WorkingSetBytes": 137617408
+        },
+        {
+          "Name": "Cursor",
+          "Id": 47568,
+          "CPUSeconds": 275.71875,
+          "WorkingSetBytes": 135647232
+        },
+        {
+          "Name": "firefox",
+          "Id": 12792,
+          "CPUSeconds": 284.296875,
+          "WorkingSetBytes": 129040384
+        },
+        {
+          "Name": "Cursor",
+          "Id": 57716,
+          "CPUSeconds": 54.1875,
+          "WorkingSetBytes": 120958976
+        },
+        {
+          "Name": "firefox",
+          "Id": 60176,
+          "CPUSeconds": 39.390625,
+          "WorkingSetBytes": 120180736
+        },
+        {
+          "Name": "firefox",
+          "Id": 39940,
+          "CPUSeconds": 232.421875,
+          "WorkingSetBytes": 117489664
+        },
+        {
+          "Name": "firefox",
+          "Id": 15236,
+          "CPUSeconds": 251.15625,
+          "WorkingSetBytes": 110927872
+        },
+        {
+          "Name": "msedge",
+          "Id": 61192,
+          "CPUSeconds": 19.828125,
+          "WorkingSetBytes": 110891008
+        },
+        {
+          "Name": "Cursor",
+          "Id": 44200,
+          "CPUSeconds": 233.453125,
+          "WorkingSetBytes": 108208128
+        },
+        {
+          "Name": "discord_clips",
+          "Id": 4876,
+          "CPUSeconds": 1523.5625,
+          "WorkingSetBytes": 105394176
+        },
+        {
+          "Name": "firefox",
+          "Id": 12308,
+          "CPUSeconds": 292.921875,
+          "WorkingSetBytes": 103301120
+        },
+        {
+          "Name": "firefox",
+          "Id": 27800,
+          "CPUSeconds": 20463.8125,
+          "WorkingSetBytes": 101232640
+        },
+        {
+          "Name": "Cursor",
+          "Id": 56080,
+          "CPUSeconds": 55.765625,
+          "WorkingSetBytes": 98914304
+        },
+        {
+          "Name": "node",
+          "Id": 57176,
+          "CPUSeconds": 4.203125,
+          "WorkingSetBytes": 92712960
+        },
+        {
+          "Name": "powershell",
+          "Id": 66928,
+          "CPUSeconds": 0.34375,
+          "WorkingSetBytes": 88522752
+        },
+        {
+          "Name": "firefox",
+          "Id": 42220,
+          "CPUSeconds": 266.15625,
+          "WorkingSetBytes": 87203840
+        },
+        {
+          "Name": "Character creator - 2D Modern",
+          "Id": 61292,
+          "CPUSeconds": 2459.84375,
+          "WorkingSetBytes": 85446656
+        },
+        {
+          "Name": "firefox",
+          "Id": 45752,
+          "CPUSeconds": 41.671875,
+          "WorkingSetBytes": 84660224
+        },
+        {
+          "Name": "firefox",
+          "Id": 38972,
+          "CPUSeconds": 2007.25,
+          "WorkingSetBytes": 83296256
+        },
+        {
+          "Name": "Cursor",
+          "Id": 49652,
+          "CPUSeconds": 1996.28125,
+          "WorkingSetBytes": 82321408
+        },
+        {
+          "Name": "firefox",
+          "Id": 43980,
+          "CPUSeconds": 3042.265625,
+          "WorkingSetBytes": 81436672
+        },
+        {
+          "Name": "firefox",
+          "Id": 6460,
+          "CPUSeconds": 187.125,
+          "WorkingSetBytes": 78266368
+        },
+        {
+          "Name": "firefox",
+          "Id": 45264,
+          "CPUSeconds": 588.890625,
+          "WorkingSetBytes": 76972032
+        },
+        {
+          "Name": "firefox",
+          "Id": 48296,
+          "CPUSeconds": 205.453125,
+          "WorkingSetBytes": 76640256
+        },
+        {
+          "Name": "firefox",
+          "Id": 9884,
+          "CPUSeconds": 664.4375,
+          "WorkingSetBytes": 74174464
+        },
+        {
+          "Name": "firefox",
+          "Id": 51312,
+          "CPUSeconds": 5.21875,
+          "WorkingSetBytes": 62816256
+        },
+        {
+          "Name": "msedge",
+          "Id": 71244,
+          "CPUSeconds": 0.0625,
+          "WorkingSetBytes": 62672896
+        },
+        {
+          "Name": "QtWebEngineProcess",
+          "Id": 35628,
+          "CPUSeconds": 4637.859375,
+          "WorkingSetBytes": 62631936
+        },
+        {
+          "Name": "Cursor",
+          "Id": 24296,
+          "CPUSeconds": 22.640625,
+          "WorkingSetBytes": 61603840
+        },
+        {
+          "Name": "firefox",
+          "Id": 28332,
+          "CPUSeconds": 6.515625,
+          "WorkingSetBytes": 57339904
+        },
+        {
+          "Name": "Discord",
+          "Id": 9588,
+          "CPUSeconds": 2249.453125,
+          "WorkingSetBytes": 56459264
+        },
+        {
+          "Name": "firefox",
+          "Id": 33472,
+          "CPUSeconds": 69.71875,
+          "WorkingSetBytes": 55701504
+        },
+        {
+          "Name": "nvcontainer",
+          "Id": 30632,
+          "CPUSeconds": 577.03125,
+          "WorkingSetBytes": 55455744
+        },
+        {
+          "Name": "node",
+          "Id": 75388,
+          "CPUSeconds": 0.15625,
+          "WorkingSetBytes": 55132160
+        },
+        {
+          "Name": "msedge",
+          "Id": 61304,
+          "CPUSeconds": 3.5625,
+          "WorkingSetBytes": 53354496
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 36404,
+          "CPUSeconds": 1979.828125,
+          "WorkingSetBytes": 52572160
+        },
+        {
+          "Name": "node",
+          "Id": 76620,
+          "CPUSeconds": 0.53125,
+          "WorkingSetBytes": 48717824
+        },
+        {
+          "Name": "Cursor",
+          "Id": 56444,
+          "CPUSeconds": 59.375,
+          "WorkingSetBytes": 48291840
+        },
+        {
+          "Name": "msedge",
+          "Id": 6388,
+          "CPUSeconds": 15.40625,
+          "WorkingSetBytes": 48099328
+        },
+        {
+          "Name": "Cursor",
+          "Id": 53028,
+          "CPUSeconds": 5.109375,
+          "WorkingSetBytes": 44146688
+        },
+        {
+          "Name": "msedge",
+          "Id": 57132,
+          "CPUSeconds": 3.421875,
+          "WorkingSetBytes": 39133184
+        },
+        {
+          "Name": "Cursor",
+          "Id": 57832,
+          "CPUSeconds": 3.046875,
+          "WorkingSetBytes": 34537472
+        },
+        {
+          "Name": "firefox",
+          "Id": 9752,
+          "CPUSeconds": 78.703125,
+          "WorkingSetBytes": 34521088
+        },
+        {
+          "Name": "node",
+          "Id": 71760,
+          "CPUSeconds": 0.09375,
+          "WorkingSetBytes": 33701888
+        },
+        {
+          "Name": "msedge",
+          "Id": 53808,
+          "CPUSeconds": 1.390625,
+          "WorkingSetBytes": 33345536
+        },
+        {
+          "Name": "StartMenuExperienceHost",
+          "Id": 10808,
+          "CPUSeconds": 50.828125,
+          "WorkingSetBytes": 32653312
+        },
+        {
+          "Name": "msedgewebview2",
+          "Id": 12164,
+          "CPUSeconds": 149.625,
+          "WorkingSetBytes": 32215040
+        },
+        {
+          "Name": "node",
+          "Id": 62172,
+          "CPUSeconds": 0.46875,
+          "WorkingSetBytes": 31969280
+        },
+        {
+          "Name": "node",
+          "Id": 47000,
+          "CPUSeconds": 0.140625,
+          "WorkingSetBytes": 31776768
+        },
+        {
+          "Name": "Discord",
+          "Id": 9384,
+          "CPUSeconds": 4314.625,
+          "WorkingSetBytes": 31248384
+        },
+        {
+          "Name": "firefox",
+          "Id": 27624,
+          "CPUSeconds": 17.828125,
+          "WorkingSetBytes": 30658560
+        },
+        {
+          "Name": "firefox",
+          "Id": 50796,
+          "CPUSeconds": 6.515625,
+          "WorkingSetBytes": 29569024
+        },
+        {
+          "Name": "steam",
+          "Id": 15884,
+          "CPUSeconds": 2542.46875,
+          "WorkingSetBytes": 28676096
+        },
+        {
+          "Name": "msedge",
+          "Id": 58816,
+          "CPUSeconds": 0.140625,
+          "WorkingSetBytes": 28205056
+        },
+        {
+          "Name": "Discord",
+          "Id": 9420,
+          "CPUSeconds": 134.765625,
+          "WorkingSetBytes": 27009024
+        },
+        {
+          "Name": "firefox",
+          "Id": 73052,
+          "CPUSeconds": 0.03125,
+          "WorkingSetBytes": 26935296
+        },
+        {
+          "Name": "firefox",
+          "Id": 72736,
+          "CPUSeconds": 0.03125,
+          "WorkingSetBytes": 26816512
+        },
+        {
+          "Name": "firefox",
+          "Id": 70828,
+          "CPUSeconds": 0.0625,
+          "WorkingSetBytes": 26734592
+        },
+        {
+          "Name": "TextInputHost",
+          "Id": 10756,
+          "CPUSeconds": 28.703125,
+          "WorkingSetBytes": 26640384
+        },
+        {
+          "Name": "Cursor",
+          "Id": 52344,
+          "CPUSeconds": 4.5,
+          "WorkingSetBytes": 25587712
+        },
+        {
+          "Name": "Cursor",
+          "Id": 56804,
+          "CPUSeconds": 0.171875,
+          "WorkingSetBytes": 25292800
+        },
+        {
+          "Name": "firefox",
+          "Id": 9244,
+          "CPUSeconds": 116.921875,
+          "WorkingSetBytes": 24989696
+        },
+        {
+          "Name": "Cursor",
+          "Id": 57880,
+          "CPUSeconds": 0.71875,
+          "WorkingSetBytes": 24891392
+        },
+        {
+          "Name": "sihost",
+          "Id": 7968,
+          "CPUSeconds": 54.328125,
+          "WorkingSetBytes": 24764416
+        },
+        {
+          "Name": "Cursor",
+          "Id": 46656,
+          "CPUSeconds": 3.234375,
+          "WorkingSetBytes": 24367104
+        },
+        {
+          "Name": "firefox",
+          "Id": 24156,
+          "CPUSeconds": 38.140625,
+          "WorkingSetBytes": 24219648
+        },
+        {
+          "Name": "stremio",
+          "Id": 27696,
+          "CPUSeconds": 3645.75,
+          "WorkingSetBytes": 23990272
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 32608,
+          "CPUSeconds": 1624.671875,
+          "WorkingSetBytes": 23920640
+        },
+        {
+          "Name": "Cursor",
+          "Id": 48032,
+          "CPUSeconds": 2.4375,
+          "WorkingSetBytes": 23871488
+        },
+        {
+          "Name": "RuntimeBroker",
+          "Id": 11176,
+          "CPUSeconds": 56.171875,
+          "WorkingSetBytes": 23367680
+        },
+        {
+          "Name": "SearchHost",
+          "Id": 10800,
+          "CPUSeconds": 41.015625,
+          "WorkingSetBytes": 22769664
+        },
+        {
+          "Name": "RuntimeBroker",
+          "Id": 46436,
+          "CPUSeconds": 4.625,
+          "WorkingSetBytes": 22425600
+        },
+        {
+          "Name": "node",
+          "Id": 50608,
+          "CPUSeconds": 0.359375,
+          "WorkingSetBytes": 22077440
+        },
+        {
+          "Name": "RuntimeBroker",
+          "Id": 22552,
+          "CPUSeconds": 4.640625,
+          "WorkingSetBytes": 21852160
+        },
+        {
+          "Name": "audiodg",
+          "Id": 26484,
+          "CPUSeconds": 1904.84375,
+          "WorkingSetBytes": 21692416
+        },
+        {
+          "Name": "msedge",
+          "Id": 62780,
+          "CPUSeconds": 0.03125,
+          "WorkingSetBytes": 20103168
+        },
+        {
+          "Name": "firefox",
+          "Id": 19944,
+          "CPUSeconds": 8.90625,
+          "WorkingSetBytes": 20041728
+        },
+        {
+          "Name": "msedge",
+          "Id": 55652,
+          "CPUSeconds": 13.71875,
+          "WorkingSetBytes": 19759104
+        },
+        {
+          "Name": "msedge",
+          "Id": 58504,
+          "CPUSeconds": 0.125,
+          "WorkingSetBytes": 19345408
+        },
+        {
+          "Name": "svchost",
+          "Id": 5260,
+          "CPUSeconds": 10.953125,
+          "WorkingSetBytes": 18939904
+        },
+        {
+          "Name": "DataExchangeHost",
+          "Id": 56680,
+          "CPUSeconds": 0.46875,
+          "WorkingSetBytes": 18755584
+        },
+        {
+          "Name": "taskhostw",
+          "Id": 460,
+          "CPUSeconds": 8.53125,
+          "WorkingSetBytes": 18411520
+        },
+        {
+          "Name": "ctfmon",
+          "Id": 9552,
+          "CPUSeconds": 66.359375,
+          "WorkingSetBytes": 18391040
+        },
+        {
+          "Name": "svchost",
+          "Id": 29284,
+          "CPUSeconds": 0.28125,
+          "WorkingSetBytes": 18333696
+        },
+        {
+          "Name": "ShellExperienceHost",
+          "Id": 2300,
+          "CPUSeconds": 78.359375,
+          "WorkingSetBytes": 17375232
+        },
+        {
+          "Name": "msedgewebview2",
+          "Id": 13092,
+          "CPUSeconds": 17.453125,
+          "WorkingSetBytes": 17260544
+        },
+        {
+          "Name": "Cursor",
+          "Id": 54084,
+          "CPUSeconds": 0.140625,
+          "WorkingSetBytes": 17084416
+        },
+        {
+          "Name": "PhoneExperienceHost",
+          "Id": 47228,
+          "CPUSeconds": 9.34375,
+          "WorkingSetBytes": 16883712
+        },
+        {
+          "Name": "powershell",
+          "Id": 58768,
+          "CPUSeconds": 2.21875,
+          "WorkingSetBytes": 16261120
+        },
+        {
+          "Name": "QtWebEngineProcess",
+          "Id": 27084,
+          "CPUSeconds": 10.875,
+          "WorkingSetBytes": 16113664
+        },
+        {
+          "Name": "stremio-runtime",
+          "Id": 25076,
+          "CPUSeconds": 141.15625,
+          "WorkingSetBytes": 15843328
+        },
+        {
+          "Name": "svchost",
+          "Id": 7492,
+          "CPUSeconds": 27.796875,
+          "WorkingSetBytes": 15773696
+        },
+        {
+          "Name": "Cursor",
+          "Id": 54300,
+          "CPUSeconds": 0.515625,
+          "WorkingSetBytes": 15593472
+        },
+        {
+          "Name": "msedge",
+          "Id": 64020,
+          "CPUSeconds": 0.0625,
+          "WorkingSetBytes": 15384576
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 35676,
+          "CPUSeconds": 157.296875,
+          "WorkingSetBytes": 15101952
+        },
+        {
+          "Name": "backgroundTaskHost",
+          "Id": 7872,
+          "CPUSeconds": 6.703125,
+          "WorkingSetBytes": 15060992
+        },
+        {
+          "Name": "taskhostw",
+          "Id": 8076,
+          "CPUSeconds": 15,
+          "WorkingSetBytes": 15028224
+        },
+        {
+          "Name": "codex",
+          "Id": 53456,
+          "CPUSeconds": 25.15625,
+          "WorkingSetBytes": 14610432
+        },
+        {
+          "Name": "msedge",
+          "Id": 58396,
+          "CPUSeconds": 0.34375,
+          "WorkingSetBytes": 14495744
+        },
+        {
+          "Name": "Cursor",
+          "Id": 540,
+          "CPUSeconds": 0.09375,
+          "WorkingSetBytes": 14012416
+        },
+        {
+          "Name": "CodeSetup-stable-3.19.7.tmp",
+          "Id": 56880,
+          "CPUSeconds": 29.90625,
+          "WorkingSetBytes": 13987840
+        },
+        {
+          "Name": "Cursor",
+          "Id": 35412,
+          "CPUSeconds": 0.53125,
+          "WorkingSetBytes": 13553664
+        },
+        {
+          "Name": "msedgewebview2",
+          "Id": 13068,
+          "CPUSeconds": 32.890625,
+          "WorkingSetBytes": 13172736
+        },
+        {
+          "Name": "msedge",
+          "Id": 27016,
+          "CPUSeconds": 0.0625,
+          "WorkingSetBytes": 13000704
+        },
+        {
+          "Name": "msedgewebview2",
+          "Id": 13244,
+          "CPUSeconds": 5.296875,
+          "WorkingSetBytes": 11800576
+        },
+        {
+          "Name": "msedgewebview2",
+          "Id": 10948,
+          "CPUSeconds": 42.984375,
+          "WorkingSetBytes": 11358208
+        },
+        {
+          "Name": "gameoverlayui64",
+          "Id": 36536,
+          "CPUSeconds": 248.5625,
+          "WorkingSetBytes": 10907648
+        },
+        {
+          "Name": "RuntimeBroker",
+          "Id": 20860,
+          "CPUSeconds": 4.1875,
+          "WorkingSetBytes": 10899456
+        },
+        {
+          "Name": "GameBarPresenceWriter",
+          "Id": 48440,
+          "CPUSeconds": 0.0625,
+          "WorkingSetBytes": 10637312
+        },
+        {
+          "Name": "powershell",
+          "Id": 53512,
+          "CPUSeconds": 2.765625,
+          "WorkingSetBytes": 10194944
+        },
+        {
+          "Name": "firefox",
+          "Id": 24768,
+          "CPUSeconds": 70334.171875,
+          "WorkingSetBytes": 9768960
+        },
+        {
+          "Name": "svchost",
+          "Id": 8828,
+          "CPUSeconds": 2.21875,
+          "WorkingSetBytes": 9314304
+        },
+        {
+          "Name": "sentry-crash",
+          "Id": 49256,
+          "CPUSeconds": 1.328125,
+          "WorkingSetBytes": 9199616
+        },
+        {
+          "Name": "ShellHost",
+          "Id": 8696,
+          "CPUSeconds": 4.984375,
+          "WorkingSetBytes": 8941568
+        },
+        {
+          "Name": "conhost",
+          "Id": 27732,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 8302592
+        },
+        {
+          "Name": "CodeSetup-stable-3.19.7",
+          "Id": 56944,
+          "CPUSeconds": 0.09375,
+          "WorkingSetBytes": 8245248
+        },
+        {
+          "Name": "LockApp",
+          "Id": 52144,
+          "CPUSeconds": 0.5,
+          "WorkingSetBytes": 8077312
+        },
+        {
+          "Name": "conhost",
+          "Id": 56276,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 8060928
+        },
+        {
+          "Name": "conhost",
+          "Id": 52704,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 8036352
+        },
+        {
+          "Name": "svchost",
+          "Id": 27452,
+          "CPUSeconds": 27.203125,
+          "WorkingSetBytes": 7843840
+        },
+        {
+          "Name": "powershell",
+          "Id": 56304,
+          "CPUSeconds": 3.171875,
+          "WorkingSetBytes": 7663616
+        },
+        {
+          "Name": "UnityCrashHandler64",
+          "Id": 64908,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 7565312
+        },
+        {
+          "Name": "RuntimeBroker",
+          "Id": 32988,
+          "CPUSeconds": 2.859375,
+          "WorkingSetBytes": 7249920
+        },
+        {
+          "Name": "conhost",
+          "Id": 45316,
+          "CPUSeconds": 0.046875,
+          "WorkingSetBytes": 7192576
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 47472,
+          "CPUSeconds": 1.25,
+          "WorkingSetBytes": 7155712
+        },
+        {
+          "Name": "conhost",
+          "Id": 40456,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 7131136
+        },
+        {
+          "Name": "firefox",
+          "Id": 2224,
+          "CPUSeconds": 2.84375,
+          "WorkingSetBytes": 6852608
+        },
+        {
+          "Name": "WsToastNotification",
+          "Id": 3396,
+          "CPUSeconds": 3,
+          "WorkingSetBytes": 6803456
+        },
+        {
+          "Name": "Discord",
+          "Id": 27704,
+          "CPUSeconds": 75.671875,
+          "WorkingSetBytes": 6766592
+        },
+        {
+          "Name": "firefox",
+          "Id": 9716,
+          "CPUSeconds": 42.53125,
+          "WorkingSetBytes": 6688768
+        },
+        {
+          "Name": "ApplicationFrameHost",
+          "Id": 8260,
+          "CPUSeconds": 3.265625,
+          "WorkingSetBytes": 6651904
+        },
+        {
+          "Name": "svchost",
+          "Id": 54912,
+          "CPUSeconds": 0.171875,
+          "WorkingSetBytes": 6254592
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 25448,
+          "CPUSeconds": 26.296875,
+          "WorkingSetBytes": 6070272
+        },
+        {
+          "Name": "XboxPcAppFT",
+          "Id": 11752,
+          "CPUSeconds": 95,
+          "WorkingSetBytes": 6008832
+        },
+        {
+          "Name": "cmd",
+          "Id": 67360,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 6008832
+        },
+        {
+          "Name": "cmd",
+          "Id": 48632,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 5935104
+        },
+        {
+          "Name": "cmd",
+          "Id": 62324,
+          "CPUSeconds": 0.015625,
+          "WorkingSetBytes": 5758976
+        },
+        {
+          "Name": "firefox",
+          "Id": 33936,
+          "CPUSeconds": 672.5625,
+          "WorkingSetBytes": 5693440
+        },
+        {
+          "Name": "Cursor",
+          "Id": 52988,
+          "CPUSeconds": 0.03125,
+          "WorkingSetBytes": 5066752
+        },
+        {
+          "Name": "plugin-container",
+          "Id": 5548,
+          "CPUSeconds": 572.578125,
+          "WorkingSetBytes": 4976640
+        },
+        {
+          "Name": "svchost",
+          "Id": 11236,
+          "CPUSeconds": 4.421875,
+          "WorkingSetBytes": 4792320
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 31036,
+          "CPUSeconds": 25.609375,
+          "WorkingSetBytes": 4689920
+        },
+        {
+          "Name": "msedgewebview2",
+          "Id": 11416,
+          "CPUSeconds": 2.578125,
+          "WorkingSetBytes": 4296704
+        },
+        {
+          "Name": "EdgeGameAssist",
+          "Id": 12068,
+          "CPUSeconds": 6.109375,
+          "WorkingSetBytes": 4218880
+        },
+        {
+          "Name": "steamwebhelper",
+          "Id": 39924,
+          "CPUSeconds": 0.46875,
+          "WorkingSetBytes": 3334144
+        },
+        {
+          "Name": "svchost",
+          "Id": 3044,
+          "CPUSeconds": 2.203125,
+          "WorkingSetBytes": 3215360
+        },
+        {
+          "Name": "UserOOBEBroker",
+          "Id": 11840,
+          "CPUSeconds": 0.25,
+          "WorkingSetBytes": 2670592
+        },
+        {
+          "Name": "Discord",
+          "Id": 32592,
+          "CPUSeconds": 0.421875,
+          "WorkingSetBytes": 2527232
+        },
+        {
+          "Name": "crashhelper",
+          "Id": 5688,
+          "CPUSeconds": 0.921875,
+          "WorkingSetBytes": 2318336
+        },
+        {
+          "Name": "conhost",
+          "Id": 37984,
+          "CPUSeconds": 0.09375,
+          "WorkingSetBytes": 2244608
+        },
+        {
+          "Name": "RuntimeBroker",
+          "Id": 39676,
+          "CPUSeconds": 1.625,
+          "WorkingSetBytes": 2007040
+        },
+        {
+          "Name": "svchost",
+          "Id": 9912,
+          "CPUSeconds": 1.484375,
+          "WorkingSetBytes": 1986560
+        },
+        {
+          "Name": "svchost",
+          "Id": 2284,
+          "CPUSeconds": 0.765625,
+          "WorkingSetBytes": 1445888
+        },
+        {
+          "Name": "RtkUWP",
+          "Id": 39668,
+          "CPUSeconds": 0.65625,
+          "WorkingSetBytes": 1384448
+        },
+        {
+          "Name": "DefenderSessionHelper",
+          "Id": 26320,
+          "CPUSeconds": 0.03125,
+          "WorkingSetBytes": 1245184
+        },
+        {
+          "Name": "SystemSettings",
+          "Id": 4144,
+          "CPUSeconds": 2.140625,
+          "WorkingSetBytes": 663552
+        }
+      ],
+      "Browsers": [
+        {
+          "Name": "Google Chrome",
+          "Found": false,
+          "Path": null,
+          "ProductVersion": null,
+          "FileVersion": null,
+          "CheckedPaths": [
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Users\\tomal\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe"
+          ]
+        },
+        {
+          "Name": "Microsoft Edge",
+          "Found": true,
+          "Path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+          "ProductVersion": "152.0.4191.62",
+          "FileVersion": "152.0.4191.62",
+          "CheckedPaths": [
+            "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+            "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+          ]
+        },
+        {
+          "Name": "Mozilla Firefox",
+          "Found": true,
+          "Path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+          "ProductVersion": "154.0",
+          "FileVersion": "154.0",
+          "CheckedPaths": [
+            "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+            "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe"
+          ]
+        }
+      ]
+    },
+    "headlessDisplayAndGraphicsProbe": {
+      "context": "Playwright Chromium headless diagnostic; not physical display evidence",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+      "devicePixelRatio": 1,
+      "innerWidth": 1920,
+      "innerHeight": 1080,
+      "screenWidth": 1920,
+      "screenHeight": 1080,
+      "webgl2": true,
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "vendor": "Google Inc. (Google)"
+    },
+    "tools": {
+      "git": {
+        "status": "available",
+        "output": "git version 2.54.0.windows.1"
+      },
+      "node": "v24.20.0",
+      "npm": { "status": "available", "output": "11.19.0" },
+      "playwrightPackageVersion": "1.62.1",
+      "playwrightCli": { "status": "available", "output": "Version 1.62.1" },
+      "playwrightInstallDryRun": {
+        "status": "available",
+        "output": "Chrome for Testing 151.0.7922.34 (playwright chromium v1234)\n  Install location:    C:\\Users\\tomal\\AppData\\Local\\ms-playwright\\chromium-1234\n  Download url:        https://cdn.playwright.dev/builds/cft/151.0.7922.34/win64/chrome-win64.zip\n\nChrome Headless Shell 151.0.7922.34 (playwright chromium-headless-shell v1234)\n  Install location:    C:\\Users\\tomal\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\n  Download url:        https://cdn.playwright.dev/builds/cft/151.0.7922.34/win64/chrome-headless-shell-win64.zip\n\nFirefox 153.0 (playwright firefox v1538)\n  Install location:    C:\\Users\\tomal\\AppData\\Local\\ms-playwright\\firefox-1538\n  Download url:        https://cdn.playwright.dev/dbazure/download/playwright/builds/firefox/1538/firefox-win64.zip\n  Download fallback 1: https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/firefox/1538/firefox-win64.zip\n  Download fallback 2: https://cdn.playwright.dev/builds/firefox/1538/firefox-win64.zip\n\nWebKit 26.5 (playwright webkit v2336)\n  Install location:    C:\\Users\\tomal\\AppData\\Local\\ms-playwright\\webkit-2336\n  Download url:        https://cdn.playwright.dev/dbazure/download/playwright/builds/webkit/2336/webkit-win64.zip\n  Download fallback 1: https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/webkit/2336/webkit-win64.zip\n  Download fallback 2: https://cdn.playwright.dev/builds/webkit/2336/webkit-win64.zip\n\nFFmpeg (playwright ffmpeg v1011)\n  Install location:    C:\\Users\\tomal\\AppData\\Local\\ms-playwright\\ffmpeg-1011\n  Download url:        https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-win64.zip\n  Download fallback 1: https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-win64.zip\n  Download fallback 2: https://cdn.playwright.dev/builds/ffmpeg/1011/ffmpeg-win64.zip\n\nWinldd (playwright winldd v1007)\n  Install location:    C:\\Users\\tomal\\AppData\\Local\\ms-playwright\\winldd-1007\n  Download url:        https://cdn.playwright.dev/dbazure/download/playwright/builds/winldd/1007/winldd-win64.zip\n  Download fallback 1: https://playwright.download.prss.microsoft.com/dbazure/download/playwright/builds/winldd/1007/winldd-win64.zip\n  Download fallback 2: https://cdn.playwright.dev/builds/winldd/1007/winldd-win64.zip"
+      }
+    },
+    "graphicsDiagnostics": "Branded chrome://gpu, edge://gpu, and Firefox about:support exports were unavailable to this command-line Node harness.",
+    "displayEvidence": "Windows scaling and browser zoom screenshots were not captured; null fields are not treated as zero.",
+    "thermal": "Ambient and CPU/GPU temperatures unavailable; no sensor capture was performed."
+  },
+  "ineligibleReasons": [
+    "Current machine does not match the P0-002 four-core/8 GB/Intel UHD 630/60 Hz reference tier.",
+    "This is a deterministic Node diagnostic harness, not the required target-browser acceptance sample.",
+    "The local process environment was captured but not reduced to P0-002 controlled benchmark conditions."
+  ],
+  "determinismConfirmation": {
+    "outcomesMatched": true,
+    "outcome": {
+      "candidateCount": 807518,
+      "pathRequests": 2400,
+      "pathExpansions": 1398979,
+      "pathChecksum": 2223895046,
+      "pendingRequests": 0,
+      "pathStatuses": {
+        "complete": 2099,
+        "no-path": 0,
+        "budget-exhausted": 301,
+        "invalid": 0
+      }
+    }
+  },
+  "allocationContract": {
+    "scope": "Project-authored spatial query, candidate collection, and local-separation storage after warm-up; excludes JS-engine internals and bounded A* path/request objects.",
+    "repetitions": [
+      {
+        "repetition": 1,
+        "passed": true,
+        "queryBufferIdentityStable": true,
+        "queryBufferOverflows": 0,
+        "bucketCreationsAfterWarmup": 0,
+        "bucketCapacityGrowthsAfterWarmup": 0,
+        "recordCellCapacityGrowthsAfterWarmup": 0
+      },
+      {
+        "repetition": 2,
+        "passed": true,
+        "queryBufferIdentityStable": true,
+        "queryBufferOverflows": 0,
+        "bucketCreationsAfterWarmup": 0,
+        "bucketCapacityGrowthsAfterWarmup": 0,
+        "recordCellCapacityGrowthsAfterWarmup": 0
+      },
+      {
+        "repetition": 3,
+        "passed": true,
+        "queryBufferIdentityStable": true,
+        "queryBufferOverflows": 0,
+        "bucketCreationsAfterWarmup": 0,
+        "bucketCapacityGrowthsAfterWarmup": 0,
+        "recordCellCapacityGrowthsAfterWarmup": 0
+      },
+      {
+        "repetition": 4,
+        "passed": true,
+        "queryBufferIdentityStable": true,
+        "queryBufferOverflows": 0,
+        "bucketCreationsAfterWarmup": 0,
+        "bucketCapacityGrowthsAfterWarmup": 0,
+        "recordCellCapacityGrowthsAfterWarmup": 0
+      },
+      {
+        "repetition": 5,
+        "passed": true,
+        "queryBufferIdentityStable": true,
+        "queryBufferOverflows": 0,
+        "bucketCreationsAfterWarmup": 0,
+        "bucketCapacityGrowthsAfterWarmup": 0,
+        "recordCellCapacityGrowthsAfterWarmup": 0
+      }
+    ],
+    "allPassed": true,
+    "jsHeapClaim": null
+  },
+  "repetitionTimingsMilliseconds": [
+    {
+      "repetition": 1,
+      "startedAtUtc": "2026-09-04T23:32:45.629Z",
+      "endedAtUtc": "2026-09-04T23:32:47.712Z",
+      "spatialP50": 0.17410000000018044,
+      "spatialP95": 0.2680000000000291,
+      "pathP50": 0.00019999999949504854,
+      "pathP95": 0.3760000000002037,
+      "totalP50": 0.1900999999998021,
+      "totalP95": 0.551300000000083,
+      "totalMaximum": 1.0957999999991443
+    },
+    {
+      "repetition": 2,
+      "startedAtUtc": "2026-09-04T23:32:47.712Z",
+      "endedAtUtc": "2026-09-04T23:32:49.766Z",
+      "spatialP50": 0.17119999999977153,
+      "spatialP95": 0.2602999999999156,
+      "pathP50": 0.00010000000111176632,
+      "pathP95": 0.38000000000010914,
+      "totalP50": 0.1848999999992884,
+      "totalP95": 0.5524999999997817,
+      "totalMaximum": 6.019999999999527
+    },
+    {
+      "repetition": 3,
+      "startedAtUtc": "2026-09-04T23:32:49.766Z",
+      "endedAtUtc": "2026-09-04T23:32:51.532Z",
+      "spatialP50": 0.13779999999860593,
+      "spatialP95": 0.22120000000177242,
+      "pathP50": 0.00010000000111176632,
+      "pathP95": 0.3445999999985361,
+      "totalP50": 0.15630000000055588,
+      "totalP95": 0.4920000000001892,
+      "totalMaximum": 0.9729000000006636
+    },
+    {
+      "repetition": 4,
+      "startedAtUtc": "2026-09-04T23:32:51.532Z",
+      "endedAtUtc": "2026-09-04T23:32:53.377Z",
+      "spatialP50": 0.13919999999961874,
+      "spatialP95": 0.22779999999875145,
+      "pathP50": 0.00010000000111176632,
+      "pathP95": 0.34870000000046275,
+      "totalP50": 0.15940000000045984,
+      "totalP95": 0.4992000000002008,
+      "totalMaximum": 0.8945000000003347
+    },
+    {
+      "repetition": 5,
+      "startedAtUtc": "2026-09-04T23:32:53.377Z",
+      "endedAtUtc": "2026-09-04T23:32:55.150Z",
+      "spatialP50": 0.13689999999951397,
+      "spatialP95": 0.22639999999955762,
+      "pathP50": 0.00010000000111176632,
+      "pathP95": 0.35380000000077416,
+      "totalP50": 0.15600000000085856,
+      "totalP95": 0.49949999999989814,
+      "totalMaximum": 1.0360000000000582
+    }
+  ],
+  "pooledTimingsMilliseconds": {
+    "spatialP50": 0.15079999999943539,
+    "spatialP95": 0.24649999999928696,
+    "pathP50": 0.00010000000111176632,
+    "pathP95": 0.3591999999989639,
+    "totalP50": 0.16820000000006985,
+    "totalP95": 0.5173000000004322,
+    "totalMaximum": 6.019999999999527
+  },
+  "rawSampleArtifact": {
+    "status": "written",
+    "path": "reports/TASK-P0-007/2026-09-04-3e00ee6-raw.json",
+    "sha256": "1991b1e5ed55353b5093ae3e13a496de26d425f1457a26598571e9654ef5ff34",
+    "bytes": 2380465,
+    "samplesPerStage": 36000
+  },
+  "limitations": [
+    "Node timings do not include Phaser presentation, browser rendering, requestAnimationFrame, GPU work, or browser GC behavior.",
+    "TASK-P0-008 owns the complete P0-002 representative browser fixture and acceptance timing.",
+    "Real Safari: NOT RUN — hardware unavailable."
+  ]
+}
