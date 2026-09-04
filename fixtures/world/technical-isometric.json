@@ -1,0 +1,142 @@
+{
+  "compressionlevel": -1,
+  "height": 6,
+  "infinite": false,
+  "layers": [
+    {
+      "data": [
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+      ],
+      "height": 6,
+      "name": "ground",
+      "properties": [{ "name": "elevation", "type": "int", "value": 0 }],
+      "type": "tilelayer",
+      "width": 6
+    },
+    {
+      "data": [
+        0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 2, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      ],
+      "height": 6,
+      "name": "detail",
+      "properties": [{ "name": "elevation", "type": "int", "value": 0 }],
+      "type": "tilelayer",
+      "width": 6
+    },
+    {
+      "data": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 3, 3, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      ],
+      "height": 6,
+      "name": "low",
+      "properties": [{ "name": "elevation", "type": "int", "value": 1 }],
+      "type": "tilelayer",
+      "width": 6
+    },
+    {
+      "data": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      ],
+      "height": 6,
+      "name": "overhang",
+      "properties": [{ "name": "elevation", "type": "int", "value": 1 }],
+      "type": "tilelayer",
+      "width": 6
+    },
+    {
+      "data": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 5,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      ],
+      "height": 6,
+      "name": "foreground",
+      "properties": [{ "name": "elevation", "type": "int", "value": 0 }],
+      "type": "tilelayer",
+      "width": 6
+    },
+    {
+      "name": "markers",
+      "objects": [
+        {
+          "id": 1,
+          "name": "fixture:marker/amber",
+          "properties": [
+            { "name": "gridX", "type": "int", "value": 1 },
+            { "name": "gridY", "type": "int", "value": 2 },
+            { "name": "elevation", "type": "int", "value": 0 },
+            { "name": "color", "type": "string", "value": "#ffbf69" },
+            { "name": "label", "type": "string", "value": "A" }
+          ],
+          "type": "technical-marker",
+          "x": 64,
+          "y": 64
+        },
+        {
+          "id": 2,
+          "name": "fixture:marker/cyan",
+          "properties": [
+            { "name": "gridX", "type": "int", "value": 3 },
+            { "name": "gridY", "type": "int", "value": 2 },
+            { "name": "elevation", "type": "int", "value": 1 },
+            { "name": "color", "type": "string", "value": "#6ee7f2" },
+            { "name": "label", "type": "string", "value": "E1" }
+          ],
+          "type": "technical-marker",
+          "x": 192,
+          "y": 64
+        },
+        {
+          "id": 3,
+          "name": "fixture:marker/magenta",
+          "properties": [
+            { "name": "gridX", "type": "int", "value": 4 },
+            { "name": "gridY", "type": "int", "value": 3 },
+            { "name": "elevation", "type": "int", "value": 0 },
+            { "name": "color", "type": "string", "value": "#f472b6" },
+            { "name": "label", "type": "string", "value": "F" }
+          ],
+          "type": "technical-marker",
+          "x": 256,
+          "y": 96
+        }
+      ],
+      "type": "objectgroup"
+    }
+  ],
+  "nextlayerid": 7,
+  "nextobjectid": 4,
+  "orientation": "isometric",
+  "properties": [
+    {
+      "name": "zoneId",
+      "type": "string",
+      "value": "fixture:technical-isometric"
+    },
+    { "name": "chunkWidth", "type": "int", "value": 3 },
+    { "name": "chunkHeight", "type": "int", "value": 3 },
+    { "name": "elevationUnit", "type": "int", "value": 16 }
+  ],
+  "renderorder": "right-down",
+  "tiledversion": "1.11.2",
+  "tileheight": 32,
+  "tilesets": [
+    {
+      "columns": 0,
+      "firstgid": 1,
+      "margin": 0,
+      "name": "fixture:technical-tileset",
+      "spacing": 0,
+      "tilecount": 5,
+      "tileheight": 32,
+      "tilewidth": 64
+    }
+  ],
+  "tilewidth": 64,
+  "type": "map",
+  "version": "1.10",
+  "width": 6
+}

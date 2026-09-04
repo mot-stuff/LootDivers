@@ -1,5 +1,6 @@
 dist
 generated/content
+public/zones
 node_modules
 package-lock.json
 schemas/content/v1

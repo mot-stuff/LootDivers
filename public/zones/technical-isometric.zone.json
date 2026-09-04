@@ -1,0 +1,527 @@
+{
+  "bundleVersion": "1.0.0",
+  "sourceFormat": "tiled-json",
+  "zoneId": "fixture:technical-isometric",
+  "sourceHash": "f9cc759ea06cd16f586728b5bde76bd83d0b610d1ccb156dae5306cfd4571b44",
+  "width": 6,
+  "height": 6,
+  "chunkWidth": 3,
+  "chunkHeight": 3,
+  "projection": {
+    "tileWidth": 64,
+    "tileHeight": 32,
+    "elevationUnit": 16,
+    "originX": 480,
+    "originY": 92
+  },
+  "layers": [
+    {
+      "name": "ground",
+      "band": 0,
+      "chunks": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 0,
+              "y": 0,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 1,
+              "y": 0,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 2,
+              "y": 0,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 0,
+              "y": 1,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 1,
+              "y": 1,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 2,
+              "y": 1,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 0,
+              "y": 2,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 1,
+              "y": 2,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "gid": 1,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 3,
+              "y": 0,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 4,
+              "y": 0,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 5,
+              "y": 0,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 3,
+              "y": 1,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 4,
+              "y": 1,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 5,
+              "y": 1,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 3,
+              "y": 2,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 5,
+              "y": 2,
+              "gid": 1,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 0,
+              "y": 3,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 1,
+              "y": 3,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 2,
+              "y": 3,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 0,
+              "y": 4,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 1,
+              "y": 4,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 2,
+              "y": 4,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 0,
+              "y": 5,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 1,
+              "y": 5,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "gid": 1,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 3,
+              "y": 3,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 4,
+              "y": 3,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 5,
+              "y": 3,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 5,
+              "y": 4,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "gid": 1,
+              "elevation": 0
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "gid": 1,
+              "elevation": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "detail",
+      "band": 1,
+      "chunks": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 1,
+              "y": 1,
+              "gid": 2,
+              "elevation": 0
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "gid": 2,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 4,
+              "y": 1,
+              "gid": 2,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 1,
+              "y": 3,
+              "gid": 2,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 3,
+              "y": 3,
+              "gid": 2,
+              "elevation": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "low",
+      "band": 2,
+      "chunks": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 2,
+              "y": 2,
+              "gid": 3,
+              "elevation": 1
+            }
+          ]
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 3,
+              "y": 2,
+              "gid": 3,
+              "elevation": 1
+            }
+          ]
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 2,
+              "y": 3,
+              "gid": 3,
+              "elevation": 1
+            }
+          ]
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 3,
+              "y": 3,
+              "gid": 3,
+              "elevation": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "overhang",
+      "band": 3,
+      "chunks": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": []
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 4,
+              "y": 1,
+              "gid": 4,
+              "elevation": 1
+            }
+          ]
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": []
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": []
+        }
+      ]
+    },
+    {
+      "name": "foreground",
+      "band": 4,
+      "chunks": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": []
+        },
+        {
+          "x": 3,
+          "y": 0,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 5,
+              "y": 2,
+              "gid": 5,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": []
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "width": 3,
+          "height": 3,
+          "tiles": [
+            {
+              "x": 4,
+              "y": 3,
+              "gid": 5,
+              "elevation": 0
+            },
+            {
+              "x": 5,
+              "y": 3,
+              "gid": 5,
+              "elevation": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "markers": [
+    {
+      "id": "fixture:marker/amber",
+      "gridX": 1,
+      "gridY": 2,
+      "elevation": 0,
+      "color": "#ffbf69",
+      "label": "A"
+    },
+    {
+      "id": "fixture:marker/cyan",
+      "gridX": 3,
+      "gridY": 2,
+      "elevation": 1,
+      "color": "#6ee7f2",
+      "label": "E1"
+    },
+    {
+      "id": "fixture:marker/magenta",
+      "gridX": 4,
+      "gridY": 3,
+      "elevation": 0,
+      "color": "#f472b6",
+      "label": "F"
+    }
+  ],
+  "assetKeys": [
+    "fixture:iso-marker-texture"
+  ]
+}
