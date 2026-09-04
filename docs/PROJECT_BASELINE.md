@@ -141,7 +141,20 @@ TASK-P0-013 or shared development.
   strict-TypeScript Phaser 4.2.1, Preact, and Vite browser foundation passes its
   clean install, static checks, unit tests, production build, transfer gates,
   WebGL2 diagnostics, and Chromium production smoke.
+- **TASK-P0-004:** Complete and independently accepted on 2026-09-04. The
+  framework-free deterministic foundation provides an injectable clock,
+  bounded fixed-step runner, versioned seeded random state, typed
+  command/event and identity contracts, explicit composition dependencies, and
+  enforced core dependency boundaries.
+- **TASK-P0-005:** Complete and independently accepted on 2026-09-04. The
+  non-gameplay content foundation provides shared stable IDs, typed versioned
+  schemas, Ajv and semantic validation, central synthetic registries, safe
+  asset references, deterministic compiled manifests, and non-mutating
+  generated-output freshness checks.
 
-These completions make TASK-P0-004, TASK-P0-005, and TASK-P0-011
-dependency-safe to start. They do not authorize those tasks, TASK-P0-006 or
-later work, Phase 1, or gameplay implementation.
+The integrated P0-004/P0-005 result passed a clean pinned install, formatting,
+warning-fatal lint, strict type-checking, 73 tests, production build, all
+transfer gates, content validation/compilation/freshness checks, and Chromium
+production smoke. These completions make TASK-P0-006, TASK-P0-010, and
+TASK-P0-011 dependency-safe to start. They do not authorize those tasks,
+TASK-P0-007 or other later work, Phase 1, or gameplay implementation.

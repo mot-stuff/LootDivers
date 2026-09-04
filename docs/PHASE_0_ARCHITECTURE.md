@@ -610,6 +610,16 @@ commands/events, IDs, and composition-root contracts.
 background-gap simulation is bounded; no Phaser/DOM imports exist in core.
 **Testing:** Vitest unit/property tests and lint dependency-boundary checks.
 
+**Completion record (2026-09-04):** Complete and independently accepted. The
+framework-free core now provides an injectable clock, bounded fixed 60 Hz
+runner, explicit pause/resume behavior, versioned Mulberry32 random state,
+typed commands/events, runtime and stable ID contracts, and explicit
+composition dependencies. Static, dynamic, type-only, and re-export dependency
+escapes from core are rejected. Integrated clean verification passed strict
+formatting, lint, type-checking, 73 unit/property-style tests, production build,
+all transfer gates, content checks, and Chromium smoke without introducing
+gameplay or a general ECS.
+
 ### TASK-P0-005 — Create content schema and compiler foundation
 
 **Owner:** Systems Designer
@@ -624,6 +634,16 @@ asset keys, fixture definitions, documented authoring workflow.
 and incompatible versions fail with source-specific messages; two clean builds
 are byte-identical where timestamps are excluded.
 **Testing:** Positive/negative fixture tests and CI-ready compiler command.
+
+**Completion record (2026-09-04):** Complete and independently accepted.
+Versioned, typed canonical schemas; Ajv validation; central synthetic
+registries; semantic diagnostics; safe asset references; and deterministic
+manifest/chunk compilation are implemented with the shared P0-004 stable-ID
+contract. The non-mutating `content:check` gate verifies schemas, source,
+byte-identical compilation, and committed generated-output freshness.
+Integrated clean verification passed with Ajv `8.20.0` pinned exactly, 73 total
+tests, all P0-002/P0-003 gates, and Chromium smoke. No production content,
+balance, maps, gameplay, or P0-006 work was added.
 
 ### TASK-P0-006 — Validate isometric world pipeline
 
