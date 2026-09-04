@@ -41,8 +41,13 @@ foreground alpha, pointer wiring, and disposal.
 Loading creates one object per visual chunk plus sorted technical markers.
 Unloading destroys every owned game object, removes the pointer listener,
 clears bundle state, and removes the generated texture from Phaser's texture
-manager. The automation-only query parameter exposes counts so Playwright proves
-objects and assets reach zero before reload.
+manager. Loads use an abortable monotonic generation: starting a load or
+unloading invalidates the prior generation, and awaited work checks ownership
+before committing. A stale request therefore cannot recreate content or install
+a listener after a newer load or unload. Current-load failures include the zone
+URL and underlying request or contract detail; stale canceled work is discarded.
+The automation-only query parameter exposes counts so Playwright proves objects,
+chunks, generated assets, and owned listeners reach zero before reload.
 
 The fixture demonstrates discrete elevation, base foot sorting, an overhang
 band, foreground occlusion, and elevation-aware inverse picking. Picking tests
