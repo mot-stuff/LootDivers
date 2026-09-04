@@ -113,10 +113,15 @@ interface PersistenceTestApi {
   corruptActive(): Promise<void>;
   prepareBlockedUpgrade(): Promise<void>;
   releaseBlockedUpgrade(): void;
-  save(state: FixtureSaveState): Promise<void>;
+  generationState(): ReturnType<
+    IndexedDbSaveRepository["debugGenerationState"]
+  >;
+  save(state: FixtureSaveState): ReturnType<PersistenceFixtureService["save"]>;
   load(): ReturnType<PersistenceFixtureService["load"]>;
   exportJson(): Promise<string>;
-  importJson(serializedEnvelope: string): Promise<void>;
+  importJson(
+    serializedEnvelope: string,
+  ): ReturnType<PersistenceFixtureService["importJson"]>;
 }
 
 declare global {
@@ -141,13 +146,10 @@ if (new URLSearchParams(location.search).has("persistenceTest")) {
     corruptActive: () => repository.debugCorruptActiveGeneration(),
     prepareBlockedUpgrade: () => repository.debugPrepareBlockedUpgrade(),
     releaseBlockedUpgrade: () => repository.debugReleaseBlockedUpgrade(),
-    async save(state) {
-      await service.save(state);
-    },
+    generationState: () => repository.debugGenerationState(),
+    save: (state) => service.save(state),
     load: () => service.load(),
     exportJson: () => service.exportJson(),
-    async importJson(serializedEnvelope) {
-      await service.importJson(serializedEnvelope);
-    },
+    importJson: (serializedEnvelope) => service.importJson(serializedEnvelope),
   };
 }

@@ -16,6 +16,7 @@ const DATABASE_VERSION = 2;
 const GENERATIONS_STORE = "generations";
 const METADATA_STORE = "metadata";
 const POINTERS_KEY = "fixture-pointers";
+const fallbackMutationTails = new Map<string, Promise<void>>();
 
 interface GenerationRecord {
   readonly generation: number;
@@ -64,6 +65,12 @@ export interface IndexedDbSaveRepositoryOptions {
   readonly checksumProvider: ChecksumProvider;
   readonly clock: SaveClock;
   readonly faultInjector?: PersistenceFaultInjector;
+}
+
+export interface GenerationDebugState {
+  readonly activeGeneration: number | null;
+  readonly backupGeneration: number | null;
+  readonly generations: readonly number[];
 }
 
 function mapStorageError(error: unknown, operation: string): PersistenceError {
@@ -128,12 +135,69 @@ function defaultPointers(): PointerRecord {
   };
 }
 
+function pruneGenerations(
+  store: IDBObjectStore,
+  retainedGenerations: ReadonlySet<number>,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const request = store.openCursor();
+    request.onerror = () =>
+      reject(idbError(request.error, "Could not enumerate save generations."));
+    request.onsuccess = () => {
+      const cursor = request.result;
+
+      if (cursor === null) {
+        resolve();
+        return;
+      }
+
+      if (
+        typeof cursor.primaryKey === "number" &&
+        !retainedGenerations.has(cursor.primaryKey)
+      ) {
+        cursor.delete();
+      }
+
+      cursor.continue();
+    };
+  });
+}
+
 export class IndexedDbSaveRepository implements SaveRepository {
   private readonly options: IndexedDbSaveRepositoryOptions;
   private debugHeldDatabase: IDBDatabase | undefined;
 
   constructor(options: IndexedDbSaveRepositoryOptions) {
     this.options = options;
+  }
+
+  private async serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
+    if (navigator.locks !== undefined) {
+      return navigator.locks.request(
+        `rarpg:persistence:${this.options.databaseName}`,
+        operation,
+      );
+    }
+
+    const lockName = `rarpg:persistence:${this.options.databaseName}`;
+    const previous = fallbackMutationTails.get(lockName) ?? Promise.resolve();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.then(() => gate);
+    fallbackMutationTails.set(lockName, tail);
+    await previous;
+
+    try {
+      return await operation();
+    } finally {
+      release();
+
+      if (fallbackMutationTails.get(lockName) === tail) {
+        fallbackMutationTails.delete(lockName);
+      }
+    }
   }
 
   private async open(): Promise<IDBDatabase> {
@@ -349,7 +413,10 @@ export class IndexedDbSaveRepository implements SaveRepository {
       throw new DOMException("Synthetic interrupted write.", "AbortError");
     }
 
-    const transaction = database.transaction(METADATA_STORE, "readwrite");
+    const transaction = database.transaction(
+      [METADATA_STORE, GENERATIONS_STORE],
+      "readwrite",
+    );
     const completion = transactionComplete(transaction);
     const metadataStore = transaction.objectStore(METADATA_STORE);
     const current =
@@ -360,6 +427,14 @@ export class IndexedDbSaveRepository implements SaveRepository {
       activeGeneration: generation,
       backupGeneration,
     } satisfies PointerRecord);
+    await pruneGenerations(
+      transaction.objectStore(GENERATIONS_STORE),
+      new Set(
+        backupGeneration === null
+          ? [generation]
+          : [generation, backupGeneration],
+      ),
+    );
     await completion;
   }
 
@@ -378,6 +453,12 @@ export class IndexedDbSaveRepository implements SaveRepository {
   }
 
   async save(state: FixtureSaveState): Promise<SaveEnvelopeV2> {
+    return this.serializeMutation(() => this.saveExclusive(state));
+  }
+
+  private async saveExclusive(
+    state: FixtureSaveState,
+  ): Promise<SaveEnvelopeV2> {
     let database: IDBDatabase | undefined;
 
     try {
@@ -405,6 +486,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
           updatedAt: now,
           build: this.options.build,
           contentSchemaVersion: this.options.contentSchemaVersion,
+          migrationProvenance: previous?.envelope.migrationProvenance ?? [],
         },
         this.options.checksumProvider,
       );
@@ -426,6 +508,14 @@ export class IndexedDbSaveRepository implements SaveRepository {
   }
 
   async importJson(serializedEnvelope: string): Promise<SaveEnvelopeV2> {
+    return this.serializeMutation(() =>
+      this.importExclusive(serializedEnvelope),
+    );
+  }
+
+  private async importExclusive(
+    serializedEnvelope: string,
+  ): Promise<SaveEnvelopeV2> {
     let decoded;
 
     try {
@@ -469,6 +559,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
           updatedAt: now,
           build: this.options.build,
           contentSchemaVersion: this.options.contentSchemaVersion,
+          migrationProvenance: decoded.envelope.migrationProvenance,
         },
         this.options.checksumProvider,
       );
@@ -545,6 +636,30 @@ export class IndexedDbSaveRepository implements SaveRepository {
   debugReleaseBlockedUpgrade(): void {
     this.debugHeldDatabase?.close();
     this.debugHeldDatabase = undefined;
+  }
+
+  async debugGenerationState(): Promise<GenerationDebugState> {
+    const database = await this.open();
+
+    try {
+      const pointers = await this.readPointers(database);
+      const transaction = database.transaction(GENERATIONS_STORE, "readonly");
+      const completion = transactionComplete(transaction);
+      const keys = await requestResult(
+        transaction.objectStore(GENERATIONS_STORE).getAllKeys(),
+      );
+      await completion;
+      const generations = keys.filter(
+        (key): key is number => typeof key === "number",
+      );
+      return {
+        activeGeneration: pointers.activeGeneration,
+        backupGeneration: pointers.backupGeneration,
+        generations: generations.sort((left, right) => left - right),
+      };
+    } finally {
+      database.close();
+    }
   }
 
   async debugReset(): Promise<void> {

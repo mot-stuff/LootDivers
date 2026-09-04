@@ -1,4 +1,13 @@
+import { createHash } from "node:crypto";
+
 import { expect, test, type Page } from "@playwright/test";
+
+import {
+  CHECKSUM_ALGORITHM,
+  SAVE_FORMAT,
+  canonicalJson,
+  type SaveEnvelopeV1,
+} from "../../src/persistence";
 
 const fixture = (counter: number) => ({
   label: "Playwright synthetic fixture",
@@ -66,6 +75,44 @@ test.describe("IndexedDB persistence generations", () => {
     );
   });
 
+  test("serializes concurrent saves and preserves fallback backup", async ({
+    page,
+  }) => {
+    await openFixture(page);
+    const envelopes = await page.evaluate(
+      async (states) => {
+        const api = window.__RARPG_PERSISTENCE_TEST__;
+
+        if (api === undefined) {
+          throw new Error("Persistence test API is unavailable.");
+        }
+
+        return Promise.all(states.map((state) => api.save(state)));
+      },
+      [fixture(20), fixture(21), fixture(22)],
+    );
+
+    expect(envelopes.map((envelope) => envelope.revision)).toEqual([1, 2, 3]);
+    await page.evaluate(async () => {
+      await window.__RARPG_PERSISTENCE_TEST__?.corruptActive();
+    });
+
+    const loaded = await page.evaluate(async () =>
+      window.__RARPG_PERSISTENCE_TEST__?.load(),
+    );
+    expect(loaded?.state).toEqual(fixture(21));
+    expect(loaded?.source).toBe("backup");
+    expect(loaded?.recoveredFromInvalidGeneration).toBe(true);
+
+    const generations = await page.evaluate(async () =>
+      window.__RARPG_PERSISTENCE_TEST__?.generationState(),
+    );
+    expect(generations?.generations).toHaveLength(2);
+    expect(generations?.activeGeneration).not.toBe(
+      generations?.backupGeneration,
+    );
+  });
+
   test("keeps active save when generation promotion is interrupted", async ({
     page,
   }) => {
@@ -89,6 +136,19 @@ test.describe("IndexedDB persistence generations", () => {
       window.__RARPG_PERSISTENCE_TEST__?.load(),
     );
     expect(loaded?.state).toEqual(fixture(3));
+
+    await page.evaluate(
+      async (state) => window.__RARPG_PERSISTENCE_TEST__?.save(state),
+      fixture(5),
+    );
+    const generations = await page.evaluate(async () =>
+      window.__RARPG_PERSISTENCE_TEST__?.generationState(),
+    );
+    expect(generations).toEqual({
+      activeGeneration: 3,
+      backupGeneration: 1,
+      generations: [1, 3],
+    });
   });
 
   test("surfaces quota and blocked storage errors", async ({ page }) => {
@@ -151,6 +211,63 @@ test.describe("IndexedDB persistence generations", () => {
     expect(loaded?.envelope.revision).toBe(3);
   });
 
+  test("preserves ordered migration provenance through import and export", async ({
+    page,
+  }) => {
+    await openFixture(page);
+    const unsigned = {
+      format: SAVE_FORMAT,
+      formatVersion: 1 as const,
+      saveId: "fixture:legacy-browser",
+      revision: 4,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+      compatibility: {
+        build: "legacy-browser-fixture",
+        contentSchemaVersion: 1,
+      },
+      payload: {
+        fixtureName: "Migrated browser fixture",
+        fixtureCount: 31,
+        markerValues: { "fixture:legacy": 12 },
+      },
+    } satisfies Omit<SaveEnvelopeV1, "checksum">;
+    const legacy: SaveEnvelopeV1 = {
+      ...unsigned,
+      checksum: {
+        algorithm: CHECKSUM_ALGORITHM,
+        value: createHash("sha256")
+          .update(canonicalJson(unsigned))
+          .digest("hex"),
+      },
+    };
+
+    await page.evaluate(
+      async (serialized) =>
+        window.__RARPG_PERSISTENCE_TEST__?.importJson(serialized),
+      JSON.stringify(legacy),
+    );
+    const exported = await page.evaluate(async () =>
+      window.__RARPG_PERSISTENCE_TEST__?.exportJson(),
+    );
+    const parsed = JSON.parse(exported ?? "{}") as {
+      migrationProvenance?: readonly {
+        fromVersion: number;
+        toVersion: number;
+        migratedAt: string;
+      }[];
+    };
+
+    expect(parsed.migrationProvenance).toHaveLength(1);
+    expect(parsed.migrationProvenance?.[0]).toMatchObject({
+      fromVersion: 1,
+      toVersion: 2,
+    });
+    expect(parsed.migrationProvenance?.[0]?.migratedAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T/,
+    );
+  });
+
   test("malformed import cannot replace a valid save", async ({ page }) => {
     await openFixture(page);
     await page.evaluate(
@@ -181,6 +298,15 @@ test.describe("IndexedDB persistence generations", () => {
         async (serialized) =>
           window.__RARPG_PERSISTENCE_TEST__?.importJson(serialized),
         JSON.stringify(tampered),
+      ),
+    ).rejects.toThrow();
+    const unknownField = JSON.parse(before ?? "{}") as Record<string, unknown>;
+    unknownField.unrecognizedFutureField = "must-not-be-ignored";
+    await expect(
+      page.evaluate(
+        async (serialized) =>
+          window.__RARPG_PERSISTENCE_TEST__?.importJson(serialized),
+        JSON.stringify(unknownField),
       ),
     ).rejects.toThrow();
 

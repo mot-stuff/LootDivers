@@ -160,4 +160,27 @@ describe("save envelope codec", () => {
       ),
     ).rejects.toMatchObject({ code: "corrupt" });
   });
+
+  it("rejects unknown envelope fields not covered by the original checksum", async () => {
+    const valid = await createSaveEnvelope(
+      { label: "Unknown-field fixture", counter: 2, markers: [] },
+      {
+        saveId: "fixture:unknown-field",
+        revision: 1,
+        createdAt: "2026-09-04T20:00:00.000Z",
+        updatedAt: "2026-09-04T20:00:00.000Z",
+        build: "unit-test",
+        contentSchemaVersion: 1,
+      },
+      checksumProvider,
+    );
+
+    await expect(
+      decodeSaveEnvelope(
+        { ...valid, unrecognizedFutureField: "must-not-be-ignored" },
+        checksumProvider,
+        clock,
+      ),
+    ).rejects.toMatchObject({ code: "checksum" });
+  });
 });

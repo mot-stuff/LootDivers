@@ -10,7 +10,6 @@ import {
   type SaveEnvelopeV1,
   type SaveEnvelopeV2,
   type SaveMetadata,
-  type SupportedSaveEnvelope,
 } from "./contracts";
 import { validateEnvelopeStructure, validateFixtureState } from "./validation";
 
@@ -20,15 +19,33 @@ export interface DecodedSave {
 }
 
 async function checksumEnvelope(
-  envelope: SupportedSaveEnvelope,
+  value: unknown,
   checksumProvider: ChecksumProvider,
 ): Promise<void> {
-  const unsigned = withoutChecksum(
-    envelope as unknown as Readonly<Record<string, unknown>>,
-  );
-  const actual = await checksumProvider.digest(canonicalJson(unsigned));
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new PersistenceError("corrupt", "Save envelope must be an object.");
+  }
 
-  if (actual !== envelope.checksum.value) {
+  const rawEnvelope = value as Record<string, unknown>;
+  const checksum = rawEnvelope.checksum;
+
+  if (
+    checksum === null ||
+    typeof checksum !== "object" ||
+    Array.isArray(checksum) ||
+    typeof (checksum as Record<string, unknown>).value !== "string"
+  ) {
+    throw new PersistenceError(
+      "corrupt",
+      "Save envelope checksum is missing or malformed.",
+    );
+  }
+
+  const unsigned = withoutChecksum(rawEnvelope);
+  const actual = await checksumProvider.digest(canonicalJson(unsigned));
+  const expected = (checksum as Record<string, unknown>).value;
+
+  if (actual !== expected) {
     throw new PersistenceError(
       "checksum",
       "Save checksum validation failed. The generation may be incomplete or corrupt.",
@@ -75,7 +92,7 @@ export async function createSaveEnvelope(
         build: metadata.build,
         contentSchemaVersion: metadata.contentSchemaVersion,
       },
-      migrationProvenance: [],
+      migrationProvenance: metadata.migrationProvenance ?? [],
       payload: { fixture },
     },
     checksumProvider,
@@ -119,8 +136,8 @@ export async function decodeSaveEnvelope(
   checksumProvider: ChecksumProvider,
   clock: SaveClock,
 ): Promise<DecodedSave> {
+  await checksumEnvelope(value, checksumProvider);
   const envelope = validateEnvelopeStructure(value);
-  await checksumEnvelope(envelope, checksumProvider);
 
   if (envelope.formatVersion === CURRENT_SAVE_VERSION) {
     return { envelope, migratedFromVersion: null };

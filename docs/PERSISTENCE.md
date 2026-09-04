@@ -31,18 +31,28 @@ The current JSON envelope is format version 2. It carries:
 - SHA-256 checksum over canonical JSON excluding the checksum field.
 
 Version 1 is retained as a tested migration fixture. Loading validates the
-source envelope and checksum first, then applies the consecutive `1 -> 2`
-migration and signs the migrated result. Unsupported versions, malformed DTOs,
-duplicate fixture IDs, non-finite values, and checksum mismatches are rejected.
+checksum against the complete raw envelope before normalizing known fields,
+then applies the consecutive `1 -> 2` migration and signs the migrated result.
+Unknown fields are never silently omitted from checksum verification and are
+also rejected structurally if a sender recomputes the checksum. Unsupported
+versions, malformed DTOs, duplicate fixture IDs, non-finite values, and
+checksum mismatches are rejected. Ordered migration provenance survives local
+import, export, and subsequent saves.
 
 ## Validated generation protocol
+
+Save and import mutations are serialized under a database-specific Web Lock so
+concurrent callers and tabs cannot derive the same revision or race generation
+promotion. An in-realm queue provides the fallback where Web Locks are
+unavailable.
 
 Saving uses two transactions:
 
 1. Write a new inactive generation.
 2. Read it back, validate its complete structure, and verify its checksum.
 3. Promote it to active in a separate transaction while retaining the previous
-   validated generation as backup.
+   validated generation as backup and atomically pruning every other
+   generation.
 
 An interruption before promotion leaves the previous active pointer unchanged.
 Loading validates active first and then the backup. If active is missing,
@@ -79,9 +89,10 @@ Run the pinned commands documented in `TOOLING.md`. Relevant focused checks are:
 ```
 
 Vitest covers round trip, fixture validation, checksum rejection, and ordered
-migration. Playwright covers real IndexedDB save/reload, invalid-active backup
-fallback, interrupted promotion, surfaced quota/blocked failures, and
-non-destructive malformed import.
+migration. Playwright covers real IndexedDB save/reload, serialized concurrent
+saves with corrupt-active fallback, two-generation pruning, interrupted
+promotion cleanup, surfaced quota/blocked failures, migration-provenance
+import/export, and non-destructive malformed import.
 
 The current automated browser project is bundled Chromium. Branded Chrome,
 Edge, Firefox, and WebKit matrix expansion belongs to TASK-P0-012 and was not

@@ -73,6 +73,7 @@ export interface SaveMetadata {
   readonly updatedAt: string;
   readonly build: string;
   readonly contentSchemaVersion: number;
+  readonly migrationProvenance?: readonly MigrationRecord[];
 }
 
 export interface ChecksumProvider {

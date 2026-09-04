@@ -99,6 +99,9 @@ private helper `node.exe` as a project runtime.
 `test:smoke` starts Vite preview and tests the production `dist` artifact. It
 fails on browser console errors, uncaught page errors, failed requests, HTTP
 responses at or above 400, missing semantic readiness, or a non-WebGL2 canvas.
+The Playwright config derives a stable high preview port from the absolute
+worktree path so simultaneous task worktrees do not share port `4173`.
+`PLAYWRIGHT_PREVIEW_PORT` may override it with a valid explicit port.
 
 Content schemas, authoring rules, diagnostics, generated output, and version
 contracts are documented in [`CONTENT_AUTHORING.md`](CONTENT_AUTHORING.md).

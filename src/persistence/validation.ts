@@ -28,6 +28,27 @@ function objectAt(value: unknown, path: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function exactKeysAt(
+  value: Record<string, unknown>,
+  expectedKeys: readonly string[],
+  path: string,
+): void {
+  const expected = new Set(expectedKeys);
+  const unknownKeys = Object.keys(value).filter((key) => !expected.has(key));
+
+  if (unknownKeys.length > 0) {
+    invalid(`${path} contains unknown field "${unknownKeys.sort()[0]}".`);
+  }
+
+  const missingKeys = expectedKeys.filter(
+    (key) => !Object.prototype.hasOwnProperty.call(value, key),
+  );
+
+  if (missingKeys.length > 0) {
+    invalid(`${path} is missing required field "${missingKeys[0]}".`);
+  }
+}
+
 function stringAt(value: unknown, path: string): string {
   if (typeof value !== "string") {
     return invalid(`${path} must be a string.`);
@@ -74,6 +95,11 @@ function stableIdAt(value: unknown, path: string): string {
 
 function compatibilityAt(value: unknown): SaveCompatibility {
   const compatibility = objectAt(value, "compatibility");
+  exactKeysAt(
+    compatibility,
+    ["build", "contentSchemaVersion"],
+    "compatibility",
+  );
   const build = stringAt(compatibility.build, "compatibility.build");
 
   if (build.length === 0) {
@@ -92,6 +118,7 @@ function compatibilityAt(value: unknown): SaveCompatibility {
 
 function checksumAt(value: unknown): SaveChecksum {
   const checksum = objectAt(value, "checksum");
+  exactKeysAt(checksum, ["algorithm", "value"], "checksum");
 
   if (checksum.algorithm !== CHECKSUM_ALGORITHM) {
     return invalid(`checksum.algorithm must be "${CHECKSUM_ALGORITHM}".`);
@@ -108,6 +135,7 @@ function checksumAt(value: unknown): SaveChecksum {
 
 function markerAt(value: unknown, index: number): FixtureMarker {
   const marker = objectAt(value, `payload.fixture.markers[${index}]`);
+  exactKeysAt(marker, ["id", "value"], `payload.fixture.markers[${index}]`);
   return {
     id: stableIdAt(marker.id, `payload.fixture.markers[${index}].id`),
     value: finiteNumberAt(
@@ -119,6 +147,7 @@ function markerAt(value: unknown, index: number): FixtureMarker {
 
 export function validateFixtureState(value: unknown): FixtureSaveState {
   const fixture = objectAt(value, "payload.fixture");
+  exactKeysAt(fixture, ["label", "counter", "markers"], "payload.fixture");
   const label = stringAt(fixture.label, "payload.fixture.label");
 
   if (label.length === 0 || label.length > 128) {
@@ -149,6 +178,11 @@ export function validateFixtureState(value: unknown): FixtureSaveState {
 
 function migrationRecordAt(value: unknown, index: number): MigrationRecord {
   const record = objectAt(value, `migrationProvenance[${index}]`);
+  exactKeysAt(
+    record,
+    ["fromVersion", "toVersion", "migratedAt"],
+    `migrationProvenance[${index}]`,
+  );
   const fromVersion = integerAt(
     record.fromVersion,
     `migrationProvenance[${index}].fromVersion`,
@@ -192,8 +226,28 @@ function sharedFields(value: Record<string, unknown>) {
 }
 
 function validateV1(value: Record<string, unknown>): SaveEnvelopeV1 {
+  exactKeysAt(
+    value,
+    [
+      "format",
+      "formatVersion",
+      "saveId",
+      "revision",
+      "createdAt",
+      "updatedAt",
+      "compatibility",
+      "payload",
+      "checksum",
+    ],
+    "save envelope",
+  );
   const shared = sharedFields(value);
   const payload = objectAt(value.payload, "payload");
+  exactKeysAt(
+    payload,
+    ["fixtureName", "fixtureCount", "markerValues"],
+    "payload",
+  );
   const markerValues = objectAt(payload.markerValues, "payload.markerValues");
   const checkedMarkerValues: Record<string, number> = {};
 
@@ -215,8 +269,25 @@ function validateV1(value: Record<string, unknown>): SaveEnvelopeV1 {
 }
 
 function validateV2(value: Record<string, unknown>): SaveEnvelopeV2 {
+  exactKeysAt(
+    value,
+    [
+      "format",
+      "formatVersion",
+      "saveId",
+      "revision",
+      "createdAt",
+      "updatedAt",
+      "compatibility",
+      "migrationProvenance",
+      "payload",
+      "checksum",
+    ],
+    "save envelope",
+  );
   const shared = sharedFields(value);
   const payload = objectAt(value.payload, "payload");
+  exactKeysAt(payload, ["fixture"], "payload");
 
   if (!Array.isArray(value.migrationProvenance)) {
     return invalid("migrationProvenance must be an array.");
