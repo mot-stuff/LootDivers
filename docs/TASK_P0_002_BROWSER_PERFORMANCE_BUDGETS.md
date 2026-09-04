@@ -434,6 +434,11 @@ data:text/html,<meta charset=utf-8><canvas id=c width=1920 height=1080></canvas>
 
 ## 14. P0-002 dry-run evidence — 2026-09-04
 
+The machine-readable session report is archived at
+[`reports/TASK-P0-002/2026-09-04-dry-run.json`](../reports/TASK-P0-002/2026-09-04-dry-run.json).
+It records unavailable fields as `null` with limitations and does not claim that
+raw terminal output, samples, traces, or screenshots were retained.
+
 Repository commit before this specification: `de11c54` (`TASK-P0-001: Restore
 canonical project documentation`). The worktree was clean before editing.
 

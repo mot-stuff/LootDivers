@@ -1,0 +1,457 @@
+{
+  "schemaVersion": 1,
+  "taskId": "TASK-P0-002",
+  "reportType": "no-gameplay-static-dry-run",
+  "sessionDate": "2026-09-04",
+  "overallStatus": "INELIGIBLE",
+  "summary": "Metadata and fixture-presence checks ran, but the machine is not the reference tier and no repository runtime fixture existed. The Edge probe was diagnostic only and produced no rAF p95 result.",
+  "timestamps": {
+    "sessionStartedUtc": null,
+    "sessionEndedUtc": null,
+    "unavailableReason": "Exact session start and end timestamps were not captured during the original dry run.",
+    "reportCreatedUtc": "2026-09-04T20:55:14.2988461Z",
+    "edgeErrorTimestampRaw": "0904/153530.020",
+    "edgeErrorTimestampNormalized": null,
+    "edgeErrorTimestampLimitation": "Edge stderr did not include a year or UTC offset, so the raw value is retained without normalization."
+  },
+  "repository": {
+    "measurementTargetCommit": "de11c54",
+    "measurementTargetCommitSubject": "TASK-P0-001: Restore canonical project documentation",
+    "sessionStartDirty": false,
+    "sessionStartDirtyScope": "Captured before specification editing.",
+    "duringProbeDirty": null,
+    "duringProbeDirtyUnavailableReason": "Dirty state was not captured at the exact time of the Edge probe.",
+    "sourceSpecificationCommit": "5dfd07344160a14c1a3842fa674a9a2f1dae48d1",
+    "coordinatorIntegrationCommitObserved": "780c6b6327bf8b6dd9bfa9200a45999b40d1bee6",
+    "reportCommit": null,
+    "reportCommitReason": "The report cannot contain the hash of the commit that first adds it.",
+    "branch": "feature/TASK-P0-002-browser-budgets"
+  },
+  "evidenceRetention": {
+    "rawCommandOutputArchived": false,
+    "rawPerformanceSamplesArchived": false,
+    "screenshotsArchived": false,
+    "traceArchived": false,
+    "notes": "Values below were transcribed from the original terminal outputs and narrative record. This JSON does not claim that unavailable raw output or samples were retained."
+  },
+  "machine": {
+    "eligibility": "INELIGIBLE",
+    "eligibilityReasons": [
+      "CPU has 8 physical cores rather than the four-core reference tier.",
+      "Installed RAM is approximately 32 GB rather than the 8 GB reference tier.",
+      "The active display used an NVIDIA GeForce RTX 5070 Ti rather than Intel UHD 630-class integrated graphics.",
+      "The display was reported at 74 Hz rather than the required 60 Hz."
+    ],
+    "computerName": "NE-299202512",
+    "manufacturer": "Micro-Star International Co., Ltd.",
+    "model": "MS-7E71",
+    "operatingSystem": {
+      "caption": "Microsoft Windows 11 Home",
+      "version": "10.0.26200",
+      "buildNumber": "26200"
+    },
+    "cpu": {
+      "name": "AMD Ryzen 7 9800X3D 8-Core Processor",
+      "physicalCores": 8,
+      "logicalProcessors": 16
+    },
+    "ramBytes": 33346146304,
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "driverVersion": "32.0.16.1088",
+        "driverDate": "2026-07-21",
+        "displayResolution": {
+          "width": 1920,
+          "height": 1080
+        },
+        "refreshRateHz": 74
+      },
+      {
+        "name": "AMD Radeon(TM) Graphics",
+        "driverVersion": "32.0.21030.2001",
+        "driverDate": "2025-09-24",
+        "displayResolution": null,
+        "refreshRateHz": null
+      }
+    ],
+    "windowsScalePercent": null,
+    "windowsScaleUnavailableReason": "The registry query returned no LogPixels value and did not establish an exact scale percentage.",
+    "ambientTemperatureC": null,
+    "cpuTemperatureC": null,
+    "gpuTemperatureC": null,
+    "thermalUnavailableReason": "No temperatures were captured.",
+    "acPowerConnected": null,
+    "acPowerUnavailableReason": "AC/battery state was not established by the original command output.",
+    "remoteDesktopState": null,
+    "remoteDesktopUnavailableReason": "Remote-session state was not captured."
+  },
+  "power": {
+    "activeSchemeName": "Balanced",
+    "activeSchemeGuid": "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "availableSchemes": [
+      {
+        "name": "Balanced",
+        "guid": "381b4222-f694-41f0-9685-ff5bb260df2e",
+        "active": true
+      },
+      {
+        "name": "High performance",
+        "guid": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+        "active": false
+      },
+      {
+        "name": "Power saver",
+        "guid": "a1841308-3541-4fab-bc81-f71556f20b4a",
+        "active": false
+      }
+    ],
+    "vendorPowerSettings": null,
+    "vendorPowerSettingsUnavailableReason": "Vendor-specific settings were not captured."
+  },
+  "network": {
+    "controlsApplied": false,
+    "controlsUnavailableReason": "The metadata probe recorded active adapters but did not isolate or shape the network.",
+    "activeAdapters": [
+      {
+        "name": "VMware Network Adapter VMnet8",
+        "description": "VMware Virtual Ethernet Adapter for VMnet8",
+        "linkSpeed": "100 Mbps"
+      },
+      {
+        "name": "Ethernet",
+        "description": "Realtek PCIe 5GbE Family Controller",
+        "linkSpeed": "1 Gbps"
+      },
+      {
+        "name": "VMware Network Adapter VMnet1",
+        "description": "VMware Virtual Ethernet Adapter for VMnet1",
+        "linkSpeed": "100 Mbps"
+      }
+    ]
+  },
+  "processControls": {
+    "applied": null,
+    "processSnapshot": null,
+    "unavailableReason": "No process-control checklist result or process snapshot was retained for the session."
+  },
+  "tools": {
+    "powerShell": {
+      "available": true,
+      "version": "5.1.26100.9168"
+    },
+    "git": {
+      "available": true,
+      "version": "2.54.0.windows.1"
+    },
+    "node": {
+      "available": true,
+      "version": "v22.22.0"
+    },
+    "npm": {
+      "availableOnPath": false,
+      "version": null
+    },
+    "npx": {
+      "availableOnPath": false,
+      "version": null
+    },
+    "playwright": {
+      "available": false,
+      "version": null,
+      "browserRevisions": null,
+      "unavailableReason": "npx was unavailable and the repository had no Playwright project."
+    },
+    "compressionTool": {
+      "available": null,
+      "version": null,
+      "unavailableReason": "No bundle existed and no compression-tool probe was run."
+    },
+    "staticServer": {
+      "available": null,
+      "version": null,
+      "unavailableReason": "No repository fixture was served."
+    }
+  },
+  "browsers": {
+    "edge": {
+      "availability": "AVAILABLE",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      "productVersion": "152.0.4191.62",
+      "fileVersion": "152.0.4191.62",
+      "manuallyExercised": false,
+      "headlessProbeExercised": true,
+      "probe": {
+        "status": "INELIGIBLE",
+        "profile": "%TEMP%\\RARPG-P0-002-edge-dryrun-2",
+        "freshTemporaryProfile": true,
+        "flags": [
+          "--headless=new",
+          "--disable-extensions",
+          "--window-size=1920,1080",
+          "--force-device-scale-factor=1",
+          "--virtual-time-budget=2000",
+          "--dump-dom"
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36 Edg/152.0.0.0",
+        "devicePixelRatio": 1,
+        "innerWidth": 1896,
+        "innerHeight": 988,
+        "visibilityState": "visible",
+        "webgl2Available": true,
+        "renderer": "WebKit WebGL",
+        "unmaskedRenderer": null,
+        "hardwareAccelerationVerified": false,
+        "gpuAcceptanceLimitation": "The generic renderer string does not prove use of the target hardware or exclude software rendering.",
+        "errors": [
+          "[56440:36524:0904/153530.020:ERROR:gpu\\ipc\\client\\command_buffer_proxy_impl.cc:490] GPU state invalid after WaitForGetOffsetInRange.",
+          "[56440:36524:0904/153530.020:ERROR:gpu\\ipc\\client\\command_buffer_proxy_impl.cc:490] GPU state invalid after WaitForGetOffsetInRange."
+        ],
+        "raf": {
+          "requestedCallbacks": 601,
+          "completedCallbacks": null,
+          "p95Milliseconds": null,
+          "status": "NOT RUN",
+          "reason": "The rAF probe remained at 'waiting' under headless virtual time; no callback sample output was produced."
+        }
+      }
+    },
+    "firefox": {
+      "availability": "AVAILABLE",
+      "path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+      "productVersion": "154.0",
+      "fileVersion": "154.0",
+      "manuallyExercised": false,
+      "probe": null,
+      "probeStatus": "NOT RUN",
+      "probeNotRunReason": "Only executable and version capture were performed."
+    },
+    "chrome": {
+      "availability": "NOT AVAILABLE",
+      "path": null,
+      "version": null,
+      "searchedLocations": [
+        "%LOCALAPPDATA%\\Google\\Chrome\\Application\\chrome.exe",
+        "%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe",
+        "%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe",
+        "Get-Command chrome",
+        "registered App Paths"
+      ],
+      "probeStatus": "NOT RUN",
+      "probeNotRunReason": "No Chrome executable was found in the searched locations."
+    },
+    "safari": {
+      "availability": "NOT AVAILABLE",
+      "version": null,
+      "probeStatus": "NOT RUN",
+      "probeNotRunReason": "Real macOS/Safari hardware is unavailable.",
+      "certified": false
+    },
+    "playwrightWebkit": {
+      "availability": "NOT AVAILABLE",
+      "version": null,
+      "probeStatus": "NOT RUN",
+      "probeNotRunReason": "Playwright tooling was unavailable.",
+      "safariCertification": false
+    }
+  },
+  "fixture": {
+    "repositoryFixturePresent": false,
+    "packageJsonPresent": false,
+    "htmlFilesPresentBeforeReport": false,
+    "javascriptFilesPresentBeforeReport": false,
+    "typescriptFilesPresentBeforeReport": false,
+    "viteProjectPresent": false,
+    "playwrightProjectPresent": false,
+    "runtimeSourceIntroducedByTask": false,
+    "representativeSeed": null,
+    "populations": null,
+    "sampleDurationSeconds": null,
+    "repetitions": null,
+    "absenceEvidence": "git ls-files, Test-Path package.json, recursive extension search, repository glob, and README.md."
+  },
+  "gates": [
+    {
+      "id": "repository-fixture-discovery",
+      "currentlyApplicable": true,
+      "status": "PASS",
+      "detail": "The check completed and established that no runtime/static fixture existed."
+    },
+    {
+      "id": "acceptance-hardware-eligibility",
+      "currentlyApplicable": true,
+      "status": "INELIGIBLE",
+      "detail": "The available machine does not match the owner-approved reference tier."
+    },
+    {
+      "id": "machine-metadata-capture",
+      "currentlyApplicable": true,
+      "status": "PASS",
+      "detail": "Available OS, CPU, RAM, GPU, driver, and machine identity metadata were captured; unavailable fields are null with reasons."
+    },
+    {
+      "id": "display-control-verification",
+      "currentlyApplicable": true,
+      "status": "NOT RUN",
+      "detail": "Resolution and refresh were captured, but exact Windows scaling and the required 60 Hz configuration were not established."
+    },
+    {
+      "id": "power-thermal-process-controls",
+      "currentlyApplicable": true,
+      "status": "NOT RUN",
+      "detail": "The active power plan was captured; AC state, thermals, vendor settings, and process controls were not."
+    },
+    {
+      "id": "network-metadata-and-controls",
+      "currentlyApplicable": true,
+      "status": "NOT RUN",
+      "detail": "Active adapter metadata was captured, but isolation/shaping controls were not applied."
+    },
+    {
+      "id": "browser-and-tool-version-capture",
+      "currentlyApplicable": true,
+      "status": "PASS",
+      "detail": "Available Edge, Firefox, PowerShell, Git, and Node versions and unavailable Chrome/npm/npx/Playwright states were recorded."
+    },
+    {
+      "id": "edge-static-webgl2-probe",
+      "currentlyApplicable": true,
+      "status": "INELIGIBLE",
+      "detail": "Headless Edge obtained WebGL2 on non-reference hardware, but target hardware acceleration was not established and GPU errors occurred."
+    },
+    {
+      "id": "static-raf-p95",
+      "currentlyApplicable": true,
+      "status": "NOT RUN",
+      "detail": "The rAF probe did not complete and no p95 value exists."
+    },
+    {
+      "id": "firefox-static-probe",
+      "currentlyApplicable": true,
+      "status": "NOT RUN",
+      "detail": "Firefox was available and version-captured but was not exercised."
+    },
+    {
+      "id": "chrome-static-probe",
+      "currentlyApplicable": true,
+      "status": "NOT RUN",
+      "detail": "Chrome was unavailable in the searched locations."
+    },
+    {
+      "id": "shell-startup-and-transfer",
+      "currentlyApplicable": false,
+      "status": "DEFERRED",
+      "dependency": "TASK-P0-003"
+    },
+    {
+      "id": "fixed-simulation-and-catch-up",
+      "currentlyApplicable": false,
+      "status": "DEFERRED",
+      "dependency": "TASK-P0-004"
+    },
+    {
+      "id": "isometric-terrain-zone-loading-and-zone-transfer",
+      "currentlyApplicable": false,
+      "status": "DEFERRED",
+      "dependency": "TASK-P0-006"
+    },
+    {
+      "id": "spatial-queries-and-path-requests",
+      "currentlyApplicable": false,
+      "status": "DEFERRED",
+      "dependency": "TASK-P0-007"
+    },
+    {
+      "id": "representative-population-frame-and-main-thread",
+      "currentlyApplicable": false,
+      "status": "DEFERRED",
+      "dependency": "TASK-P0-008"
+    },
+    {
+      "id": "automated-context-loss-and-browser-matrix",
+      "currentlyApplicable": false,
+      "status": "DEFERRED",
+      "dependency": "TASK-P0-012"
+    },
+    {
+      "id": "staging-wire-compression-and-loading",
+      "currentlyApplicable": false,
+      "status": "DEFERRED",
+      "dependency": "TASK-P0-013"
+    },
+    {
+      "id": "real-safari",
+      "currentlyApplicable": true,
+      "status": "NOT RUN",
+      "detail": "Real Safari hardware was unavailable; no certification is claimed."
+    }
+  ],
+  "commandProvenance": [
+    {
+      "purpose": "Repository commit and dirty state",
+      "command": "git status --short --branch; git log -1 --oneline; git rev-parse HEAD",
+      "rawOutputArchived": false,
+      "resultSummary": "Commit de11c54 and a clean worktree were captured before editing."
+    },
+    {
+      "purpose": "Machine metadata",
+      "command": "Get-CimInstance Win32_OperatingSystem; Get-CimInstance Win32_Processor; Get-CimInstance Win32_ComputerSystem; Get-CimInstance Win32_VideoController",
+      "rawOutputArchived": false,
+      "resultSummary": "Machine, OS, CPU, RAM, GPUs, drivers, resolution, and refresh values recorded in this report."
+    },
+    {
+      "purpose": "Power, display, and network metadata",
+      "command": "powercfg /getactivescheme; powercfg /list; Get-CimInstance Win32_VideoController | Select-Object Name,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate; Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object Name,InterfaceDescription,LinkSpeed",
+      "rawOutputArchived": false,
+      "resultSummary": "Balanced plan, display metadata, and three active adapters recorded."
+    },
+    {
+      "purpose": "Tool versions",
+      "command": "git --version; node --version; cmd /c npm --version; cmd /c npx --yes playwright --version; $PSVersionTable.PSVersion.ToString()",
+      "rawOutputArchived": false,
+      "resultSummary": "Git, Node, and PowerShell versions captured; npm and npx commands were unavailable."
+    },
+    {
+      "purpose": "Fixture absence",
+      "command": "git ls-files; Test-Path package.json; Get-ChildItem -Recurse -File -Include *.html,*.js,*.ts | Select-Object FullName",
+      "rawOutputArchived": false,
+      "resultSummary": "package.json was false and no matching runtime files were returned before this report."
+    },
+    {
+      "purpose": "Browser paths and versions",
+      "command": "Test-Path common user-local and Program Files browser paths; (Get-Item $app).VersionInfo for discovered Edge and Firefox executables",
+      "rawOutputArchived": false,
+      "resultSummary": "Edge 152.0.4191.62 and Firefox 154.0 were found; Chrome was not found."
+    },
+    {
+      "purpose": "Edge headless WebGL2 probe",
+      "executable": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      "arguments": [
+        "--headless=new",
+        "--disable-extensions",
+        "--user-data-dir=%TEMP%\\RARPG-P0-002-edge-dryrun-2",
+        "--window-size=1920,1080",
+        "--force-device-scale-factor=1",
+        "--virtual-time-budget=2000",
+        "--dump-dom",
+        "data:text/html,<pre id=o>waiting</pre><script>const c=document.createElement('canvas'),g=c.getContext('webgl2');setTimeout(()=>{o.textContent=JSON.stringify({ua:navigator.userAgent,dpr:devicePixelRatio,inner:[innerWidth,innerHeight],webgl2:!!g,renderer:g&&g.getParameter(g.RENDERER),visibility:document.visibilityState},null,2)},1000)</script>"
+      ],
+      "rawOutputArchived": false,
+      "resultSummary": "WebGL2 true, DPR 1, inner viewport 1896x988, generic WebKit WebGL renderer, visible state, and two GPU-state errors."
+    },
+    {
+      "purpose": "Edge rAF probe",
+      "command": "The specification's transient 601-callback data-URL probe under Edge headless virtual time.",
+      "rawOutputArchived": false,
+      "resultSummary": "DOM remained at 'waiting'; no rAF count or p95 was produced."
+    }
+  ],
+  "limitations": [
+    "No raw terminal transcript, sample array, trace, or screenshot was archived for the original session.",
+    "The machine is not eligible for strict acceptance.",
+    "No repository runtime or representative fixture existed.",
+    "No bundle, loading, frame-time, main-thread, simulation, context-loss, or representative-population result was measured.",
+    "Edge headless diagnostics do not substitute for a branded headful acceptance run.",
+    "Firefox was version-captured only; Chrome and real Safari were unavailable."
+  ]
+}
