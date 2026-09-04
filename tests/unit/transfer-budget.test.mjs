@@ -81,4 +81,48 @@ describe("initial transfer graph", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    ["plain parent traversal", "../outside.js", "outside.js"],
+    ["backslash parent traversal", "..\\outside.js", "outside.js"],
+    ["encoded parent traversal", "%2e%2e/outside.js", "outside.js"],
+    [
+      "encoded backslash traversal",
+      "%2e%2e%5coutside.js",
+      "%2e%2e%5coutside.js",
+    ],
+    ["encoded slash traversal", "%2e%2e%2foutside.js", "%2e%2e%2foutside.js"],
+  ])(
+    "keeps %s inside the artifact root",
+    async (_description, reference, expectedMissingReference) => {
+      const container = await mkdtemp(join(tmpdir(), "rarpg-traversal-"));
+      const directory = join(container, "dist");
+      const reportPath = join(container, "report.json");
+      await mkdir(directory);
+      await writeFile(join(container, "outside.js"), "must-not-be-read");
+      await writeFile(
+        join(directory, "index.html"),
+        `<script type="module" src="${reference}"></script>`,
+      );
+
+      try {
+        const report = await createTransferBudgetReport({
+          distDirectory: directory,
+          reportPath,
+        });
+
+        expect(report.entries.map((entry) => entry.path)).toEqual([
+          "index.html",
+        ]);
+        expect(report.missingReferences).toHaveLength(1);
+        expect(report.missingReferences[0].reference).toBe(
+          expectedMissingReference,
+        );
+        expect(report.gates.missingReferences.status).toBe("FAIL");
+        expect(report.status).toBe("FAIL");
+      } finally {
+        await rm(container, { recursive: true, force: true });
+      }
+    },
+  );
 });

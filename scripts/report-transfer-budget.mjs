@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { dirname, extname, join, posix, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   brotliCompressSync,
@@ -11,6 +11,7 @@ import {
 const CODE_BUDGET_BYTES = 1024 * 1024;
 const TOTAL_SHELL_BUDGET_BYTES = 1.25 * 1024 * 1024;
 const SINGLE_JS_BUDGET_BYTES = 512 * 1024;
+const ARTIFACT_ORIGIN = new URL("https://rarpg.invalid/");
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const DEFAULT_DIST_DIRECTORY = join(REPOSITORY_ROOT, "dist");
 const DEFAULT_REPORT_PATH = join(
@@ -142,36 +143,48 @@ function resolveLocalReference(fromPath, reference) {
   if (
     reference === undefined ||
     reference === "" ||
-    reference.startsWith("data:") ||
-    reference.startsWith("blob:") ||
+    /^(?:data|blob):/i.test(reference) ||
     reference.startsWith("#")
   ) {
     return { ignored: true };
   }
 
-  if (/^(?:[a-z]+:)?\/\//i.test(reference)) {
+  let browserUrl;
+
+  try {
+    const browserBase = new URL(`/${fromPath}`, ARTIFACT_ORIGIN);
+    browserUrl = new URL(reference, browserBase);
+  } catch {
+    return { error: "invalid browser URL" };
+  }
+
+  if (browserUrl.origin !== ARTIFACT_ORIGIN.origin) {
     return { error: "external initial reference" };
   }
 
-  const withoutQuery = reference.split(/[?#]/, 1)[0];
-  let decoded;
+  if (/%(?:2f|5c)/i.test(browserUrl.pathname)) {
+    return { error: "encoded path separators are not supported" };
+  }
+
+  let decodedPath;
 
   try {
-    decoded = decodeURIComponent(withoutQuery);
+    decodedPath = decodeURIComponent(browserUrl.pathname);
   } catch {
     return { error: "invalid URL encoding" };
   }
 
-  const candidate = decoded.startsWith("/")
-    ? decoded.slice(1)
-    : posix.join(posix.dirname(fromPath), decoded);
-  const normalized = posix.normalize(candidate);
-
-  if (normalized === ".." || normalized.startsWith("../")) {
-    return { error: "reference escapes dist" };
+  if (
+    decodedPath.includes("\\") ||
+    decodedPath.includes("\0") ||
+    decodedPath.split("/").includes("..")
+  ) {
+    return { error: "reference cannot be mapped safely inside dist" };
   }
 
-  return { path: normalized };
+  // WHATWG URL resolution clamps parent traversal at the served origin root.
+  // Remove all root separators before handing the path to the host filesystem.
+  return { path: decodedPath.replace(/^\/+/, "") };
 }
 
 function referencesFor(path, source) {
