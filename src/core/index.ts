@@ -77,7 +77,10 @@ export {
   UniformSpatialHash,
   type Aabb,
   type Circle,
+  type MutableCircleQuery,
+  type MutableSegmentQuery,
   type Point2,
   type Segment,
+  type SpatialAllocationDiagnostics,
   type SpatialRecord,
 } from "./spatial";

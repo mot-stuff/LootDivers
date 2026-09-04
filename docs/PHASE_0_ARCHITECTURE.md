@@ -678,7 +678,10 @@ respect work budgets; no per-agent unbounded path request loop exists.
 Framework-free uniform spatial indexing, simple collision queries, a compiled
 128×128 walkability/cost/elevation grid, deterministic bounded A*, a bounded
 fair request scheduler, and local separation are implemented with reusable
-buffers and explicit budgets. The five-repetition P0-002-shaped synthetic
+fixed-capacity query buffers, mutable query specs, numeric cell keys, structural
+capacity counters, and explicit budgets. The spatial fixture enforces no
+project-authored query/result storage allocation after warm-up; this is not a
+JS-engine heap claim. The five-repetition P0-002-shaped synthetic
 timing harness produced deterministic outcomes, but its current-machine Node
 timings are `INELIGIBLE` and make no browser acceptance claim. No enemy AI,
 combat hit policy, physics simulation, movement, dynamic navmesh, flow field,

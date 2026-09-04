@@ -107,8 +107,12 @@ describe("uniform spatial hash", () => {
     expect(
       spatial.queryAabb({ minX: -5, minY: -5, maxX: 15, maxY: 15 }, 0, output),
     ).toBe(1);
-    expect(output.records.map(({ id }) => id)).toEqual([1]);
-    expect(spatial.queryCircle({ x: 0, y: 0, radius: 3 }, 1, output)).toBe(1);
+    expect(
+      output.records.slice(0, output.count).map((record) => record?.id),
+    ).toEqual([1]);
+    expect(
+      spatial.queryCircle({ x: 0, y: 0, radius: 3, elevation: 1 }, output),
+    ).toBe(1);
     expect(output.records[0]?.id).toBe(2);
   });
 
@@ -148,7 +152,10 @@ describe("uniform spatial hash", () => {
       const query = { minX: x, minY: y, maxX: x + 40, maxY: y + 40 };
       const elevation = queryIndex % 3;
       spatial.queryAabb(query, elevation, output);
-      const actual = output.records.map(({ id }) => id).sort((a, b) => a - b);
+      const actual = output.records
+        .slice(0, output.count)
+        .map((record) => record?.id)
+        .filter((id): id is number => id !== undefined);
       const expected = records
         .filter(
           (record) =>
@@ -167,13 +174,76 @@ describe("uniform spatial hash", () => {
     spatial.upsert(2, 0, { minX: 20, minY: 20, maxX: 21, maxY: 21 });
     expect(
       spatial.querySegment(
-        { startX: 0, startY: 6, endX: 12, endY: 6 },
-        0,
-        0,
+        {
+          startX: 0,
+          startY: 6,
+          endX: 12,
+          endY: 6,
+          padding: 0,
+          elevation: 0,
+        },
         output,
       ),
     ).toBe(1);
     expect(output.records[0]?.id).toBe(1);
+  });
+
+  it("keeps caller buffers and spatial capacities stable after warm-up", () => {
+    const spatial = new UniformSpatialHash(16);
+    spatial.reserve({ minX: -64, minY: -64, maxX: 64, maxY: 64 }, 16);
+    for (let id = 0; id < 12; id += 1) {
+      const x = (id % 4) * 8 - 16;
+      const y = Math.floor(id / 4) * 8 - 8;
+      spatial.upsert(id, 0, {
+        minX: x - 2,
+        minY: y - 2,
+        maxX: x + 2,
+        maxY: y + 2,
+      });
+    }
+    const output = new SpatialQueryBuffer(16);
+    const recordsIdentity = output.records;
+    const circle = { x: 0, y: 0, radius: 64, elevation: 0 };
+    const segment = {
+      startX: -64,
+      startY: 0,
+      endX: 64,
+      endY: 0,
+      padding: 8,
+      elevation: 0,
+    };
+    spatial.queryCircle(circle, output);
+    spatial.querySegment(segment, output);
+    const warmedHighWater = output.highWaterMark;
+    const before = {
+      bucketCount: 0,
+      bucketCreations: 0,
+      bucketCapacityGrowths: 0,
+      recordCellCapacityGrowths: 0,
+      queryCount: 0,
+    };
+    const after = { ...before };
+    spatial.writeAllocationDiagnostics(before);
+
+    for (let iteration = 0; iteration < 10_000; iteration += 1) {
+      circle.x = (iteration % 9) - 4;
+      spatial.queryCircle(circle, output);
+      segment.startY = (iteration % 7) - 3;
+      segment.endY = segment.startY;
+      spatial.querySegment(segment, output);
+    }
+    spatial.writeAllocationDiagnostics(after);
+
+    expect(output.records).toBe(recordsIdentity);
+    expect(output.highWaterMark).toBe(warmedHighWater);
+    expect(output.overflowCount).toBe(0);
+    expect(after.bucketCount).toBe(before.bucketCount);
+    expect(after.bucketCreations).toBe(before.bucketCreations);
+    expect(after.bucketCapacityGrowths).toBe(before.bucketCapacityGrowths);
+    expect(after.recordCellCapacityGrowths).toBe(
+      before.recordCellCapacityGrowths,
+    );
+    expect(after.queryCount - before.queryCount).toBe(20_000);
   });
 });
 
@@ -355,6 +425,7 @@ describe("fair path scheduler and local separation", () => {
   it("separates only nearby same-elevation records with a capped vector", () => {
     const spatial = new UniformSpatialHash(16);
     const query = new SpatialQueryBuffer();
+    const circleQuery = { x: 0, y: 0, radius: 0, elevation: 0 };
     const output = { x: 0, y: 0 };
     spatial.upsert(1, 0, { minX: -1, minY: -1, maxX: 1, maxY: 1 });
     spatial.upsert(2, 0, { minX: 3, minY: -1, maxX: 5, maxY: 1 });
@@ -367,6 +438,7 @@ describe("fair path scheduler and local separation", () => {
         0,
         10,
         0.25,
+        circleQuery,
         query,
         output,
       ),

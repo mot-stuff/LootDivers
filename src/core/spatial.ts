@@ -7,6 +7,13 @@ export interface Circle extends Point2 {
   readonly radius: number;
 }
 
+export interface MutableCircleQuery {
+  x: number;
+  y: number;
+  radius: number;
+  elevation: number;
+}
+
 export interface Aabb {
   readonly minX: number;
   readonly minY: number;
@@ -19,6 +26,15 @@ export interface Segment {
   readonly startY: number;
   readonly endX: number;
   readonly endY: number;
+}
+
+export interface MutableSegmentQuery {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  padding: number;
+  elevation: number;
 }
 
 export interface SpatialRecord {
@@ -36,22 +52,67 @@ interface MutableSpatialRecord {
     maxX: number;
     maxY: number;
   };
-  cells: string[];
+  cells: (number | undefined)[];
+  cellCount: number;
+  queryGeneration: number;
 }
 
-export class SpatialQueryBuffer {
-  readonly records: SpatialRecord[] = [];
-  private readonly seen = new Set<number>();
+interface SpatialBucket {
+  records: (MutableSpatialRecord | undefined)[];
+  count: number;
+  highWaterMark: number;
+}
 
-  reset(): void {
-    this.records.length = 0;
-    this.seen.clear();
+export interface SpatialAllocationDiagnostics {
+  bucketCount: number;
+  bucketCreations: number;
+  bucketCapacityGrowths: number;
+  recordCellCapacityGrowths: number;
+  queryCount: number;
+}
+
+const CELL_COORDINATE_OFFSET = 33_554_432;
+const CELL_KEY_STRIDE = 67_108_864;
+const MINIMUM_CELL_COORDINATE = -CELL_COORDINATE_OFFSET;
+const MAXIMUM_CELL_COORDINATE = CELL_COORDINATE_OFFSET - 1;
+
+export class SpatialQueryBuffer {
+  readonly records: (SpatialRecord | undefined)[];
+  readonly capacity: number;
+  count = 0;
+  highWaterMark = 0;
+  overflowCount = 0;
+
+  constructor(capacity = 256) {
+    if (!Number.isInteger(capacity) || capacity <= 0) {
+      throw new RangeError(
+        "Spatial query capacity must be a positive integer.",
+      );
+    }
+    this.capacity = capacity;
+    this.records = new Array<SpatialRecord | undefined>(capacity);
   }
 
-  add(record: SpatialRecord): void {
-    if (!this.seen.has(record.id)) {
-      this.seen.add(record.id);
-      this.records.push(record);
+  reset(): void {
+    this.count = 0;
+  }
+
+  addSorted(record: SpatialRecord): void {
+    if (this.count >= this.capacity) {
+      this.overflowCount += 1;
+      throw new RangeError(
+        `Spatial query capacity ${this.capacity} was exceeded; increase the caller-owned buffer explicitly.`,
+      );
+    }
+    let index = this.count;
+    while (index > 0 && (this.records[index - 1]?.id ?? -1) > record.id) {
+      this.records[index] = this.records[index - 1];
+      index -= 1;
+    }
+    this.records[index] = record;
+    this.count += 1;
+    if (this.count > this.highWaterMark) {
+      this.highWaterMark = this.count;
     }
   }
 }
@@ -78,9 +139,84 @@ function overlapsAabb(left: Aabb, right: Aabb): boolean {
   );
 }
 
+function cellKey(cellX: number, cellY: number): number {
+  if (
+    cellX < MINIMUM_CELL_COORDINATE ||
+    cellX > MAXIMUM_CELL_COORDINATE ||
+    cellY < MINIMUM_CELL_COORDINATE ||
+    cellY > MAXIMUM_CELL_COORDINATE
+  ) {
+    throw new RangeError(
+      `Spatial cell (${cellX}, ${cellY}) exceeds the numeric key range.`,
+    );
+  }
+  return (
+    (cellX + CELL_COORDINATE_OFFSET) * CELL_KEY_STRIDE +
+    cellY +
+    CELL_COORDINATE_OFFSET
+  );
+}
+
+function circleIntersectsBounds(
+  x: number,
+  y: number,
+  radius: number,
+  bounds: Aabb,
+): boolean {
+  const closestX = Math.max(bounds.minX, Math.min(x, bounds.maxX));
+  const closestY = Math.max(bounds.minY, Math.min(y, bounds.maxY));
+  const dx = x - closestX;
+  const dy = y - closestY;
+  return dx * dx + dy * dy <= radius * radius;
+}
+
+function segmentIntersectsBounds(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): boolean {
+  let minimum = 0;
+  let maximum = 1;
+  const dx = endX - startX;
+  const dy = endY - startY;
+  if (dx === 0) {
+    if (startX < minX || startX > maxX) {
+      return false;
+    }
+  } else {
+    const inverseX = 1 / dx;
+    const firstX = (minX - startX) * inverseX;
+    const secondX = (maxX - startX) * inverseX;
+    minimum = Math.max(minimum, Math.min(firstX, secondX));
+    maximum = Math.min(maximum, Math.max(firstX, secondX));
+    if (minimum > maximum) {
+      return false;
+    }
+  }
+  if (dy === 0) {
+    return startY >= minY && startY <= maxY;
+  }
+  const inverseY = 1 / dy;
+  const firstY = (minY - startY) * inverseY;
+  const secondY = (maxY - startY) * inverseY;
+  minimum = Math.max(minimum, Math.min(firstY, secondY));
+  maximum = Math.min(maximum, Math.max(firstY, secondY));
+  return minimum <= maximum;
+}
+
 export class UniformSpatialHash {
-  private readonly cells = new Map<string, MutableSpatialRecord[]>();
+  private readonly cells = new Map<number, SpatialBucket>();
   private readonly records = new Map<number, MutableSpatialRecord>();
+  private queryGeneration = 0;
+  private bucketCreations = 0;
+  private bucketCapacityGrowths = 0;
+  private recordCellCapacityGrowths = 0;
+  private queryCount = 0;
   readonly cellSize: number;
 
   constructor(cellSize: number) {
@@ -94,6 +230,32 @@ export class UniformSpatialHash {
 
   get size(): number {
     return this.records.size;
+  }
+
+  reserve(bounds: Aabb, bucketCapacity = 8): void {
+    validateAabb(bounds);
+    if (!Number.isInteger(bucketCapacity) || bucketCapacity <= 0) {
+      throw new RangeError(
+        "Reserved bucket capacity must be a positive integer.",
+      );
+    }
+    const minCellX = Math.floor(bounds.minX / this.cellSize);
+    const minCellY = Math.floor(bounds.minY / this.cellSize);
+    const maxCellX = Math.floor(bounds.maxX / this.cellSize);
+    const maxCellY = Math.floor(bounds.maxY / this.cellSize);
+    for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+      for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+        this.requireBucket(cellKey(cellX, cellY), bucketCapacity);
+      }
+    }
+  }
+
+  writeAllocationDiagnostics(output: SpatialAllocationDiagnostics): void {
+    output.bucketCount = this.cells.size;
+    output.bucketCreations = this.bucketCreations;
+    output.bucketCapacityGrowths = this.bucketCapacityGrowths;
+    output.recordCellCapacityGrowths = this.recordCellCapacityGrowths;
+    output.queryCount = this.queryCount;
   }
 
   upsert(id: number, elevation: number, bounds: Aabb): void {
@@ -123,19 +285,13 @@ export class UniformSpatialHash {
         priorMaxX === nextMaxX &&
         priorMaxY === nextMaxY
       ) {
-        existing.bounds.minX = bounds.minX;
-        existing.bounds.minY = bounds.minY;
-        existing.bounds.maxX = bounds.maxX;
-        existing.bounds.maxY = bounds.maxY;
+        this.copyBounds(existing, bounds);
         return;
       }
       this.detach(existing);
       existing.elevation = elevation;
-      existing.bounds.minX = bounds.minX;
-      existing.bounds.minY = bounds.minY;
-      existing.bounds.maxX = bounds.maxX;
-      existing.bounds.maxY = bounds.maxY;
-      existing.cells.length = 0;
+      this.copyBounds(existing, bounds);
+      existing.cellCount = 0;
       this.attach(existing);
       return;
     }
@@ -144,7 +300,9 @@ export class UniformSpatialHash {
       id,
       elevation,
       bounds: { ...bounds },
-      cells: [],
+      cells: new Array<number | undefined>(4),
+      cellCount: 0,
+      queryGeneration: 0,
     };
     this.attach(record);
     this.records.set(id, record);
@@ -160,40 +318,14 @@ export class UniformSpatialHash {
     return true;
   }
 
-  private detach(record: MutableSpatialRecord): void {
-    for (const key of record.cells) {
-      const bucket = this.cells.get(key);
-      if (bucket === undefined) {
-        continue;
-      }
-      const index = bucket.indexOf(record);
-      if (index >= 0) {
-        const last = bucket.pop();
-        if (last !== undefined && index < bucket.length) {
-          bucket[index] = last;
-        }
-      }
-      if (bucket.length === 0) {
-        this.cells.delete(key);
-      }
-    }
-  }
-
-  private attach(record: MutableSpatialRecord): void {
-    this.visitCellKeys(record.bounds, (key) => {
-      let bucket = this.cells.get(key);
-      if (bucket === undefined) {
-        bucket = [];
-        this.cells.set(key, bucket);
-      }
-      bucket.push(record);
-      record.cells.push(key);
-    });
-  }
-
   clear(): void {
     this.cells.clear();
     this.records.clear();
+    this.queryGeneration = 0;
+    this.bucketCreations = 0;
+    this.bucketCapacityGrowths = 0;
+    this.recordCellCapacityGrowths = 0;
+    this.queryCount = 0;
   }
 
   queryAabb(
@@ -202,93 +334,248 @@ export class UniformSpatialHash {
     output: SpatialQueryBuffer,
   ): number {
     validateAabb(bounds);
+    return this.queryBounds(
+      bounds.minX,
+      bounds.minY,
+      bounds.maxX,
+      bounds.maxY,
+      elevation,
+      output,
+      0,
+      undefined,
+      undefined,
+    );
+  }
+
+  queryCircle(query: MutableCircleQuery, output: SpatialQueryBuffer): number {
+    if (
+      !Number.isFinite(query.x) ||
+      !Number.isFinite(query.y) ||
+      !Number.isFinite(query.radius) ||
+      query.radius < 0
+    ) {
+      throw new RangeError(
+        "Circle query values must be finite and non-negative.",
+      );
+    }
+    return this.queryBounds(
+      query.x - query.radius,
+      query.y - query.radius,
+      query.x + query.radius,
+      query.y + query.radius,
+      query.elevation,
+      output,
+      1,
+      query,
+      undefined,
+    );
+  }
+
+  querySegment(query: MutableSegmentQuery, output: SpatialQueryBuffer): number {
+    if (
+      !Number.isFinite(query.startX) ||
+      !Number.isFinite(query.startY) ||
+      !Number.isFinite(query.endX) ||
+      !Number.isFinite(query.endY) ||
+      !Number.isFinite(query.padding) ||
+      query.padding < 0
+    ) {
+      throw new RangeError(
+        "Segment query values must be finite and padding non-negative.",
+      );
+    }
+    return this.queryBounds(
+      Math.min(query.startX, query.endX) - query.padding,
+      Math.min(query.startY, query.endY) - query.padding,
+      Math.max(query.startX, query.endX) + query.padding,
+      Math.max(query.startY, query.endY) + query.padding,
+      query.elevation,
+      output,
+      2,
+      undefined,
+      query,
+    );
+  }
+
+  private queryBounds(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    elevation: number,
+    output: SpatialQueryBuffer,
+    narrowKind: 0 | 1 | 2,
+    circleQuery: MutableCircleQuery | undefined,
+    segmentQuery: MutableSegmentQuery | undefined,
+  ): number {
     output.reset();
-    this.visitCellKeys(bounds, (key) => {
-      const bucket = this.cells.get(key);
-      if (bucket === undefined) {
-        return;
+    this.queryCount += 1;
+    this.queryGeneration = (this.queryGeneration + 1) >>> 0;
+    if (this.queryGeneration === 0) {
+      for (const record of this.records.values()) {
+        record.queryGeneration = 0;
       }
-      for (const record of bucket) {
-        if (
-          record.elevation === elevation &&
-          overlapsAabb(record.bounds, bounds)
-        ) {
-          output.add(record);
-        }
-      }
-    });
-    return output.records.length;
-  }
-
-  queryCircle(
-    circle: Circle,
-    elevation: number,
-    output: SpatialQueryBuffer,
-  ): number {
-    if (!Number.isFinite(circle.radius) || circle.radius < 0) {
-      throw new RangeError("Circle radius must be finite and non-negative.");
+      this.queryGeneration = 1;
     }
-    const bounds = {
-      minX: circle.x - circle.radius,
-      minY: circle.y - circle.radius,
-      maxX: circle.x + circle.radius,
-      maxY: circle.y + circle.radius,
-    };
-    this.queryAabb(bounds, elevation, output);
-    let write = 0;
-    for (const record of output.records) {
-      if (circleIntersectsAabb(circle, record.bounds)) {
-        output.records[write] = record;
-        write += 1;
-      }
-    }
-    output.records.length = write;
-    return write;
-  }
-
-  querySegment(
-    segment: Segment,
-    padding: number,
-    elevation: number,
-    output: SpatialQueryBuffer,
-  ): number {
-    if (!Number.isFinite(padding) || padding < 0) {
-      throw new RangeError("Segment padding must be finite and non-negative.");
-    }
-    const bounds = {
-      minX: Math.min(segment.startX, segment.endX) - padding,
-      minY: Math.min(segment.startY, segment.endY) - padding,
-      maxX: Math.max(segment.startX, segment.endX) + padding,
-      maxY: Math.max(segment.startY, segment.endY) + padding,
-    };
-    this.queryAabb(bounds, elevation, output);
-    let write = 0;
-    for (const record of output.records) {
-      const expanded = {
-        minX: record.bounds.minX - padding,
-        minY: record.bounds.minY - padding,
-        maxX: record.bounds.maxX + padding,
-        maxY: record.bounds.maxY + padding,
-      };
-      if (segmentIntersectsAabb(segment, expanded)) {
-        output.records[write] = record;
-        write += 1;
-      }
-    }
-    output.records.length = write;
-    return write;
-  }
-
-  private visitCellKeys(bounds: Aabb, visit: (key: string) => void): void {
-    const minCellX = Math.floor(bounds.minX / this.cellSize);
-    const minCellY = Math.floor(bounds.minY / this.cellSize);
-    const maxCellX = Math.floor(bounds.maxX / this.cellSize);
-    const maxCellY = Math.floor(bounds.maxY / this.cellSize);
+    const generation = this.queryGeneration;
+    const minCellX = Math.floor(minX / this.cellSize);
+    const minCellY = Math.floor(minY / this.cellSize);
+    const maxCellX = Math.floor(maxX / this.cellSize);
+    const maxCellY = Math.floor(maxY / this.cellSize);
     for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
       for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
-        visit(`${cellX},${cellY}`);
+        const bucket = this.cells.get(cellKey(cellX, cellY));
+        if (bucket === undefined) {
+          continue;
+        }
+        for (let index = 0; index < bucket.count; index += 1) {
+          const record = bucket.records[index];
+          if (record === undefined) {
+            continue;
+          }
+          if (
+            record.queryGeneration !== generation &&
+            record.elevation === elevation &&
+            record.bounds.minX <= maxX &&
+            record.bounds.maxX >= minX &&
+            record.bounds.minY <= maxY &&
+            record.bounds.maxY >= minY &&
+            (narrowKind === 0 ||
+              (narrowKind === 1 &&
+                circleQuery !== undefined &&
+                circleIntersectsBounds(
+                  circleQuery.x,
+                  circleQuery.y,
+                  circleQuery.radius,
+                  record.bounds,
+                )) ||
+              (narrowKind === 2 &&
+                segmentQuery !== undefined &&
+                segmentIntersectsBounds(
+                  segmentQuery.startX,
+                  segmentQuery.startY,
+                  segmentQuery.endX,
+                  segmentQuery.endY,
+                  record.bounds.minX - segmentQuery.padding,
+                  record.bounds.minY - segmentQuery.padding,
+                  record.bounds.maxX + segmentQuery.padding,
+                  record.bounds.maxY + segmentQuery.padding,
+                )))
+          ) {
+            record.queryGeneration = generation;
+            output.addSorted(record);
+          }
+        }
       }
     }
+    return output.count;
+  }
+
+  private copyBounds(record: MutableSpatialRecord, bounds: Aabb): void {
+    record.bounds.minX = bounds.minX;
+    record.bounds.minY = bounds.minY;
+    record.bounds.maxX = bounds.maxX;
+    record.bounds.maxY = bounds.maxY;
+  }
+
+  private detach(record: MutableSpatialRecord): void {
+    for (let cellIndex = 0; cellIndex < record.cellCount; cellIndex += 1) {
+      const key = record.cells[cellIndex];
+      if (key === undefined) {
+        continue;
+      }
+      const bucket = this.cells.get(key);
+      if (bucket === undefined) {
+        continue;
+      }
+      let index = -1;
+      for (let candidate = 0; candidate < bucket.count; candidate += 1) {
+        if (bucket.records[candidate] === record) {
+          index = candidate;
+          break;
+        }
+      }
+      if (index >= 0) {
+        bucket.count -= 1;
+        const last = bucket.records[bucket.count];
+        bucket.records[bucket.count] = undefined;
+        if (last !== undefined && index < bucket.count) {
+          bucket.records[index] = last;
+        }
+      }
+    }
+  }
+
+  private attach(record: MutableSpatialRecord): void {
+    const minCellX = Math.floor(record.bounds.minX / this.cellSize);
+    const minCellY = Math.floor(record.bounds.minY / this.cellSize);
+    const maxCellX = Math.floor(record.bounds.maxX / this.cellSize);
+    const maxCellY = Math.floor(record.bounds.maxY / this.cellSize);
+    for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+      for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+        const key = cellKey(cellX, cellY);
+        const bucket = this.requireBucket(key, 4);
+        this.ensureBucketCapacity(bucket, bucket.count + 1);
+        bucket.records[bucket.count] = record;
+        bucket.count += 1;
+        this.ensureRecordCellCapacity(record, record.cellCount + 1);
+        record.cells[record.cellCount] = key;
+        record.cellCount += 1;
+        if (bucket.count > bucket.highWaterMark) {
+          bucket.highWaterMark = bucket.count;
+        }
+      }
+    }
+  }
+
+  private requireBucket(key: number, capacity: number): SpatialBucket {
+    let bucket = this.cells.get(key);
+    if (bucket === undefined) {
+      bucket = {
+        records: new Array<MutableSpatialRecord | undefined>(capacity),
+        count: 0,
+        highWaterMark: 0,
+      };
+      this.cells.set(key, bucket);
+      this.bucketCreations += 1;
+    } else {
+      this.ensureBucketCapacity(bucket, capacity);
+    }
+    return bucket;
+  }
+
+  private ensureBucketCapacity(
+    bucket: SpatialBucket,
+    minimumCapacity: number,
+  ): void {
+    if (bucket.records.length >= minimumCapacity) {
+      return;
+    }
+    const next = new Array<MutableSpatialRecord | undefined>(
+      Math.max(minimumCapacity, bucket.records.length * 2),
+    );
+    for (let index = 0; index < bucket.count; index += 1) {
+      next[index] = bucket.records[index];
+    }
+    bucket.records = next;
+    this.bucketCapacityGrowths += 1;
+  }
+
+  private ensureRecordCellCapacity(
+    record: MutableSpatialRecord,
+    minimumCapacity: number,
+  ): void {
+    if (record.cells.length >= minimumCapacity) {
+      return;
+    }
+    const next = new Array<number | undefined>(
+      Math.max(minimumCapacity, record.cells.length * 2),
+    );
+    for (let index = 0; index < record.cellCount; index += 1) {
+      next[index] = record.cells[index];
+    }
+    record.cells = next;
+    this.recordCellCapacityGrowths += 1;
   }
 }
 
@@ -307,11 +594,7 @@ export function aabbsOverlap(left: Aabb, right: Aabb): boolean {
 
 export function circleIntersectsAabb(circle: Circle, bounds: Aabb): boolean {
   validateAabb(bounds);
-  const closestX = Math.max(bounds.minX, Math.min(circle.x, bounds.maxX));
-  const closestY = Math.max(bounds.minY, Math.min(circle.y, bounds.maxY));
-  const dx = circle.x - closestX;
-  const dy = circle.y - closestY;
-  return dx * dx + dy * dy <= circle.radius * circle.radius;
+  return circleIntersectsBounds(circle.x, circle.y, circle.radius, bounds);
 }
 
 export function segmentIntersectsCircle(
@@ -342,32 +625,14 @@ export function segmentIntersectsCircle(
 
 export function segmentIntersectsAabb(segment: Segment, bounds: Aabb): boolean {
   validateAabb(bounds);
-  let minimum = 0;
-  let maximum = 1;
-  const dx = segment.endX - segment.startX;
-  const dy = segment.endY - segment.startY;
-  const axes = [
-    [-dx, segment.startX - bounds.minX],
-    [dx, bounds.maxX - segment.startX],
-    [-dy, segment.startY - bounds.minY],
-    [dy, bounds.maxY - segment.startY],
-  ] as const;
-  for (const [denominator, numerator] of axes) {
-    if (denominator === 0) {
-      if (numerator < 0) {
-        return false;
-      }
-      continue;
-    }
-    const ratio = numerator / denominator;
-    if (denominator < 0) {
-      minimum = Math.max(minimum, ratio);
-    } else {
-      maximum = Math.min(maximum, ratio);
-    }
-    if (minimum > maximum) {
-      return false;
-    }
-  }
-  return true;
+  return segmentIntersectsBounds(
+    segment.startX,
+    segment.startY,
+    segment.endX,
+    segment.endY,
+    bounds.minX,
+    bounds.minY,
+    bounds.maxX,
+    bounds.maxY,
+  );
 }

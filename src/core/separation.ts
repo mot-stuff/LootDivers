@@ -1,6 +1,7 @@
 import {
   SpatialQueryBuffer,
   UniformSpatialHash,
+  type MutableCircleQuery,
   type Point2,
 } from "./spatial.ts";
 
@@ -16,6 +17,7 @@ export function computeLocalSeparation(
   elevation: number,
   radius: number,
   maximumMagnitude: number,
+  circleQuery: MutableCircleQuery,
   queryBuffer: SpatialQueryBuffer,
   output: MutableVector2,
 ): number {
@@ -32,12 +34,16 @@ export function computeLocalSeparation(
 
   output.x = 0;
   output.y = 0;
-  spatial.queryCircle({ ...position, radius }, elevation, queryBuffer);
-  queryBuffer.records.sort((left, right) => left.id - right.id);
+  circleQuery.x = position.x;
+  circleQuery.y = position.y;
+  circleQuery.radius = radius;
+  circleQuery.elevation = elevation;
+  spatial.queryCircle(circleQuery, queryBuffer);
 
   let neighbors = 0;
-  for (const record of queryBuffer.records) {
-    if (record.id === selfId) {
+  for (let index = 0; index < queryBuffer.count; index += 1) {
+    const record = queryBuffer.records[index];
+    if (record === undefined || record.id === selfId) {
       continue;
     }
     const otherX = (record.bounds.minX + record.bounds.maxX) * 0.5;
