@@ -1,6 +1,7 @@
 # Dependencies and package-manager state
 node_modules/
 .npm/
+.tools/
 
 # Build and test output
 dist/

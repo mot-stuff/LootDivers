@@ -53,19 +53,33 @@ may read core exports but does not own game state. Phaser remains an adapter.
 
 ## Commands
 
-Install and verify from the repository root:
+On Windows, no system Node.js or npm installation is required. From the
+repository root, provision the pinned official distribution into the ignored
+`.tools` directory and capture its absolute npm path:
 
-```text
-npm ci
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm run budget
-npx playwright install chromium
-npm run test:smoke
+```powershell
+$npm = & .\scripts\bootstrap-toolchain.ps1
+& $npm ci
+& $npm run format:check
+& $npm run lint
+& $npm run typecheck
+& $npm test
+& $npm run build
+& $npm run budget
+& $npm exec playwright -- install chromium
+& $npm run test:smoke
 ```
+
+The bootstrap downloads Node.js `24.20.0` from `nodejs.org`, verifies the
+Windows x64 archive against the release's official `SHASUMS256.txt`, validates
+the bundled Node.js and npm versions, and returns only the absolute `npm.cmd`
+path. If local execution policy blocks scripts, invoke it through
+`$npm = powershell -NoProfile -ExecutionPolicy Bypass -File
+.\scripts\bootstrap-toolchain.ps1`.
+
+On another platform with the pinned Node.js and npm versions already active,
+the equivalent commands may be run directly with `npm`. Do not use the IDE's
+private helper `node.exe` as a project runtime.
 
 `test:smoke` starts Vite preview and tests the production `dist` artifact. It
 fails on browser console errors, uncaught page errors, failed requests, HTTP
