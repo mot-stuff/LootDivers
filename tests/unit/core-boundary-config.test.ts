@@ -5,6 +5,7 @@ import { ESLint, type Linter } from "eslint";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
+const coreBoundaryRule = "core-boundary/imports-stay-in-core";
 
 function configuredSeverity(rule: unknown): unknown {
   return Array.isArray(rule) ? rule[0] : undefined;
@@ -18,7 +19,7 @@ describe("core boundary configuration", () => {
     )) as Linter.Config | undefined;
 
     expect(
-      configuredSeverity(config?.rules?.["no-restricted-imports"] as unknown),
+      configuredSeverity(config?.rules?.[coreBoundaryRule] as unknown),
     ).toBe(2);
     expect(
       configuredSeverity(config?.rules?.["no-restricted-globals"] as unknown),
@@ -41,7 +42,7 @@ describe("core boundary configuration", () => {
     expect(config.compilerOptions.types).toEqual([]);
   });
 
-  it("rejects framework, adapter, presentation, and Node imports in core", async () => {
+  it("rejects every static import or re-export outside core", async () => {
     const eslint = new ESLint({ cwd: repositoryRoot });
     const [result] = await eslint.lintText(
       [
@@ -50,15 +51,74 @@ describe("core boundary configuration", () => {
         'import "node:fs";',
         'import "../adapters/phaser/boot";',
         'import "../presentation/App";',
+        'import "../main";',
+        'import "../content";',
+        'import "../persistence";',
+        'export * from "../main";',
+        'export { example } from "../../tests/example";',
       ].join("\n"),
       { filePath: "src/core/index.ts" },
     );
     const restrictedImports =
       result?.messages.filter(
-        (message) => message.ruleId === "no-restricted-imports",
+        (message) => message.ruleId === coreBoundaryRule,
       ) ?? [];
 
-    expect(restrictedImports).toHaveLength(5);
+    expect(restrictedImports).toHaveLength(10);
+  });
+
+  it("rejects prohibited dynamic imports and non-static specifiers", async () => {
+    const eslint = new ESLint({ cwd: repositoryRoot });
+    const [result] = await eslint.lintText(
+      [
+        'void import("phaser");',
+        'void import("preact/hooks");',
+        'void import("node:fs");',
+        'void import("../adapters/phaser/boot");',
+        'void import("../presentation/App");',
+        'void import("../main");',
+        'void import("../content");',
+        "void import(`../persistence`);",
+        'const target = "../main";',
+        "void import(target);",
+        'type OuterModule = typeof import("../main");',
+        'import Outer = require("../main");',
+        'void import("./%2e%2e/main");',
+        'void import(".\\\\..\\\\main");',
+      ].join("\n"),
+      { filePath: "src/core/index.ts" },
+    );
+    const restrictedImports =
+      result?.messages.filter(
+        (message) => message.ruleId === coreBoundaryRule,
+      ) ?? [];
+
+    expect(restrictedImports).toHaveLength(13);
+    expect(
+      restrictedImports.some((message) =>
+        /static relative/.test(message.message),
+      ),
+    ).toBe(true);
+  });
+
+  it("allows static and dynamic imports that remain inside core", async () => {
+    const eslint = new ESLint({ cwd: repositoryRoot });
+    const [result] = await eslint.lintText(
+      [
+        'import type { Clock } from "./clock";',
+        'export * from "./messages";',
+        'void import("./random");',
+        "void import(`./ids`);",
+        'type ClockModule = typeof import("./clock");',
+      ].join("\n"),
+      { filePath: "src/core/index.ts" },
+    );
+
+    expect(
+      result?.messages.filter(
+        (message) => message.ruleId === coreBoundaryRule,
+      ) ?? [],
+    ).toEqual([]);
   });
 
   it("rejects representative DOM and browser globals in core", async () => {
