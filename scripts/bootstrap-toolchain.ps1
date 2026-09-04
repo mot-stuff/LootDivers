@@ -63,5 +63,12 @@ if ($installedNpmVersion -ne $expectedNpmVersion) {
     throw "Expected npm $expectedNpmVersion, found $installedNpmVersion."
 }
 
+# Environment variables are process-scoped, so this remains active in the
+# calling PowerShell session and is inherited by Playwright's child processes.
+$pathEntries = $env:PATH -split [IO.Path]::PathSeparator
+if ($pathEntries -notcontains $installationDirectory) {
+    $env:PATH = "$installationDirectory$([IO.Path]::PathSeparator)$env:PATH"
+}
+
 # Return only the absolute executable path so callers can safely capture it.
 Write-Output $npmPath

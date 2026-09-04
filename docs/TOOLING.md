@@ -72,10 +72,18 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 
 The bootstrap downloads Node.js `24.20.0` from `nodejs.org`, verifies the
 Windows x64 archive against the release's official `SHASUMS256.txt`, validates
-the bundled Node.js and npm versions, and returns only the absolute `npm.cmd`
-path. If local execution policy blocks scripts, invoke it through
-`$npm = powershell -NoProfile -ExecutionPolicy Bypass -File
-.\scripts\bootstrap-toolchain.ps1`.
+the bundled Node.js and npm versions, prepends that distribution to the current
+PowerShell process's `PATH`, and returns only the absolute `npm.cmd` path. The
+updated `PATH` is inherited by child processes such as Playwright's preview
+server.
+
+If local execution policy blocks scripts, invoke it in a child PowerShell and
+apply the returned location to the current process:
+
+```powershell
+$npm = powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap-toolchain.ps1
+$env:PATH = "$(Split-Path $npm);$env:PATH"
+```
 
 On another platform with the pinned Node.js and npm versions already active,
 the equivalent commands may be run directly with `npm`. Do not use the IDE's
