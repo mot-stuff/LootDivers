@@ -151,6 +151,13 @@ TASK-P0-013 or shared development.
   schemas, Ajv and semantic validation, central synthetic registries, safe
   asset references, deterministic compiled manifests, and non-mutating
   generated-output freshness checks.
+- **TASK-P0-007:** Complete pending independent acceptance on 2026-09-04. The
+  framework-free technical foundation provides uniform spatial queries, simple
+  collision tests, a compiled 128×128 navigation grid, bounded deterministic
+  A*, a fair bounded request scheduler, local separation, and a deterministic
+  diagnostic timing harness. Current-machine timing is explicitly
+  `INELIGIBLE`; representative browser population acceptance remains with
+  TASK-P0-008.
 - **TASK-P0-010:** Complete pending independent acceptance on 2026-09-04. The
   synthetic local persistence foundation provides a framework-free repository
   and migration boundary, versioned checksummed envelopes, validated IndexedDB

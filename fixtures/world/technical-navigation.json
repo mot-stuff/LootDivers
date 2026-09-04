@@ -1,0 +1,21 @@
+{
+  "gridVersion": "1.0.0",
+  "gridId": "fixture:technical-navigation",
+  "sourceZoneId": "fixture:technical-isometric",
+  "width": 128,
+  "height": 128,
+  "cellSize": 32,
+  "defaultCost": 1,
+  "defaultElevation": 0,
+  "blocked": [
+    { "x": 64, "y": 0, "width": 1, "height": 56, "value": 0 },
+    { "x": 64, "y": 72, "width": 1, "height": 56, "value": 0 },
+    { "x": 16, "y": 48, "width": 32, "height": 2, "value": 0 },
+    { "x": 80, "y": 40, "width": 32, "height": 2, "value": 0 }
+  ],
+  "costs": [
+    { "x": 8, "y": 72, "width": 24, "height": 20, "value": 3 },
+    { "x": 72, "y": 8, "width": 20, "height": 20, "value": 5 }
+  ],
+  "elevations": [{ "x": 96, "y": 96, "width": 24, "height": 24, "value": 1 }]
+}

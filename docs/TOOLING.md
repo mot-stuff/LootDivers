@@ -79,6 +79,7 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm run test:smoke
 & $npm run test:visual
 & $npm run budget:world
+& $npm run timing:navigation
 ```
 
 The bootstrap downloads Node.js `24.20.0` from `nodejs.org`, verifies the
@@ -113,6 +114,15 @@ Vitest Browser Mode through the pinned Playwright Chromium provider.
 Playwright browser matrix. UI shell contracts, focus rules, resize/DPR behavior,
 accessibility coverage, and the manual keyboard checklist are documented in
 [`UI_SHELL.md`](UI_SHELL.md).
+
+Spatial, collision, compiled-grid, bounded A*, scheduler, separation, and
+diagnostic timing contracts are documented in
+[`SPATIAL_NAVIGATION.md`](SPATIAL_NAVIGATION.md). `world:check` also verifies the
+committed 128×128 navigation grid. `timing:navigation` is a deterministic
+current-machine diagnostic and is always `INELIGIBLE`, never an acceptance
+performance pass. Retained runs use both `--output=<summary.json>` and
+`--raw-output=<samples.json>` and must be generated from a clean committed
+implementation state before a separate evidence commit.
 
 Content schemas, authoring rules, diagnostics, generated output, and version
 contracts are documented in [`CONTENT_AUTHORING.md`](CONTENT_AUTHORING.md).

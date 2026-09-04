@@ -28,6 +28,7 @@
     "test:visual": "node scripts/run-playwright.mjs tests/e2e/isometric-world.spec.ts --project=chromium --grep deterministic",
     "budget": "node scripts/report-transfer-budget.mjs",
     "budget:world": "node scripts/report-world-budget.mjs",
+    "timing:navigation": "node scripts/report-spatial-navigation-timing.mts",
     "world:compile": "node scripts/world.mts compile",
     "world:check": "node scripts/world.mts check",
     "content:validate": "node scripts/content.mts validate",

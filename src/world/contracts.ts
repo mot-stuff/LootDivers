@@ -1,4 +1,5 @@
 export const ZONE_BUNDLE_VERSION = "1.0.0" as const;
+export const NAVIGATION_GRID_VERSION = "1.0.0" as const;
 
 export const ISO_LAYER_ORDER = [
   "ground",
@@ -61,4 +62,17 @@ export interface CompiledZoneBundle {
   readonly layers: readonly ZoneLayer[];
   readonly markers: readonly ZoneMarker[];
   readonly assetKeys: readonly string[];
+}
+
+export interface CompiledNavigationGridBundle {
+  readonly gridVersion: typeof NAVIGATION_GRID_VERSION;
+  readonly zoneBundleVersion: typeof ZONE_BUNDLE_VERSION;
+  readonly gridId: string;
+  readonly sourceZoneId: string;
+  readonly sourceHash: string;
+  readonly width: number;
+  readonly height: number;
+  readonly cellSize: number;
+  readonly costs: readonly number[];
+  readonly elevations: readonly number[];
 }
