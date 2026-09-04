@@ -715,6 +715,28 @@ invalid newest generation falls back safely; quota/blocked errors are surfaced;
 malformed import cannot replace a valid save.
 **Testing:** Unit migration tests and Playwright reload/failure-path tests.
 
+**Completion record (2026-09-04):** Complete pending independent acceptance.
+The framework-free persistence boundary now provides versioned, checksummed
+synthetic save envelopes, ordered migration, fixture-state validation, and
+validated JSON export/import. The IndexedDB adapter writes inactive
+generations, verifies them before pointer promotion, retains a last-known-good
+backup, and exposes stable error UX states. Clean pinned verification passed 77
+unit tests and nine Chromium production-artifact tests, including reload,
+invalid-active fallback, interrupted promotion, quota/blocked error hooks,
+valid export/import, and non-destructive malformed/tampered import. No
+production character/world schema, gameplay, account, backend, cloud-sync, or
+anti-cheat behavior was introduced.
+
+**QA remediation record (2026-09-04):** Concurrent save/import mutations are
+now serialized, revision derivation is monotonic and unique, promotion
+atomically retains only active and backup generations, and unreachable staged
+generations are pruned. Checksums validate the complete raw envelope so unknown
+fields cannot be ignored, and ordered migration provenance survives browser
+import/export and later saves. Regression coverage now includes concurrent
+saves followed by corrupt-active fallback, interrupted-generation pruning,
+unknown-field rejection, and browser migration provenance. The isolated
+Playwright preview uses a stable worktree-derived port.
+
 ### TASK-P0-011 — Establish UI shell boundaries
 
 **Owner:** UI Engineer

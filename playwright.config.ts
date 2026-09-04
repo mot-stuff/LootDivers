@@ -1,16 +1,30 @@
+import { createHash } from "node:crypto";
+
 import { defineConfig, devices } from "@playwright/test";
 
-const previewPort = Number.parseInt(
-  process.env["RARPG_PLAYWRIGHT_PORT"] ?? "4174",
-  10,
-);
+const configuredPort =
+  process.env["RARPG_PLAYWRIGHT_PORT"] ??
+  process.env["PLAYWRIGHT_PREVIEW_PORT"];
+const worktreePortOffset =
+  Number.parseInt(
+    createHash("sha256").update(process.cwd()).digest("hex").slice(0, 8),
+    16,
+  ) % 10_000;
+const previewPort =
+  configuredPort === undefined
+    ? 45_000 + worktreePortOffset
+    : Number(configuredPort);
+
 if (
-  !Number.isInteger(previewPort) ||
+  !Number.isSafeInteger(previewPort) ||
   previewPort < 1024 ||
   previewPort > 65_535
 ) {
-  throw new Error("RARPG_PLAYWRIGHT_PORT must be an available TCP port.");
+  throw new Error(
+    "RARPG_PLAYWRIGHT_PORT or PLAYWRIGHT_PREVIEW_PORT must be an available TCP port.",
+  );
 }
+
 const previewUrl = `http://127.0.0.1:${previewPort}`;
 
 export default defineConfig({
