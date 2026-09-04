@@ -151,6 +151,12 @@ TASK-P0-013 or shared development.
   schemas, Ajv and semantic validation, central synthetic registries, safe
   asset references, deterministic compiled manifests, and non-mutating
   generated-output freshness checks.
+- **TASK-P0-010:** Complete pending independent acceptance on 2026-09-04. The
+  synthetic local persistence foundation provides a framework-free repository
+  and migration boundary, versioned checksummed envelopes, validated IndexedDB
+  generations with last-known-good fallback, validated export/import, and
+  actionable quota/blocked/error UX hooks. It does not define production state
+  or introduce gameplay, accounts, cloud sync, backend, or anti-cheat systems.
 
 The integrated P0-004/P0-005 result passed a clean pinned install, formatting,
 warning-fatal lint, strict type-checking, 73 tests, production build, all

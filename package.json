@@ -20,7 +20,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc -p tsconfig.core.json && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.core.json && tsc -p tsconfig.persistence.json && tsc -p tsconfig.json",
     "test": "vitest run",
     "test:smoke": "playwright test --project=chromium",
     "budget": "node scripts/report-transfer-budget.mjs",

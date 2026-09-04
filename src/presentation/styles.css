@@ -57,7 +57,8 @@ h1 {
 }
 
 .diagnostics div,
-.boot-status {
+.boot-status,
+.persistence-fixture {
   padding: 0.85rem 1rem;
   border: 1px solid #29405e;
   border-radius: 0.55rem;
@@ -82,6 +83,81 @@ h1 {
 
 .boot-status.error {
   border-color: #a64a4a;
+  color: #ffd0d0;
+}
+
+.persistence-fixture {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.persistence-fixture h2 {
+  margin: 0;
+}
+
+.persistence-fixture label {
+  display: grid;
+  gap: 0.35rem;
+  color: #b8c8de;
+  font-size: 0.85rem;
+}
+
+.persistence-fixture input,
+.persistence-fixture textarea,
+.persistence-fixture button {
+  border: 1px solid #385272;
+  border-radius: 0.4rem;
+  color: #e8f1ff;
+  background: #08111f;
+  font: inherit;
+}
+
+.persistence-fixture input,
+.persistence-fixture textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+}
+
+.persistence-fixture textarea {
+  resize: vertical;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.75rem;
+}
+
+.persistence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.persistence-fixture button {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.persistence-fixture button:hover {
+  border-color: #76b8ff;
+}
+
+.persistence-status {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border-left: 3px solid #4d7cab;
+  background: #0b1525;
+}
+
+.persistence-status.saved,
+.persistence-status.loaded {
+  border-color: #36a174;
+}
+
+.persistence-status.recovered {
+  border-color: #d3a13a;
+  color: #ffe5a6;
+}
+
+.persistence-status.error {
+  border-color: #c95656;
   color: #ffd0d0;
 }
 
