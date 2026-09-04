@@ -130,3 +130,18 @@ Not allowed:
 Hosted backup, branch protection, and CI remain unavailable by the owner's
 local-only choice. This is accepted for TASK-P0-001 but must be revisited before
 TASK-P0-013 or shared development.
+
+## Subsequent Phase 0 completion status
+
+- **TASK-P0-002:** Complete and independently accepted on 2026-09-04. The
+  browser, performance, loading, and bundle measurement contract and its
+  non-reference-machine dry-run evidence are recorded. Representative fixture
+  gates remain dependency-bound and deferred.
+- **TASK-P0-003:** Complete and independently accepted on 2026-09-04. The
+  strict-TypeScript Phaser 4.2.1, Preact, and Vite browser foundation passes its
+  clean install, static checks, unit tests, production build, transfer gates,
+  WebGL2 diagnostics, and Chromium production smoke.
+
+These completions make TASK-P0-004, TASK-P0-005, and TASK-P0-011
+dependency-safe to start. They do not authorize those tasks, TASK-P0-006 or
+later work, Phase 1, or gameplay implementation.

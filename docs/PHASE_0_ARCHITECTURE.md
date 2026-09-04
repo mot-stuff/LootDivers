@@ -563,6 +563,14 @@ sampling, pass/fail/report rules, bundle and asset budgets.
 process are explicit; Safari availability is recorded.
 **Testing:** Dry-run the measurement procedure against a minimal static fixture.
 
+**Completion record (2026-09-04):** Complete and independently accepted. The
+reproducible gate contract is recorded in
+`docs/TASK_P0_002_BROWSER_PERFORMANCE_BUDGETS.md`, with machine-readable dry-run
+evidence in `reports/TASK-P0-002/2026-09-04-dry-run.json`. The available machine
+is not the reference tier and real Safari remains unavailable; representative
+performance, lifecycle, and browser-matrix gates remain explicitly deferred to
+their dependency tasks rather than reported as passes.
+
 ### TASK-P0-003 — Establish browser toolchain and module skeleton
 
 **Owner:** Gameplay Engineer
@@ -580,6 +588,15 @@ absent from core modules; shell transfer budget is reported; browser console
 errors fail the boot test.
 **Testing:** Run all scripts and the minimal Playwright smoke from a clean
 checkout.
+
+**Completion record (2026-09-04):** Complete and independently accepted. The
+pinned Node/npm/Vite/TypeScript/Phaser/Preact toolchain, framework-free core
+boundary, WebGL2-only diagnostic shell, transfer-budget report, Vitest checks,
+and Playwright Chromium production-build smoke are implemented and documented
+in `docs/TOOLING.md`. A clean `npm ci` verification passed formatting, lint,
+type-checking, 10 unit tests, production build, all currently measurable shell
+transfer gates, and Chromium smoke. No gameplay or later Phase 0 task was
+introduced.
 
 ### TASK-P0-004 — Implement deterministic foundation contracts
 
