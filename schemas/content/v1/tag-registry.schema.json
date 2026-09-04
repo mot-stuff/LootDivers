@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rarpg.dev/schemas/content/v1/tag-registry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "contentVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "kind": { "const": "tag-registry" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+          }
+        },
+        "required": ["id"]
+      }
+    }
+  },
+  "required": ["schemaVersion", "contentVersion", "kind", "entries"]
+}

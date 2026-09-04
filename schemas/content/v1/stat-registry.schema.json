@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rarpg.dev/schemas/content/v1/stat-registry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "contentVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "kind": { "const": "stat-registry" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+          },
+          "minimum": {
+            "type": "number",
+            "minimum": -1000000000,
+            "maximum": 1000000000
+          },
+          "maximum": {
+            "type": "number",
+            "minimum": -1000000000,
+            "maximum": 1000000000
+          }
+        },
+        "required": ["id", "minimum", "maximum"]
+      }
+    }
+  },
+  "required": ["schemaVersion", "contentVersion", "kind", "entries"]
+}

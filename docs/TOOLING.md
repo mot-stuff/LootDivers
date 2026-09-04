@@ -30,12 +30,14 @@ packages are:
 - Vitest `5.0.0`
 - Playwright Test `1.62.1`
 - Node type declarations `24.13.3`
+- Ajv `8.20.0` for build-time content shape validation
 
 Versions and engine/peer constraints were resolved from npm registry package
 metadata on 2026-09-04. TypeScript `6.0.3` is the newest release accepted by
 `typescript-eslint`'s `<6.1.0` peer range; TypeScript `7.0.2` is intentionally
-not used. Every direct dependency is exact, and `package-lock.json` locks the
-complete graph.
+not used. Ajv `8.20.0` declares no engine or peer dependency constraints and is
+compatible with the pinned Node/npm runtime. Every direct dependency is exact,
+and `package-lock.json` locks the complete graph.
 
 ## Module boundaries
 
@@ -68,6 +70,9 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm test
 & $npm run build
 & $npm run budget
+& $npm run content:validate
+& $npm run content:compile
+& $npm run content:check-determinism
 & $npm exec playwright -- install chromium
 & $npm run test:smoke
 ```
@@ -94,6 +99,9 @@ private helper `node.exe` as a project runtime.
 `test:smoke` starts Vite preview and tests the production `dist` artifact. It
 fails on browser console errors, uncaught page errors, failed requests, HTTP
 responses at or above 400, missing semantic readiness, or a non-WebGL2 canvas.
+
+Content schemas, authoring rules, diagnostics, generated output, and version
+contracts are documented in [`CONTENT_AUTHORING.md`](CONTENT_AUTHORING.md).
 
 ## Renderer and transfer policy
 

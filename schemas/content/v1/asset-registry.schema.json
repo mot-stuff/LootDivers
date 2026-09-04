@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rarpg.dev/schemas/content/v1/asset-registry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "contentVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "kind": { "const": "asset-registry" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+          },
+          "type": { "enum": ["audio", "data", "image"] },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_./-]*$"
+          }
+        },
+        "required": ["id", "type", "source"]
+      }
+    }
+  },
+  "required": ["schemaVersion", "contentVersion", "kind", "entries"]
+}

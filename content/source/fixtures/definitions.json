@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "contentVersion": "0.1.0",
+  "kind": "technical-definition",
+  "id": "fixture:root",
+  "tags": ["fixture:synthetic"],
+  "stats": [{ "statId": "fixture:scalar", "value": 1 }],
+  "assets": ["fixture:placeholder"],
+  "references": []
+}

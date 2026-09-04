@@ -1,4 +1,5 @@
 dist
+generated/content
 node_modules
 package-lock.json
 playwright-report

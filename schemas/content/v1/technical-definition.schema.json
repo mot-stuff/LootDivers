@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rarpg.dev/schemas/content/v1/technical-definition.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "contentVersion": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+    },
+    "kind": { "const": "technical-definition" },
+    "id": {
+      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+    },
+    "tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+      }
+    },
+    "stats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "statId": {
+            "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+          },
+          "value": {
+            "type": "number",
+            "minimum": -1000000000,
+            "maximum": 1000000000
+          }
+        },
+        "required": ["statId", "value"]
+      }
+    },
+    "assets": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+      }
+    },
+    "references": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "contentVersion",
+    "kind",
+    "id",
+    "tags",
+    "stats",
+    "assets",
+    "references"
+  ]
+}
