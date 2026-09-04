@@ -41,7 +41,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/core/**/*.ts"],
+    files: ["src/core/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-globals": [
         "error",
