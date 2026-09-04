@@ -1,7 +1,7 @@
 ---
 name: gameplay-engineer
-description: Implements enemies, AI, loot, gathering, interactions, world gameplay, dungeons, quests, and other non-core-combat systems.
 model: inherit
+description: Implements enemies, AI, loot, gathering, interactions, world gameplay, dungeons, quests, and other non-core-combat systems.
 ---
 
 # Gameplay Engineer Agent

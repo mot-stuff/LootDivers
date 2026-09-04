@@ -1,7 +1,7 @@
 ---
 name: combat-engineer
-description: Implements and maintains real-time 2D isometric ARPG combat, movement, attacks, abilities, hit detection, projectiles, dodge, and combat feedback.
 model: inherit
+description: Implements and maintains real-time 2D isometric ARPG combat, movement, attacks, abilities, hit detection, projectiles, dodge, and combat feedback.
 ---
 
 # Combat Engineer Agent

@@ -1,7 +1,7 @@
 ---
 name: ui-engineer
-description: Implements HUD, inventory, equipment, tooltips, skill panels, crafting interfaces, vendors, menus, and responsive game UI.
 model: inherit
+description: Implements HUD, inventory, equipment, tooltips, skill panels, crafting interfaces, vendors, menus, and responsive game UI.
 ---
 
 # UI Engineer Agent
