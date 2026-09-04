@@ -37,7 +37,7 @@ declare global {
   interface Window {
     __RARPG_WORLD_TEST__?: {
       diagnostics: () => ZoneLifecycleDiagnostics;
-      load: () => Promise<void>;
+      load: (url?: string) => Promise<void>;
       pick: (screenX: number, screenY: number) => void;
       unload: () => void;
     };
@@ -188,7 +188,7 @@ if (!support.supported) {
       if (worldAutomation) {
         window.__RARPG_WORLD_TEST__ = {
           diagnostics: () => renderer.world.diagnostics(),
-          load: () => renderer.world.load(),
+          load: (url) => renderer.world.load(url),
           pick: (screenX, screenY) => {
             renderer.world.pick(screenX, screenY);
           },

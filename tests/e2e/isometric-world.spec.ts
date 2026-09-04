@@ -1,4 +1,46 @@
-import { expect, test, type Page } from "@playwright/test";
+import { fileURLToPath } from "node:url";
+
+import { expect, test, type Page, type Route } from "@playwright/test";
+
+const zoneFixturePath = fileURLToPath(
+  new URL("../../public/zones/technical-isometric.zone.json", import.meta.url),
+);
+
+async function launchObservedLoad(
+  page: Page,
+  label: string,
+  url: string,
+): Promise<void> {
+  await page.evaluate(
+    ({ loadLabel, loadUrl }) => {
+      const testWindow = window as typeof window & {
+        __RARPG_LOAD_RESULTS__?: string[];
+      };
+      testWindow.__RARPG_LOAD_RESULTS__ ??= [];
+      void testWindow.__RARPG_WORLD_TEST__?.load(loadUrl).then(
+        () => testWindow.__RARPG_LOAD_RESULTS__?.push(`${loadLabel}:resolved`),
+        (error: unknown) =>
+          testWindow.__RARPG_LOAD_RESULTS__?.push(
+            `${loadLabel}:rejected:${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ),
+      );
+    },
+    { loadLabel: label, loadUrl: url },
+  );
+}
+
+async function loadResults(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __RARPG_LOAD_RESULTS__?: string[];
+        }
+      ).__RARPG_LOAD_RESULTS__ ?? [],
+  );
+}
 
 async function clickLogicalCanvasPoint(
   page: Page,
@@ -35,6 +77,7 @@ test.beforeEach(async ({ page }) => {
               objectCount: diagnostics.objectCount,
               chunkCount: diagnostics.chunkCount,
               assetCount: diagnostics.assetCount,
+              listenerCount: diagnostics.listenerCount,
             };
       }),
     )
@@ -43,6 +86,7 @@ test.beforeEach(async ({ page }) => {
       objectCount: 27,
       chunkCount: 20,
       assetCount: 1,
+      listenerCount: 1,
     });
 });
 
@@ -57,6 +101,7 @@ test("loads, picks, unloads, releases, and reloads the technical zone", async ({
     objectCount: 27,
     chunkCount: 20,
     assetCount: 1,
+    listenerCount: 1,
     pickedCell: null,
   });
 
@@ -92,6 +137,7 @@ test("loads, picks, unloads, releases, and reloads the technical zone", async ({
     objectCount: 0,
     chunkCount: 0,
     assetCount: 0,
+    listenerCount: 0,
     pickedCell: null,
   });
 
@@ -101,6 +147,110 @@ test("loads, picks, unloads, releases, and reloads the technical zone", async ({
   expect(
     await page.evaluate(() => window.__RARPG_WORLD_TEST__?.diagnostics()),
   ).toEqual(initial);
+});
+
+test("serializes concurrent loads and keeps one committed resource set", async ({
+  page,
+}) => {
+  let resolveFirst!: (route: Route) => void;
+  let resolveSecond!: (route: Route) => void;
+  const firstRequest = new Promise<Route>((resolve) => {
+    resolveFirst = resolve;
+  });
+  const secondRequest = new Promise<Route>((resolve) => {
+    resolveSecond = resolve;
+  });
+  await page.route("**/zones/lifecycle-first.json", resolveFirst);
+  await page.route("**/zones/lifecycle-second.json", resolveSecond);
+
+  await launchObservedLoad(page, "first", "/zones/lifecycle-first.json");
+  await firstRequest;
+  await launchObservedLoad(page, "second", "/zones/lifecycle-second.json");
+  const latestRoute = await secondRequest;
+  await latestRoute.fulfill({
+    contentType: "application/json",
+    path: zoneFixturePath,
+  });
+
+  await expect
+    .poll(() => loadResults(page))
+    .toEqual(["first:resolved", "second:resolved"]);
+  expect(
+    await page.evaluate(() => window.__RARPG_WORLD_TEST__?.diagnostics()),
+  ).toEqual({
+    zoneId: "fixture:technical-isometric",
+    objectCount: 27,
+    chunkCount: 20,
+    assetCount: 1,
+    listenerCount: 1,
+    pickedCell: null,
+  });
+});
+
+test("cancels load on unload, ignores physical clicks, recovers from failure", async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error));
+
+  let resolvePending!: (route: Route) => void;
+  const pendingRequest = new Promise<Route>((resolve) => {
+    resolvePending = resolve;
+  });
+  await page.route("**/zones/lifecycle-pending.json", resolvePending);
+  await launchObservedLoad(page, "pending", "/zones/lifecycle-pending.json");
+  await pendingRequest;
+  await page.evaluate(() => window.__RARPG_WORLD_TEST__?.unload());
+  await expect.poll(() => loadResults(page)).toContain("pending:resolved");
+
+  expect(
+    await page.evaluate(() => window.__RARPG_WORLD_TEST__?.diagnostics()),
+  ).toEqual({
+    zoneId: null,
+    objectCount: 0,
+    chunkCount: 0,
+    assetCount: 0,
+    listenerCount: 0,
+    pickedCell: null,
+  });
+  await clickLogicalCanvasPoint(page, 480, 108);
+  expect(pageErrors).toEqual([]);
+
+  await page.route("**/zones/lifecycle-failure.json", async (route) => {
+    await route.fulfill({
+      body: "temporary failure",
+      contentType: "text/plain",
+      status: 503,
+    });
+  });
+  await launchObservedLoad(page, "failure", "/zones/lifecycle-failure.json");
+  await expect
+    .poll(() => loadResults(page))
+    .toContain(
+      'failure:rejected:Technical zone "/zones/lifecycle-failure.json" failed to load: request returned HTTP 503',
+    );
+  expect(
+    await page.evaluate(() => window.__RARPG_WORLD_TEST__?.diagnostics()),
+  ).toEqual({
+    zoneId: null,
+    objectCount: 0,
+    chunkCount: 0,
+    assetCount: 0,
+    listenerCount: 0,
+    pickedCell: null,
+  });
+
+  await page.evaluate(() => window.__RARPG_WORLD_TEST__?.load());
+  expect(
+    await page.evaluate(() => window.__RARPG_WORLD_TEST__?.diagnostics()),
+  ).toEqual({
+    zoneId: "fixture:technical-isometric",
+    objectCount: 27,
+    chunkCount: 20,
+    assetCount: 1,
+    listenerCount: 1,
+    pickedCell: null,
+  });
 });
 
 for (const pointerCase of [

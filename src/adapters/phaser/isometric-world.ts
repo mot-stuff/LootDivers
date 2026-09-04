@@ -21,6 +21,7 @@ export interface ZoneLifecycleDiagnostics {
   readonly objectCount: number;
   readonly chunkCount: number;
   readonly assetCount: number;
+  readonly listenerCount: number;
   readonly pickedCell: string | null;
 }
 
@@ -57,29 +58,83 @@ export class IsometricZoneAdapter {
   #pickedCell: string | null = null;
   #pickLabel: Phaser.GameObjects.Text | null = null;
   #pointerHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
+  #generation = 0;
+  #loadController: AbortController | null = null;
 
   public constructor(scene: Phaser.Scene) {
     this.#scene = scene;
   }
 
   public async load(url = FIXTURE_URL): Promise<void> {
-    this.unload();
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`Technical zone request failed with ${response.status}.`);
+    const generation = this.#beginGeneration();
+    const controller = new AbortController();
+    this.#loadController = controller;
+
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!this.#isCurrent(generation, controller)) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`request returned HTTP ${response.status}`);
+      }
+
+      const candidate: unknown = await response.json();
+      if (!this.#isCurrent(generation, controller)) {
+        return;
+      }
+      if (!isZoneBundle(candidate)) {
+        throw new Error("bundle has an incompatible contract");
+      }
+
+      this.#bundle = candidate;
+      this.#createMarkerTexture();
+      this.#renderLayers(candidate);
+      this.#renderMarkers(candidate);
+      this.#installPicking(generation);
+    } catch (error: unknown) {
+      if (!this.#isCurrent(generation, controller)) {
+        return;
+      }
+      this.#releaseCommittedResources();
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Technical zone "${url}" failed to load: ${detail}`, {
+        cause: error,
+      });
+    } finally {
+      if (this.#loadController === controller) {
+        this.#loadController = null;
+      }
     }
-    const candidate: unknown = await response.json();
-    if (!isZoneBundle(candidate)) {
-      throw new Error("Technical zone bundle has an incompatible contract.");
-    }
-    this.#bundle = candidate;
-    this.#createMarkerTexture();
-    this.#renderLayers(candidate);
-    this.#renderMarkers(candidate);
-    this.#installPicking();
   }
 
   public unload(): void {
+    this.#generation += 1;
+    this.#loadController?.abort();
+    this.#loadController = null;
+    this.#releaseCommittedResources();
+  }
+
+  #beginGeneration(): number {
+    this.#generation += 1;
+    this.#loadController?.abort();
+    this.#loadController = null;
+    this.#releaseCommittedResources();
+    return this.#generation;
+  }
+
+  #isCurrent(generation: number, controller: AbortController): boolean {
+    return (
+      generation === this.#generation &&
+      this.#loadController === controller &&
+      !controller.signal.aborted
+    );
+  }
+
+  #releaseCommittedResources(): void {
     if (this.#pointerHandler !== null) {
       this.#scene.input.off("pointerdown", this.#pointerHandler);
       this.#pointerHandler = null;
@@ -102,6 +157,7 @@ export class IsometricZoneAdapter {
       objectCount: this.#objects.length,
       chunkCount: this.#chunkCount,
       assetCount: this.#scene.textures.exists(MARKER_TEXTURE) ? 1 : 0,
+      listenerCount: this.#pointerHandler === null ? 0 : 1,
       pickedCell: this.#pickedCell,
     };
   }
@@ -202,7 +258,7 @@ export class IsometricZoneAdapter {
     });
   }
 
-  #installPicking(): void {
+  #installPicking(generation: number): void {
     this.#pickLabel = this.#scene.add
       .text(16, 510, "Pick: click a diamond", {
         color: "#e8f1ff",
@@ -212,6 +268,9 @@ export class IsometricZoneAdapter {
       .setDepth(4_000_000);
     this.#objects.push(this.#pickLabel);
     this.#pointerHandler = (pointer) => {
+      if (generation !== this.#generation) {
+        return;
+      }
       const event = pointer.event;
       if (
         event === null ||
