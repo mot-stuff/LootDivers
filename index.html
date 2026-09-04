@@ -3,21 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="RARPG browser foundation diagnostics" />
-    <title>RARPG Foundation Diagnostics</title>
+    <meta
+      name="description"
+      content="RARPG browser UI and renderer diagnostics"
+    />
+    <title>RARPG UI Shell Diagnostics</title>
   </head>
   <body data-app-state="booting">
-    <div id="app-shell"></div>
-    <main class="game-region" aria-label="Renderer diagnostic">
-      <div id="game-host">
-        <canvas
-          id="game-canvas"
-          width="960"
-          height="540"
-          aria-label="RARPG Phaser diagnostic canvas"
-        ></canvas>
-      </div>
-    </main>
+    <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

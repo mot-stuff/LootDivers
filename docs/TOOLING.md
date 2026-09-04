@@ -70,6 +70,7 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm run lint
 & $npm run typecheck
 & $npm test
+& $npm run test:browser
 & $npm run build
 & $npm run budget
 & $npm run content:check
@@ -99,6 +100,11 @@ private helper `node.exe` as a project runtime.
 `test:smoke` starts Vite preview and tests the production `dist` artifact. It
 fails on browser console errors, uncaught page errors, failed requests, HTTP
 responses at or above 400, missing semantic readiness, or a non-WebGL2 canvas.
+
+TASK-P0-011 adds `test:browser`, which runs Preact shell component tests in
+Vitest Browser Mode through the pinned Playwright Chromium provider. UI shell
+contracts, focus rules, resize/DPR behavior, accessibility coverage, and the
+manual keyboard checklist are documented in [`UI_SHELL.md`](UI_SHELL.md).
 
 Content schemas, authoring rules, diagnostics, generated output, and version
 contracts are documented in [`CONTENT_AUTHORING.md`](CONTENT_AUTHORING.md).
