@@ -39,9 +39,11 @@ complete graph.
 
 ## Module boundaries
 
-- `src/core`: framework-free rules. It is compiled separately without DOM or
-  browser type libraries. ESLint also rejects Phaser and Preact imports and
-  direct DOM globals here.
+- `src/core`: framework-free rules. Both `.ts` and `.tsx` are compiled
+  separately without DOM or browser type libraries. ESLint applies the same
+  Phaser, Preact, and direct DOM-global restrictions to both extensions. Unit
+  tests inspect the effective ESLint and TypeScript configurations for a
+  hypothetical future core `.tsx` file.
 - `src/adapters`: browser and Phaser integration.
 - `src/presentation`: Preact and CSS presentation.
 - `src/content`: reserved content boundary; intentionally empty.
@@ -99,7 +101,30 @@ The page preflights WebGL2 before creating Phaser and asserts the canvas context
 version after Phaser boot. Failure hides the canvas and shows actionable browser,
 hardware-acceleration, and driver guidance. There is no Canvas gameplay fallback.
 
-`npm run budget` Brotli-compresses every built `.js` and `.css` file at quality
-11 and fails above the 1 MiB initial framework-shell limit. Source maps and
-non-code assets are excluded. Future game and zone assets must remain separate
-from these shell extensions and load on demand.
+`npm run budget` runs the literal command
+`node scripts/report-transfer-budget.mjs`. It starts at production
+`dist/index.html`, follows initial HTML, static JavaScript import, stylesheet,
+CSS asset, icon, font, and web-manifest references, and does not follow dynamic
+imports or unrelated build output. Missing, external, or dist-escaping initial
+references fail the report.
+
+Each discovered artifact is compressed with Node.js `node:zlib` using
+`gzipSync(..., { level: 9 })` and the Brotli quality-11 equivalent
+`brotliCompressSync(..., { params: { BROTLI_PARAM_QUALITY: 11 } })`. The report
+records the expanded Node/script command, Node, zlib, and Brotli versions, the
+equivalent operation for every input, content type, initiators, raw/gzip/Brotli
+bytes, SHA-256, and that cache status is not measurable during static artifact
+inspection.
+
+The command enforces the currently measurable P0-002 shell gates:
+
+- initial JavaScript, CSS, and frameworks: at most 1 MiB Brotli;
+- complete initial shell including HTML, manifest, fonts, and icons: at most
+  1.25 MiB Brotli;
+- each initial JavaScript chunk: at most 512 KiB Brotli;
+- zero source maps in the normal initial graph;
+- zero missing or unexpected initial references.
+
+The machine-readable output is generated at the intentionally untracked
+`reports/transfer-budget.json`. Future lazy zone chunks are not charged until
+they become part of the initial request graph.
