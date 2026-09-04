@@ -1,10 +1,13 @@
-export const STABLE_ID_PATTERN =
-  "^[a-z][a-z0-9_-]{1,31}:[a-z][a-z0-9_.-]{1,63}$";
+export const STABLE_ID_PATTERN = "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$";
+
+export const ASSET_PATH_PATTERN =
+  "^(?![a-zA-Z][a-zA-Z0-9+.-]*:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9_-])?(?:/[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9_-])?)*$";
 
 export const SUPPORTED_SCHEMA_VERSION = "1.0.0";
 export const SUPPORTED_COMPILER_VERSION = "1.0.0";
 
 export type StableId = `${string}:${string}`;
+export type AssetPath = string;
 
 export interface VersionedDocument {
   readonly schemaVersion: string;
@@ -36,12 +39,13 @@ export interface TagRegistry extends VersionedDocument {
   readonly entries: readonly TagDefinition[];
 }
 
-export type AssetType = "audio" | "data" | "image";
+export const ASSET_TYPES = ["audio", "data", "image"] as const;
+export type AssetType = (typeof ASSET_TYPES)[number];
 
 export interface AssetDefinition {
   readonly id: StableId;
   readonly type: AssetType;
-  readonly source: string;
+  readonly source: AssetPath;
 }
 
 export interface AssetRegistry extends VersionedDocument {
@@ -86,25 +90,25 @@ export interface ValidatedContent {
   readonly sourceHash: string;
 }
 
-export const REQUIRED_KEYS = {
-  project: ["schemaVersion", "contentVersion", "kind", "id"],
-  statRegistry: ["schemaVersion", "contentVersion", "kind", "entries"],
-  tagRegistry: ["schemaVersion", "contentVersion", "kind", "entries"],
-  assetRegistry: ["schemaVersion", "contentVersion", "kind", "entries"],
-  technicalDefinition: [
-    "schemaVersion",
-    "contentVersion",
-    "kind",
-    "id",
-    "tags",
-    "stats",
-    "assets",
-    "references",
-  ],
-} as const satisfies {
-  readonly project: readonly (keyof ContentProject)[];
-  readonly statRegistry: readonly (keyof StatRegistry)[];
-  readonly tagRegistry: readonly (keyof TagRegistry)[];
-  readonly assetRegistry: readonly (keyof AssetRegistry)[];
-  readonly technicalDefinition: readonly (keyof TechnicalDefinition)[];
-};
+export interface CompiledChunkDescriptor {
+  readonly id: StableId;
+  readonly path: AssetPath;
+  readonly sha256: string;
+}
+
+export interface CompiledContentManifest {
+  readonly compilerVersion: string;
+  readonly schemaVersion: string;
+  readonly contentVersion: string;
+  readonly projectId: StableId;
+  readonly sourceHash: string;
+  readonly chunks: readonly CompiledChunkDescriptor[];
+}
+
+export interface CompiledRegistriesChunk {
+  readonly assets: readonly AssetDefinition[];
+  readonly stats: readonly StatDefinition[];
+  readonly tags: readonly TagDefinition[];
+}
+
+export type CompiledTechnicalDefinitionsChunk = readonly TechnicalDefinition[];

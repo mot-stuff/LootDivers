@@ -1,6 +1,15 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import {
+  dirname,
+  isAbsolute,
+  join,
+  posix,
+  relative,
+  resolve,
+  sep,
+  win32,
+} from "node:path";
 import { tmpdir } from "node:os";
 
 import Ajv2020, {
@@ -9,9 +18,13 @@ import Ajv2020, {
 } from "ajv/dist/2020.js";
 
 import {
+  ASSET_PATH_PATTERN,
   SUPPORTED_COMPILER_VERSION,
   SUPPORTED_SCHEMA_VERSION,
   type AssetDefinition,
+  type CompiledContentManifest,
+  type CompiledRegistriesChunk,
+  type CompiledTechnicalDefinitionsChunk,
   type ContentDocument,
   type ContentProject,
   type Diagnostic,
@@ -21,27 +34,17 @@ import {
   type TechnicalDefinition,
   type ValidatedContent,
 } from "./contracts.ts";
+import {
+  compiledManifestSchema,
+  compiledRegistriesChunkSchema,
+  compiledTechnicalDefinitionsChunkSchema,
+  CONTENT_SCHEMAS,
+  SOURCE_SCHEMA_BY_KIND,
+} from "./schemas.ts";
 
-const SCHEMA_FILES = [
-  "common.schema.json",
-  "project.schema.json",
-  "stat-registry.schema.json",
-  "tag-registry.schema.json",
-  "asset-registry.schema.json",
-  "technical-definition.schema.json",
-] as const;
-
-const SCHEMA_BY_KIND = {
-  project: "https://rarpg.dev/schemas/content/v1/project.schema.json",
-  "stat-registry":
-    "https://rarpg.dev/schemas/content/v1/stat-registry.schema.json",
-  "tag-registry":
-    "https://rarpg.dev/schemas/content/v1/tag-registry.schema.json",
-  "asset-registry":
-    "https://rarpg.dev/schemas/content/v1/asset-registry.schema.json",
-  "technical-definition":
-    "https://rarpg.dev/schemas/content/v1/technical-definition.schema.json",
-} as const;
+const SAFE_ASSET_PATH = new RegExp(ASSET_PATH_PATTERN);
+const WINDOWS_RESERVED_ASSET_SEGMENT =
+  /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
 
 interface SourceDocument {
   readonly source: string;
@@ -50,11 +53,22 @@ interface SourceDocument {
 
 interface Located<T> {
   readonly source: string;
+  readonly path: string;
   readonly value: T;
 }
 
+interface SourcePointer {
+  readonly source: string;
+  readonly path: string;
+}
+
 export interface ValidateOptions {
+  readonly assetRoot?: string;
   readonly schemasDirectory?: string;
+}
+
+export interface DeterminismOptions extends ValidateOptions {
+  readonly canonicalDirectory?: string;
 }
 
 export interface ValidationResult {
@@ -71,6 +85,10 @@ function normalizePath(path: string): string {
   return path.split(sep).join("/");
 }
 
+export function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function stableJson(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((entry) => stableJson(entry)).join(",")}]`;
@@ -79,7 +97,7 @@ export function stableJson(value: unknown): string {
   if (value !== null && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right));
+      .sort(([left], [right]) => compareCodeUnits(left, right));
     return `{${entries
       .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
       .join(",")}}`;
@@ -103,25 +121,77 @@ async function listJsonFiles(directory: string): Promise<string[]> {
       return entry.isFile() && entry.name.endsWith(".json") ? [path] : [];
     }),
   );
-  return nested.flat().sort((left, right) => left.localeCompare(right));
+  return nested.flat().sort(compareCodeUnits);
 }
 
-async function loadSchemas(
-  schemasDirectory: string,
-): Promise<Map<string, ValidateFunction>> {
-  const ajv = new Ajv2020({ allErrors: true, strict: true });
-  for (const filename of SCHEMA_FILES) {
-    const text = await readFile(join(schemasDirectory, filename), "utf8");
-    ajv.addSchema(JSON.parse(text) as object);
-  }
+async function listFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map(async (entry): Promise<string[]> => {
+      const path = join(directory, entry.name);
+      return entry.isDirectory()
+        ? listFiles(path)
+        : entry.isFile()
+          ? [path]
+          : [];
+    }),
+  );
+  return nested.flat().sort(compareCodeUnits);
+}
 
+function formatSchemaArtifact(schema: unknown): string {
+  return `${JSON.stringify(schema, undefined, 2)}\n`;
+}
+
+export async function generateSchemaArtifacts(
+  schemasDirectory: string,
+): Promise<void> {
+  await rm(schemasDirectory, { recursive: true, force: true });
+  await mkdir(schemasDirectory, { recursive: true });
+  for (const [filename, schema] of Object.entries(CONTENT_SCHEMAS).sort(
+    ([left], [right]) => compareCodeUnits(left, right),
+  )) {
+    await writeFile(
+      join(schemasDirectory, filename),
+      formatSchemaArtifact(schema),
+      "utf8",
+    );
+  }
+}
+
+export async function checkSchemaArtifacts(
+  schemasDirectory: string,
+): Promise<void> {
+  const expectedNames = Object.keys(CONTENT_SCHEMAS).sort(compareCodeUnits);
+  const actualNames = (await listFiles(schemasDirectory)).map((path) =>
+    normalizePath(relative(schemasDirectory, path)),
+  );
+  if (
+    expectedNames.length !== actualNames.length ||
+    expectedNames.some((name, index) => name !== actualNames[index])
+  ) {
+    throw new Error(
+      "Versioned JSON Schema artifacts are missing or contain unexpected files.",
+    );
+  }
+  for (const filename of expectedNames) {
+    const actual = await readFile(join(schemasDirectory, filename), "utf8");
+    const expected = formatSchemaArtifact(
+      CONTENT_SCHEMAS[filename as keyof typeof CONTENT_SCHEMAS],
+    );
+    if (actual !== expected) {
+      throw new Error(
+        `Versioned JSON Schema artifact "${filename}" is stale; regenerate schemas.`,
+      );
+    }
+  }
+}
+
+function loadSchemas(): Map<string, ValidateFunction> {
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
   return new Map(
-    Object.entries(SCHEMA_BY_KIND).map(([kind, schemaId]) => {
-      const validator = ajv.getSchema(schemaId);
-      if (validator === undefined) {
-        throw new Error(`Schema "${schemaId}" did not compile.`);
-      }
-      return [kind, validator];
+    Object.entries(SOURCE_SCHEMA_BY_KIND).map(([kind, schema]) => {
+      return [kind, ajv.compile(schema)];
     }),
   );
 }
@@ -147,11 +217,50 @@ function diagnostic(
   return { code, source, path, message };
 }
 
+export function isAssetPathContained(
+  assetRoot: string,
+  source: string,
+): boolean {
+  if (
+    source.length === 0 ||
+    !SAFE_ASSET_PATH.test(source) ||
+    source.includes("\\") ||
+    posix.isAbsolute(source) ||
+    win32.isAbsolute(source) ||
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(source)
+  ) {
+    return false;
+  }
+  const segments = source.split("/");
+  if (
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        segment === "." ||
+        segment === ".." ||
+        WINDOWS_RESERVED_ASSET_SEGMENT.test(segment),
+    ) ||
+    posix.normalize(source) !== source
+  ) {
+    return false;
+  }
+
+  const absoluteRoot = resolve(assetRoot);
+  const candidate = resolve(absoluteRoot, ...segments);
+  const fromRoot = relative(absoluteRoot, candidate);
+  return (
+    fromRoot === "" ||
+    (!isAbsolute(fromRoot) &&
+      fromRoot !== ".." &&
+      !fromRoot.startsWith(`..${sep}`))
+  );
+}
+
 function addUnique<T extends { readonly id: StableId }>(
   located: Located<T>,
   category: string,
   target: T[],
-  sources: Map<StableId, string>,
+  sources: Map<StableId, SourcePointer>,
   diagnostics: Diagnostic[],
 ): void {
   const previous = sources.get(located.value.id);
@@ -160,20 +269,25 @@ function addUnique<T extends { readonly id: StableId }>(
       diagnostic(
         "DUPLICATE_ID",
         located.source,
-        "/id",
-        `ID "${located.value.id}" duplicates ${category} ID from "${previous}".`,
+        located.path,
+        `ID "${located.value.id}" duplicates ${category} ID from "${previous.source}${previous.path}".`,
       ),
     );
     return;
   }
-  sources.set(located.value.id, located.source);
+  sources.set(located.value.id, {
+    source: located.source,
+    path: located.path,
+  });
   target.push(located.value);
 }
 
 function sortById<T extends { readonly id: string }>(
   entries: readonly T[],
 ): T[] {
-  return [...entries].sort((left, right) => left.id.localeCompare(right.id));
+  return [...entries].sort((left, right) =>
+    compareCodeUnits(left.id, right.id),
+  );
 }
 
 export async function validateContentDirectory(
@@ -184,7 +298,8 @@ export async function validateContentDirectory(
   const schemasDirectory = resolve(
     options.schemasDirectory ?? "schemas/content/v1",
   );
-  const validators = await loadSchemas(schemasDirectory);
+  await checkSchemaArtifacts(schemasDirectory);
+  const validators = loadSchemas();
   const diagnostics: Diagnostic[] = [];
   const documents: Located<ContentDocument>[] = [];
   const sourceDocuments: SourceDocument[] = [];
@@ -228,21 +343,34 @@ export async function validateContentDirectory(
       diagnostics.push(...shapeDiagnostics(source, validator.errors));
       continue;
     }
-    documents.push({ source, value: value as ContentDocument });
+    documents.push({ source, path: "/", value: value as ContentDocument });
   }
 
   const projects = documents.filter(
     (entry): entry is Located<ContentProject> => entry.value.kind === "project",
   );
   if (projects.length !== 1) {
-    diagnostics.push(
-      diagnostic(
-        "PROJECT_COUNT_INVALID",
-        "<content-root>",
-        "/",
-        `Expected exactly one project document, found ${projects.length}.`,
-      ),
-    );
+    if (projects.length === 0) {
+      diagnostics.push(
+        diagnostic(
+          "PROJECT_COUNT_INVALID",
+          "project.json",
+          "/",
+          "Project document is missing; expected exactly one.",
+        ),
+      );
+    } else {
+      projects.slice(1).forEach((entry) => {
+        diagnostics.push(
+          diagnostic(
+            "PROJECT_COUNT_INVALID",
+            entry.source,
+            "/kind",
+            `Extra project document; first project is "${projects[0]?.source}".`,
+          ),
+        );
+      });
+    }
   }
   const project = projects[0];
 
@@ -272,27 +400,36 @@ export async function validateContentDirectory(
     }
   }
 
-  const idSources = new Map<StableId, string>();
+  const idSources = new Map<StableId, SourcePointer>();
   const assets: AssetDefinition[] = [];
   const stats: StatDefinition[] = [];
   const tags: TagDefinition[] = [];
   const definitions: TechnicalDefinition[] = [];
   const definitionSources = new Map<StableId, string>();
+  const statSources = new Map<StableId, SourcePointer>();
 
-  const registryCounts = new Map<string, number>();
+  const registryDocuments = new Map<string, SourcePointer[]>();
   for (const document of documents) {
     const { source, value } = document;
     if (value.kind === "project") {
-      addUnique({ source, value }, "project", [], idSources, diagnostics);
+      addUnique(
+        { source, path: "/id", value },
+        "project",
+        [],
+        idSources,
+        diagnostics,
+      );
       continue;
     }
     if (value.kind.endsWith("-registry")) {
-      registryCounts.set(value.kind, (registryCounts.get(value.kind) ?? 0) + 1);
+      const entries = registryDocuments.get(value.kind) ?? [];
+      entries.push({ source, path: "/kind" });
+      registryDocuments.set(value.kind, entries);
     }
     if (value.kind === "asset-registry") {
-      value.entries.forEach((entry) =>
+      value.entries.forEach((entry, index) =>
         addUnique(
-          { source, value: entry },
+          { source, path: `/entries/${index}/id`, value: entry },
           "asset",
           assets,
           idSources,
@@ -300,19 +437,25 @@ export async function validateContentDirectory(
         ),
       );
     } else if (value.kind === "stat-registry") {
-      value.entries.forEach((entry) =>
+      value.entries.forEach((entry, index) => {
         addUnique(
-          { source, value: entry },
+          { source, path: `/entries/${index}/id`, value: entry },
           "stat",
           stats,
           idSources,
           diagnostics,
-        ),
-      );
+        );
+        if (!statSources.has(entry.id)) {
+          statSources.set(entry.id, {
+            source,
+            path: `/entries/${index}`,
+          });
+        }
+      });
     } else if (value.kind === "tag-registry") {
-      value.entries.forEach((entry) =>
+      value.entries.forEach((entry, index) =>
         addUnique(
-          { source, value: entry },
+          { source, path: `/entries/${index}/id`, value: entry },
           "tag",
           tags,
           idSources,
@@ -321,7 +464,7 @@ export async function validateContentDirectory(
       );
     } else if (value.kind === "technical-definition") {
       addUnique(
-        { source, value },
+        { source, path: "/id", value },
         "definition",
         definitions,
         idSources,
@@ -338,16 +481,31 @@ export async function validateContentDirectory(
     "stat-registry",
     "tag-registry",
   ] as const) {
-    const count = registryCounts.get(kind) ?? 0;
+    const registrySources = registryDocuments.get(kind) ?? [];
+    const count = registrySources.length;
     if (count !== 1) {
-      diagnostics.push(
-        diagnostic(
-          "REGISTRY_COUNT_INVALID",
-          "<content-root>",
-          "/",
-          `Expected exactly one ${kind}, found ${count}.`,
-        ),
-      );
+      if (count === 0) {
+        const filename = `${kind.slice(0, -"-registry".length)}s.json`;
+        diagnostics.push(
+          diagnostic(
+            "REGISTRY_COUNT_INVALID",
+            `registries/${filename}`,
+            "/",
+            `Missing ${kind}; expected exactly one registry document.`,
+          ),
+        );
+      } else {
+        registrySources.slice(1).forEach((entry) => {
+          diagnostics.push(
+            diagnostic(
+              "REGISTRY_COUNT_INVALID",
+              entry.source,
+              entry.path,
+              `Extra ${kind}; first registry is "${registrySources[0]?.source}".`,
+            ),
+          );
+        });
+      }
     }
   }
 
@@ -358,12 +516,36 @@ export async function validateContentDirectory(
 
   for (const stat of stats) {
     if (stat.minimum > stat.maximum) {
+      const location = statSources.get(stat.id);
       diagnostics.push(
         diagnostic(
           "STAT_RANGE_INVALID",
-          idSources.get(stat.id) ?? "<unknown>",
-          "/entries",
+          location?.source ?? "registries/stats.json",
+          `${location?.path ?? "/entries"}/minimum`,
           `Stat "${stat.id}" minimum ${stat.minimum} exceeds maximum ${stat.maximum}.`,
+        ),
+      );
+      diagnostics.push(
+        diagnostic(
+          "STAT_RANGE_INVALID",
+          location?.source ?? "registries/stats.json",
+          `${location?.path ?? "/entries"}/maximum`,
+          `Stat "${stat.id}" maximum ${stat.maximum} is below minimum ${stat.minimum}.`,
+        ),
+      );
+    }
+  }
+
+  const assetRoot = resolve(options.assetRoot ?? "public/assets");
+  for (const asset of assets) {
+    if (!isAssetPathContained(assetRoot, asset.source)) {
+      const location = idSources.get(asset.id);
+      diagnostics.push(
+        diagnostic(
+          "ASSET_PATH_UNSAFE",
+          location?.source ?? "registries/assets.json",
+          (location?.path ?? "/entries/id").replace(/\/id$/, "/source"),
+          `Asset source "${asset.source}" is not a normalized relative path contained by the asset root.`,
         ),
       );
     }
@@ -407,7 +589,19 @@ export async function validateContentDirectory(
         );
       }
     });
+    const usedStats = new Set<StableId>();
     definition.stats.forEach((statValue, index) => {
+      if (usedStats.has(statValue.statId)) {
+        diagnostics.push(
+          diagnostic(
+            "DUPLICATE_VALUE",
+            source,
+            `/stats/${index}/statId`,
+            `Stat ID "${statValue.statId}" is repeated in the definition.`,
+          ),
+        );
+      }
+      usedStats.add(statValue.statId);
       const stat = statById.get(statValue.statId);
       if (stat === undefined) {
         diagnostics.push(
@@ -435,7 +629,8 @@ export async function validateContentDirectory(
   }
 
   diagnostics.sort((left, right) =>
-    `${left.source}\0${left.path}\0${left.code}`.localeCompare(
+    compareCodeUnits(
+      `${left.source}\0${left.path}\0${left.code}`,
       `${right.source}\0${right.path}\0${right.code}`,
     ),
   );
@@ -445,7 +640,7 @@ export async function validateContentDirectory(
 
   const sourceHash = sha256(
     sourceDocuments
-      .sort((left, right) => left.source.localeCompare(right.source))
+      .sort((left, right) => compareCodeUnits(left.source, right.source))
       .map(({ source, value }) => `${source}\0${stableJson(value)}\n`)
       .join(""),
   );
@@ -458,12 +653,12 @@ export async function validateContentDirectory(
       tags: sortById(tags),
       definitions: sortById(definitions).map((definition) => ({
         ...definition,
-        assets: [...definition.assets].sort(),
-        references: [...definition.references].sort(),
+        assets: [...definition.assets].sort(compareCodeUnits),
+        references: [...definition.references].sort(compareCodeUnits),
         stats: [...definition.stats].sort((left, right) =>
-          left.statId.localeCompare(right.statId),
+          compareCodeUnits(left.statId, right.statId),
         ),
-        tags: [...definition.tags].sort(),
+        tags: [...definition.tags].sort(compareCodeUnits),
       })),
       sourceHash,
     },
@@ -473,6 +668,22 @@ export async function validateContentDirectory(
 async function writeStableJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${stableJson(value)}\n`, "utf8");
+}
+
+function assertGeneratedContract(
+  schema: object,
+  value: unknown,
+  label: string,
+): void {
+  const validate = new Ajv2020({ allErrors: true, strict: true }).compile(
+    schema,
+  );
+  if (!validate(value)) {
+    const detail = (validate.errors ?? [])
+      .map((error) => `${error.instancePath || "/"} ${error.message ?? ""}`)
+      .join("; ");
+    throw new Error(`Generated ${label} violates its typed schema: ${detail}`);
+  }
 }
 
 export async function compileContent(
@@ -487,18 +698,32 @@ export async function compileContent(
   const { content } = validation;
   await rm(outputDirectory, { recursive: true, force: true });
 
-  const chunks = [
-    [
-      "registries",
-      {
-        assets: content.assets,
-        stats: content.stats,
-        tags: content.tags,
-      },
-    ],
-    ["technical-definitions", content.definitions],
+  const registriesChunk: CompiledRegistriesChunk = {
+    assets: content.assets,
+    stats: content.stats,
+    tags: content.tags,
+  };
+  const definitionsChunk: CompiledTechnicalDefinitionsChunk =
+    content.definitions;
+  assertGeneratedContract(
+    compiledRegistriesChunkSchema,
+    registriesChunk,
+    "registries chunk",
+  );
+  assertGeneratedContract(
+    compiledTechnicalDefinitionsChunkSchema,
+    definitionsChunk,
+    "technical definitions chunk",
+  );
+
+  const chunks: readonly [
+    string,
+    CompiledRegistriesChunk | CompiledTechnicalDefinitionsChunk,
+  ][] = [
+    ["registries", registriesChunk],
+    ["technical-definitions", definitionsChunk],
   ] as const;
-  const manifestChunks = [];
+  const manifestChunks: CompiledContentManifest["chunks"][number][] = [];
   const files: string[] = [];
   for (const [name, data] of chunks) {
     const path = `chunks/${name}.json`;
@@ -519,11 +744,12 @@ export async function compileContent(
     projectId: content.project.id,
     sourceHash: content.sourceHash,
     chunks: manifestChunks,
-  };
+  } satisfies CompiledContentManifest;
+  assertGeneratedContract(compiledManifestSchema, manifest, "manifest");
   await writeStableJson(join(outputDirectory, "manifest.json"), manifest);
   files.push("manifest.json");
   return {
-    files: files.sort(),
+    files: files.sort(compareCodeUnits),
     manifestHash: sha256(`${stableJson(manifest)}\n`),
   };
 }
@@ -542,7 +768,7 @@ async function snapshotDirectory(
   directory: string,
 ): Promise<Map<string, Buffer>> {
   const snapshot = new Map<string, Buffer>();
-  for (const filename of await listJsonFiles(directory)) {
+  for (const filename of await listFiles(directory)) {
     snapshot.set(
       normalizePath(relative(directory, filename)),
       await readFile(filename),
@@ -551,9 +777,31 @@ async function snapshotDirectory(
   return snapshot;
 }
 
+function compareSnapshots(
+  expected: ReadonlyMap<string, Buffer>,
+  actual: ReadonlyMap<string, Buffer>,
+  label: string,
+): void {
+  const expectedPaths = [...expected.keys()].sort(compareCodeUnits);
+  const actualPaths = [...actual.keys()].sort(compareCodeUnits);
+  const missing = expectedPaths.filter((path) => !actual.has(path));
+  const extra = actualPaths.filter((path) => !expected.has(path));
+  const stale = expectedPaths.filter((path) => {
+    const actualBytes = actual.get(path);
+    return (
+      actualBytes !== undefined && !expected.get(path)?.equals(actualBytes)
+    );
+  });
+  if (missing.length > 0 || extra.length > 0 || stale.length > 0) {
+    throw new Error(
+      `${label} differs from fresh compilation: missing [${missing.join(", ")}], extra [${extra.join(", ")}], stale [${stale.join(", ")}].`,
+    );
+  }
+}
+
 export async function checkContentDeterminism(
   sourceDirectory: string,
-  options: ValidateOptions = {},
+  options: DeterminismOptions = {},
 ): Promise<void> {
   const base = join(tmpdir(), `rarpg-content-${process.pid}-${Date.now()}`);
   const first = join(base, "first");
@@ -563,15 +811,11 @@ export async function checkContentDeterminism(
     await compileContent(sourceDirectory, second, options);
     const left = await snapshotDirectory(first);
     const right = await snapshotDirectory(second);
-    if (
-      left.size !== right.size ||
-      [...left].some(
-        ([path, bytes]) =>
-          !right.has(path) || !bytes.equals(right.get(path) as Buffer),
-      )
-    ) {
-      throw new Error("Content compiler output was not byte-identical.");
-    }
+    compareSnapshots(left, right, "Second clean compiler output");
+    const canonical = await snapshotDirectory(
+      resolve(options.canonicalDirectory ?? "generated/content"),
+    );
+    compareSnapshots(left, canonical, "Canonical generated/content output");
   } finally {
     await rm(base, { recursive: true, force: true });
   }

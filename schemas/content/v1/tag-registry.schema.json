@@ -5,12 +5,17 @@
   "additionalProperties": false,
   "properties": {
     "schemaVersion": {
-      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
     },
     "contentVersion": {
-      "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/version"
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
     },
-    "kind": { "const": "tag-registry" },
+    "kind": {
+      "type": "string",
+      "const": "tag-registry"
+    },
     "entries": {
       "type": "array",
       "items": {
@@ -18,12 +23,20 @@
         "additionalProperties": false,
         "properties": {
           "id": {
-            "$ref": "https://rarpg.dev/schemas/content/v1/common.schema.json#/$defs/stableId"
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
           }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ]
       }
     }
   },
-  "required": ["schemaVersion", "contentVersion", "kind", "entries"]
+  "required": [
+    "schemaVersion",
+    "contentVersion",
+    "kind",
+    "entries"
+  ]
 }

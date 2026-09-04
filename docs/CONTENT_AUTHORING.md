@@ -8,14 +8,14 @@ content.
 
 Every persistent content, stat, tag, and asset identity uses:
 
-`namespace:local_name`
+`namespace:local/name`
 
-Both segments are lowercase ASCII. The namespace is 2–32 characters and begins
-with a letter; the local name is 2–64 characters and begins with a letter.
-Namespaces may contain letters, digits, `_`, and `-`. Local names may also use
-`.` for a bounded hierarchy. The exact schema pattern is:
+Both segments are non-empty lowercase ASCII. The namespace begins with a letter
+and may contain letters, digits, `_`, and `-`. The local name begins with a
+letter or digit and may additionally contain `.`, `_`, `/`, and `-`. This is
+exactly the shared P0-004 identity contract:
 
-`^[a-z][a-z0-9_-]{1,31}:[a-z][a-z0-9_.-]{1,63}$`
+`^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$`
 
 IDs are globally unique across registries and definitions. They are immutable
 identity, not display text, file paths, or Phaser object names. Do not recycle a
@@ -46,26 +46,41 @@ under `schemas/content/v1`. Exactly one project, stat registry, tag registry,
 and asset registry are required. Definitions refer only to registered keys or
 other definition IDs.
 
-Ajv validates JSON shape. Project semantic validation then reports deterministic,
-source-relative diagnostics for duplicate IDs, unknown stats/tags/assets,
-missing definition references, version incompatibility, invalid stat ranges,
-and values outside each registered range. Numeric schema bounds are
+Typed canonical schema constants in `src/content/schemas.ts` are checked by
+TypeScript against source and generated-output contracts, then deterministically
+generate the versioned JSON Schema artifacts. Ajv validates source shape and
+compiler output. Project semantic validation reports ordinally ordered,
+source-relative diagnostics for duplicate IDs and repeated values, unknown
+stats/tags/assets, missing definition references, version incompatibility,
+invalid stat ranges, and values outside each registered range. Numeric schema bounds are
 `[-1,000,000,000, 1,000,000,000]`; narrower stat-specific bounds are mandatory
 for values used by definitions.
+
+Asset registry `source` values are normalized forward-slash relative paths.
+Absolute paths, URL/protocol forms, backslashes, empty or dot segments,
+traversal, and encoded traversal are rejected. Compilation additionally resolves
+each path against the configured asset root and verifies containment.
 
 Run:
 
 ```powershell
+& $npm run content:check-schemas
 & $npm run content:validate
 & $npm run content:compile
 & $npm run content:check-determinism
 ```
 
+After intentionally changing a canonical schema, run
+`content:generate-schemas`, review the JSON artifact diff, and run
+`content:check-schemas`.
+
 `content:compile` replaces `generated/content` with canonical JSON chunks and a
 manifest containing schema/content/compiler versions, hashes, and stable chunk
 keys. Object keys, source traversal, registries, definitions, and reference
-arrays are ordered deterministically. Generated output contains no timestamps
-and must not be edited by hand.
+arrays use an explicit UTF-16 code-unit comparator. Generated output contains no
+timestamps and must not be edited by hand. `content:check-determinism` compares
+two clean builds and also fails for stale, missing, or extra files in the
+canonical `generated/content` directory.
 
 ## Extending the foundation
 

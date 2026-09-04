@@ -2,8 +2,10 @@ import { resolve } from "node:path";
 
 import {
   checkContentDeterminism,
+  checkSchemaArtifacts,
   compileContent,
   ContentValidationError,
+  generateSchemaArtifacts,
   validateContentDirectory,
 } from "../src/content/pipeline.ts";
 
@@ -43,13 +45,23 @@ try {
       `Compiled ${result.files.length} deterministic file(s); manifest ${result.manifestHash}.`,
     );
   } else if (command === "check-determinism") {
-    await checkContentDeterminism(sourceDirectory);
+    await checkContentDeterminism(sourceDirectory, {
+      canonicalDirectory: outputDirectory,
+    });
     console.log(
-      "Content compiler outputs are byte-identical across clean runs.",
+      "Content compiler outputs are byte-identical and canonical generated output is current.",
+    );
+  } else if (command === "generate-schemas") {
+    await generateSchemaArtifacts(resolve("schemas/content/v1"));
+    console.log("Generated versioned JSON Schema artifacts.");
+  } else if (command === "check-schemas") {
+    await checkSchemaArtifacts(resolve("schemas/content/v1"));
+    console.log(
+      "Versioned JSON Schema artifacts match typed canonical schemas.",
     );
   } else {
     console.error(
-      "Usage: content.mts <validate|compile|check-determinism> [source] [output]",
+      "Usage: content.mts <validate|compile|check-determinism|generate-schemas|check-schemas> [source] [output]",
     );
     process.exitCode = 2;
   }

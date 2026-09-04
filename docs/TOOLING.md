@@ -70,6 +70,7 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm test
 & $npm run build
 & $npm run budget
+& $npm run content:check-schemas
 & $npm run content:validate
 & $npm run content:compile
 & $npm run content:check-determinism
@@ -102,6 +103,9 @@ responses at or above 400, missing semantic readiness, or a non-WebGL2 canvas.
 
 Content schemas, authoring rules, diagnostics, generated output, and version
 contracts are documented in [`CONTENT_AUTHORING.md`](CONTENT_AUTHORING.md).
+Canonical typed schemas can be intentionally materialized with
+`npm run content:generate-schemas`; normal verification uses
+`npm run content:check-schemas` and rejects stale schema artifacts.
 
 ## Renderer and transfer policy
 

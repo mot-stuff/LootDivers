@@ -1,9 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://rarpg.dev/schemas/content/v1/asset-registry.schema.json",
+  "$id": "https://rarpg.dev/schemas/content/v1/compiled-manifest.schema.json",
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "compilerVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
     "schemaVersion": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
@@ -12,11 +16,15 @@
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
     },
-    "kind": {
+    "projectId": {
       "type": "string",
-      "const": "asset-registry"
+      "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
     },
-    "entries": {
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "chunks": {
       "type": "array",
       "items": {
         "type": "object",
@@ -26,32 +34,30 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
           },
-          "type": {
-            "type": "string",
-            "enum": [
-              "audio",
-              "data",
-              "image"
-            ]
-          },
-          "source": {
+          "path": {
             "type": "string",
             "minLength": 1,
             "pattern": "^(?![a-zA-Z][a-zA-Z0-9+.-]*:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9_-])?(?:/[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9_-])?)*$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
           }
         },
         "required": [
           "id",
-          "type",
-          "source"
+          "path",
+          "sha256"
         ]
       }
     }
   },
   "required": [
+    "compilerVersion",
     "schemaVersion",
     "contentVersion",
-    "kind",
-    "entries"
+    "projectId",
+    "sourceHash",
+    "chunks"
   ]
 }

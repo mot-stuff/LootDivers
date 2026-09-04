@@ -2,11 +2,14 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   checkContentDeterminism,
+  compareCodeUnits,
   compileContent,
+  isAssetPathContained,
+  stableJson,
   validateContentDirectory,
 } from "../../src/content/pipeline.ts";
 
@@ -40,7 +43,11 @@ async function mutate(
   await writeFile(path, JSON.stringify(value), "utf8");
 }
 
-async function expectDiagnostic(code: string, source: string): Promise<void> {
+async function expectDiagnostic(
+  code: string,
+  source: string,
+  path?: string,
+): Promise<void> {
   const result = await validateContentDirectory(sourceDirectory, {
     schemasDirectory,
   });
@@ -49,7 +56,11 @@ async function expectDiagnostic(code: string, source: string): Promise<void> {
     (entry) => entry.code === code && entry.source === source,
   );
   expect(match).toBeDefined();
-  expect(match?.path).toMatch(/^\//);
+  if (path === undefined) {
+    expect(match?.path).toMatch(/^\//);
+  } else {
+    expect(match?.path).toBe(path);
+  }
 }
 
 describe("content validation", () => {
@@ -86,6 +97,37 @@ describe("content validation", () => {
     await expectDiagnostic("DUPLICATE_ID", "fixtures/duplicate.json");
   });
 
+  it("reports exact duplicate registry ID pointers", async () => {
+    await mutate("registries/tags.json", (document) => {
+      document.entries = [
+        { id: "fixture:synthetic" },
+        { id: "fixture:synthetic" },
+      ];
+    });
+    await expectDiagnostic(
+      "DUPLICATE_ID",
+      "registries/tags.json",
+      "/entries/1/id",
+    );
+  });
+
+  it("detects cross-category duplicate IDs", async () => {
+    await mutate("registries/assets.json", (document) => {
+      document.entries = [
+        {
+          id: "fixture:synthetic",
+          type: "data",
+          source: "fixtures/placeholder.json",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "DUPLICATE_ID",
+      "registries/tags.json",
+      "/entries/0/id",
+    );
+  });
+
   it.each([
     ["tags", ["fixture:missing"], "TAG_UNKNOWN"],
     ["assets", ["fixture:missing"], "ASSET_UNKNOWN"],
@@ -119,7 +161,102 @@ describe("content validation", () => {
     await mutate("registries/stats.json", (document) => {
       document.entries = [{ id: "fixture:scalar", minimum: 10, maximum: 0 }];
     });
-    await expectDiagnostic("STAT_RANGE_INVALID", "registries/stats.json");
+    const result = await validateContentDirectory(sourceDirectory, {
+      schemasDirectory,
+    });
+    expect(
+      result.diagnostics
+        .filter(({ code }) => code === "STAT_RANGE_INVALID")
+        .map(({ path }) => path),
+    ).toEqual(["/entries/0/maximum", "/entries/0/minimum"]);
+  });
+
+  it("rejects repeated stat IDs within a definition", async () => {
+    await mutate("fixtures/definitions.json", (document) => {
+      document.stats = [
+        { statId: "fixture:scalar", value: 1 },
+        { statId: "fixture:scalar", value: 2 },
+      ];
+    });
+    await expectDiagnostic(
+      "DUPLICATE_VALUE",
+      "fixtures/definitions.json",
+      "/stats/1/statId",
+    );
+  });
+
+  it.each([
+    "../secret.json",
+    "safe/../secret.json",
+    "/absolute.json",
+    "C:/secret.json",
+    "https://example.invalid/file.json",
+    "safe\\file.json",
+    "./safe.json",
+    "safe//file.json",
+    "safe/%2e%2e/file.json",
+    "safe/file.",
+  ])("rejects unsafe asset source %s", async (source) => {
+    await mutate("registries/assets.json", (document) => {
+      document.entries = [{ id: "fixture:placeholder", type: "data", source }];
+    });
+    await expectDiagnostic(
+      "SHAPE_INVALID",
+      "registries/assets.json",
+      "/entries/0/source",
+    );
+    expect(
+      isAssetPathContained(join(temporaryDirectory, "assets"), source),
+    ).toBe(false);
+  });
+
+  it("accepts normalized relative asset paths within the configured root", () => {
+    expect(
+      isAssetPathContained(
+        join(temporaryDirectory, "assets"),
+        "folder/file-name_1.json",
+      ),
+    ).toBe(true);
+  });
+
+  it("applies semantic portable-path defense before compilation", async () => {
+    await mutate("registries/assets.json", (document) => {
+      document.entries = [
+        {
+          id: "fixture:placeholder",
+          type: "data",
+          source: "CON/file.json",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "ASSET_PATH_UNSAFE",
+      "registries/assets.json",
+      "/entries/0/source",
+    );
+  });
+
+  it("reports actionable missing and duplicate registry sources", async () => {
+    await rm(join(sourceDirectory, "registries/stats.json"));
+    await expectDiagnostic(
+      "REGISTRY_COUNT_INVALID",
+      "registries/stats.json",
+      "/",
+    );
+
+    await cp(
+      join(sourceFixture, "registries/stats.json"),
+      join(sourceDirectory, "registries/stats.json"),
+    );
+    await cp(
+      join(sourceFixture, "registries/stats.json"),
+      join(sourceDirectory, "registries/zz-stats.json"),
+    );
+    await expectDiagnostic(
+      "REGISTRY_COUNT_INVALID",
+      "registries/zz-stats.json",
+      "/kind",
+    );
   });
 
   it("rejects incompatible schema and content versions", async () => {
@@ -167,5 +304,42 @@ describe("content compilation", () => {
     await expect(
       checkContentDeterminism(sourceDirectory, { schemasDirectory }),
     ).resolves.toBeUndefined();
+  });
+
+  it("rejects stale canonical generated output", async () => {
+    const canonicalDirectory = join(temporaryDirectory, "canonical");
+    await compileContent(sourceDirectory, canonicalDirectory, {
+      schemasDirectory,
+    });
+    await writeFile(
+      join(canonicalDirectory, "manifest.json"),
+      '{"stale":true}\n',
+      "utf8",
+    );
+
+    await expect(
+      checkContentDeterminism(sourceDirectory, {
+        schemasDirectory,
+        canonicalDirectory,
+      }),
+    ).rejects.toThrow(/stale \[manifest\.json\]/);
+  });
+
+  it("uses explicit ordinal ordering without localeCompare", async () => {
+    const localeCompare = vi
+      .spyOn(String.prototype, "localeCompare")
+      .mockImplementation(() => {
+        throw new Error("localeCompare must not participate in compilation");
+      });
+    try {
+      expect(["z", "ä", "a"].sort(compareCodeUnits)).toEqual(["a", "z", "ä"]);
+      expect(stableJson({ ä: 1, z: 2, a: 3 })).toBe('{"a":3,"z":2,"ä":1}');
+      const output = join(temporaryDirectory, "ordinal-output");
+      await expect(
+        compileContent(sourceDirectory, output, { schemasDirectory }),
+      ).resolves.toBeDefined();
+    } finally {
+      localeCompare.mockRestore();
+    }
   });
 });

@@ -4,19 +4,20 @@
   "$defs": {
     "stableId": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9_-]{1,31}:[a-z][a-z0-9_.-]{1,63}$"
+      "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+    },
+    "assetPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![a-zA-Z][a-zA-Z0-9+.-]*:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9_-])?(?:/[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9_-])?)*$"
     },
     "version": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
     },
-    "versionProperties": {
-      "type": "object",
-      "properties": {
-        "schemaVersion": { "$ref": "#/$defs/version" },
-        "contentVersion": { "$ref": "#/$defs/version" }
-      },
-      "required": ["schemaVersion", "contentVersion"]
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
     }
   }
 }
