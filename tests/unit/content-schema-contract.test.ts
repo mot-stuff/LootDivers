@@ -32,6 +32,22 @@ async function schemaArtifact(
 }
 
 describe("schema and TypeScript contract alignment", () => {
+  it("keeps the composite content gate non-mutating", async () => {
+    const packageJson = JSON.parse(
+      await readFile(
+        join(resolve(import.meta.dirname, "../.."), "package.json"),
+        "utf8",
+      ),
+    ) as { readonly scripts?: Record<string, string> };
+    const contentCheck = packageJson.scripts?.["content:check"];
+
+    expect(contentCheck).toBe(
+      "npm run content:check-schemas && npm run content:validate && npm run content:check-determinism",
+    );
+    expect(contentCheck).not.toContain("content:compile");
+    expect(contentCheck).not.toContain("content:generate-schemas");
+  });
+
   it("keeps every JSON artifact byte-aligned with typed canonical schemas", async () => {
     await expect(
       checkSchemaArtifacts(schemasDirectory),

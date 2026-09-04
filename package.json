@@ -28,7 +28,8 @@
     "content:compile": "node scripts/content.mts compile",
     "content:check-determinism": "node scripts/content.mts check-determinism",
     "content:generate-schemas": "node scripts/content.mts generate-schemas",
-    "content:check-schemas": "node scripts/content.mts check-schemas"
+    "content:check-schemas": "node scripts/content.mts check-schemas",
+    "content:check": "npm run content:check-schemas && npm run content:validate && npm run content:check-determinism"
   },
   "dependencies": {
     "phaser": "4.2.1",

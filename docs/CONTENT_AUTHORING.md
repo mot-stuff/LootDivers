@@ -61,18 +61,33 @@ Absolute paths, URL/protocol forms, backslashes, empty or dot segments,
 traversal, and encoded traversal are rejected. Compilation additionally resolves
 each path against the configured asset root and verifies containment.
 
-Run:
+## Verification
+
+The required local and CI content gate is non-mutating:
 
 ```powershell
-& $npm run content:check-schemas
-& $npm run content:validate
-& $npm run content:compile
-& $npm run content:check-determinism
+& $npm run content:check
 ```
 
-After intentionally changing a canonical schema, run
-`content:generate-schemas`, review the JSON artifact diff, and run
-`content:check-schemas`.
+It checks typed-schema artifact freshness, validates source, proves two clean
+compiler runs are byte-identical, and compares a fresh compilation against
+canonical `generated/content`. It never regenerates either committed artifact
+set. Do not run `content:compile` before this gate: doing so can repair stale,
+missing, or extra generated output and conceal the defect being checked.
+
+## Intentional regeneration
+
+Only after a source or canonical schema change has made the non-mutating gate
+fail should an author intentionally regenerate affected artifacts:
+
+```powershell
+& $npm run content:generate-schemas # only after canonical schema changes
+& $npm run content:compile
+& $npm run content:check
+```
+
+Review every generated diff before committing it. The final `content:check`
+confirms the regenerated artifacts without modifying them.
 
 `content:compile` replaces `generated/content` with canonical JSON chunks and a
 manifest containing schema/content/compiler versions, hashes, and stable chunk

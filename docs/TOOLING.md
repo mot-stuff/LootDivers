@@ -48,7 +48,9 @@ and `package-lock.json` locks the complete graph.
   hypothetical future core `.tsx` file.
 - `src/adapters`: browser and Phaser integration.
 - `src/presentation`: Preact and CSS presentation.
-- `src/content`: reserved content boundary; intentionally empty.
+- `src/content`: typed content contracts, canonical schemas, validation,
+  deterministic compilation, and generated-output freshness checks. It contains
+  no production gameplay content.
 - `src/persistence`: reserved persistence boundary; intentionally empty.
 - `tests/unit` and `tests/e2e`: Vitest and Playwright verification.
 
@@ -70,10 +72,7 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm test
 & $npm run build
 & $npm run budget
-& $npm run content:check-schemas
-& $npm run content:validate
-& $npm run content:compile
-& $npm run content:check-determinism
+& $npm run content:check
 & $npm exec playwright -- install chromium
 & $npm run test:smoke
 ```
@@ -103,9 +102,22 @@ responses at or above 400, missing semantic readiness, or a non-WebGL2 canvas.
 
 Content schemas, authoring rules, diagnostics, generated output, and version
 contracts are documented in [`CONTENT_AUTHORING.md`](CONTENT_AUTHORING.md).
-Canonical typed schemas can be intentionally materialized with
-`npm run content:generate-schemas`; normal verification uses
-`npm run content:check-schemas` and rejects stale schema artifacts.
+`npm run content:check` is the required non-mutating local/CI gate. It must run
+before any regeneration command so stale, missing, or extra committed artifacts
+cannot be silently repaired.
+
+After an intentional content or canonical schema edit, regeneration is a
+separate authoring operation:
+
+```powershell
+& $npm run content:check # demonstrates the expected stale failure first
+& $npm run content:generate-schemas # only for canonical schema changes
+& $npm run content:compile
+& $npm run content:check # confirms regenerated artifacts are current
+```
+
+Review generated diffs before committing. CI must never use either regeneration
+command.
 
 ## Renderer and transfer policy
 
