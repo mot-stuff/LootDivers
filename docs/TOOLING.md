@@ -73,8 +73,11 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm run build
 & $npm run budget
 & $npm run content:check
+& $npm run world:check
 & $npm exec playwright -- install chromium
 & $npm run test:smoke
+& $npm run test:visual
+& $npm run budget:world
 ```
 
 The bootstrap downloads Node.js `24.20.0` from `nodejs.org`, verifies the
@@ -152,3 +155,16 @@ The command enforces the currently measurable P0-002 shell gates:
 The machine-readable output is generated at the intentionally untracked
 `reports/transfer-budget.json`. Future lazy zone chunks are not charged until
 they become part of the initial request graph.
+
+TASK-P0-006 adds the deterministic technical-zone commands, browser matrix, and
+zone transfer checks documented in [`WORLD_PIPELINE.md`](WORLD_PIPELINE.md).
+Run `budget` before `budget:world`; the latter enforces both the 8 MiB technical
+zone limit and the 10 MiB combined shell-plus-zone limit. `test:smoke` remains
+the pinned Chromium production-artifact gate, while `test:browser` exercises
+configured Chromium, branded Chrome, branded Edge, Firefox, and WebKit projects
+when their binaries are available. These scripts launch Playwright through
+`scripts/run-playwright.mjs`, which allocates one free loopback preview port per
+invocation and shares it with every worker. Browser artifacts are isolated
+under that port's test-results directory. Direct `playwright test` remains
+available for debugging and uses port 4174 unless `RARPG_PLAYWRIGHT_PORT` is
+provided.

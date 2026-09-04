@@ -27,7 +27,10 @@ test("production build boots Phaser and the diagnostic shell", async ({
   await page.goto("/", { waitUntil: "networkidle" });
 
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
-  await expect(page.getByTestId("boot-status")).toHaveText("Foundation ready");
+  await expect(page.getByTestId("boot-status")).toHaveText(
+    "Technical isometric fixture ready",
+  );
+  await expect(page.getByText("fixture:technical-isometric")).toBeVisible();
   await expect(page.getByLabel("RARPG Phaser diagnostic canvas")).toBeVisible();
   await expect(page.getByText(/^WebGL 2/)).toBeVisible();
 

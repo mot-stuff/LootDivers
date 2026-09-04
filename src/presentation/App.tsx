@@ -2,7 +2,11 @@ import { FOUNDATION_ID } from "../core";
 
 export type BootState =
   | { readonly kind: "checking" }
-  | { readonly kind: "ready"; readonly rendererVersion: string }
+  | {
+      readonly kind: "ready";
+      readonly rendererVersion: string;
+      readonly zoneId: string;
+    }
   | { readonly kind: "unsupported"; readonly detail: string };
 
 export interface AppProps {
@@ -31,6 +35,10 @@ export function App({ state }: AppProps) {
           <dt>Renderer</dt>
           <dd>{ready ? state.rendererVersion : "WebGL2 required"}</dd>
         </div>
+        <div>
+          <dt>Zone</dt>
+          <dd>{ready ? state.zoneId : "Loading on demand"}</dd>
+        </div>
       </dl>
       <section
         class={
@@ -40,7 +48,7 @@ export function App({ state }: AppProps) {
         data-testid="boot-status"
       >
         {state.kind === "checking" && "Checking WebGL2 support…"}
-        {state.kind === "ready" && "Foundation ready"}
+        {state.kind === "ready" && "Technical isometric fixture ready"}
         {state.kind === "unsupported" && (
           <>
             <strong>WebGL2 is required.</strong> {state.detail} Update to a
