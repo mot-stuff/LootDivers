@@ -22,6 +22,13 @@ The deterministic output is
 `public/zones/technical-isometric.zone.json`. Runtime code fetches this compiled
 bundle and never parses arbitrary Tiled source.
 
+TASK-P0-007 adds the compatible technical navigation source
+`fixtures/world/technical-navigation.json` and deterministic compiled
+`public/zones/technical-navigation.grid.json`. It references this zone's stable
+ID and bundle version but remains a framework-free 128×128 walkability, cost,
+and discrete-elevation contract. Details are in
+[`SPATIAL_NAVIGATION.md`](SPATIAL_NAVIGATION.md).
+
 ```powershell
 & $npm run world:check
 & $npm run world:compile # only after an intentional source edit

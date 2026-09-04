@@ -674,6 +674,16 @@ flow fields, worker implementation.
 respect work budgets; no per-agent unbounded path request loop exists.
 **Testing:** Unit/property tests plus synthetic crowd timing report.
 
+**Completion record (2026-09-04):** Complete pending independent acceptance.
+Framework-free uniform spatial indexing, simple collision queries, a compiled
+128×128 walkability/cost/elevation grid, deterministic bounded A*, a bounded
+fair request scheduler, and local separation are implemented with reusable
+buffers and explicit budgets. The five-repetition P0-002-shaped synthetic
+timing harness produced deterministic outcomes, but its current-machine Node
+timings are `INELIGIBLE` and make no browser acceptance claim. No enemy AI,
+combat hit policy, physics simulation, movement, dynamic navmesh, flow field,
+worker, or Phaser dependency was introduced into core.
+
 ### TASK-P0-008 — Prove entity/presentation lifecycle
 
 **Owner:** Combat Engineer

@@ -43,3 +43,41 @@ export {
   type RandomState,
   type StatefulRandomSource,
 } from "./random";
+export {
+  BLOCKED_NAVIGATION_COST,
+  MAXIMUM_NAVIGATION_COST,
+  MINIMUM_NAVIGATION_COST,
+  NavigationGrid,
+  type CompiledNavigationGridData,
+  type GridPoint,
+} from "./navigation-grid";
+export {
+  BoundedAStar,
+  createPathResult,
+  PathBuffer,
+  type PathResult,
+  type PathStatus,
+} from "./pathfinding";
+export {
+  FairPathRequestScheduler,
+  type PathCompletionSink,
+  type PathRequest,
+  type PathRequestRejection,
+  type PathSchedulerOptions,
+  type PathSchedulerTickResult,
+} from "./path-scheduler";
+export { computeLocalSeparation, type MutableVector2 } from "./separation";
+export {
+  aabbsOverlap,
+  circleIntersectsAabb,
+  circlesOverlap,
+  segmentIntersectsAabb,
+  segmentIntersectsCircle,
+  SpatialQueryBuffer,
+  UniformSpatialHash,
+  type Aabb,
+  type Circle,
+  type Point2,
+  type Segment,
+  type SpatialRecord,
+} from "./spatial";
