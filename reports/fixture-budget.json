@@ -22,8 +22,8 @@
     }
   ],
   "fixtureBrotliBytes": 1385,
-  "shellBrotliBytes": 307947,
-  "combinedBrotliBytes": 309332,
+  "shellBrotliBytes": 308179,
+  "combinedBrotliBytes": 309564,
   "gates": {
     "fixtureAtMost8MiB": "PASS",
     "combinedAtMost10MiB": "PASS"
