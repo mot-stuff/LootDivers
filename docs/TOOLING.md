@@ -70,6 +70,7 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm run lint
 & $npm run typecheck
 & $npm test
+& $npm run test:component
 & $npm run build
 & $npm run budget
 & $npm run content:check
@@ -105,6 +106,13 @@ responses at or above 400, missing semantic readiness, or a non-WebGL2 canvas.
 The Playwright config derives a stable high preview port from the absolute
 worktree path so simultaneous task worktrees do not share port `4173`.
 `PLAYWRIGHT_PREVIEW_PORT` may override it with a valid explicit port.
+
+TASK-P0-011 adds `test:component`, which runs Preact shell component tests in
+Vitest Browser Mode through the pinned Playwright Chromium provider.
+`test:browser` consolidates that component gate with the complete configured
+Playwright browser matrix. UI shell contracts, focus rules, resize/DPR behavior,
+accessibility coverage, and the manual keyboard checklist are documented in
+[`UI_SHELL.md`](UI_SHELL.md).
 
 Content schemas, authoring rules, diagnostics, generated output, and version
 contracts are documented in [`CONTENT_AUTHORING.md`](CONTENT_AUTHORING.md).

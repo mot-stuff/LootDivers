@@ -132,11 +132,16 @@ for (const pointerCase of [
             backingWidth: canvas.width,
             backingHeight: canvas.height,
             displayWidth: canvas.getBoundingClientRect().width,
+            displayHeight: canvas.getBoundingClientRect().height,
             dpr: window.devicePixelRatio,
           };
         });
-      expect(dimensions.backingWidth).toBe(960);
-      expect(dimensions.backingHeight).toBe(540);
+      expect(dimensions.backingWidth).toBe(
+        Math.round(dimensions.displayWidth * dimensions.dpr),
+      );
+      expect(dimensions.backingHeight).toBe(
+        Math.round(dimensions.displayHeight * dimensions.dpr),
+      );
       expect(dimensions.dpr).toBe(pointerCase.deviceScaleFactor);
       if (pointerCase.expectedDisplay === "expanded") {
         expect(dimensions.displayWidth).toBeGreaterThan(960);

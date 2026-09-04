@@ -1,27 +1,36 @@
 import { render } from "preact";
 
 import {
+  applyCanvasViewport,
+  measureCanvasViewport,
+  observeCanvasViewport,
+} from "./adapters/browser/canvas-viewport";
+import {
   IndexedDbSaveRepository,
   PersistenceFaultInjector,
   type PersistenceFault,
 } from "./adapters/browser/indexeddb-save-repository";
+import { installKeyboardCapture } from "./adapters/browser/keyboard-capture";
 import {
   SystemSaveClock,
   WebCryptoSha256,
 } from "./adapters/browser/persistence-platform";
-import { bootPhaser } from "./adapters/phaser/boot";
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
+import { bootPhaser } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
+import { createReadModelChannel } from "./adapters/ui/read-model-channel";
 import {
   PersistenceFixtureService,
   type FixtureSaveState,
   type PersistenceStatus,
 } from "./persistence";
-import {
-  App,
-  type BootState,
-  type PersistenceFixtureActions,
-} from "./presentation/App";
+import { App, type PersistenceFixtureActions } from "./presentation/App";
+import type {
+  CanvasViewportReadModel,
+  ShellBindings,
+  ShellIntent,
+  ShellReadModel,
+} from "./presentation/shell-contracts";
 import "./presentation/styles.css";
 
 declare global {
@@ -37,27 +46,42 @@ declare global {
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
-
   if (element === null) {
     throw new Error(
       `Required foundation mount point "${selector}" is missing.`,
     );
   }
-
   return element;
 }
 
-const shell = requireElement<HTMLDivElement>("#app-shell");
-const canvas = requireElement<HTMLCanvasElement>("#game-canvas");
 const fixtureParameters = new URLSearchParams(window.location.search);
 const worldAutomation = fixtureParameters.has("automation");
 const persistenceAutomation = fixtureParameters.has("persistenceTest");
-let bootState: BootState = { kind: "checking" };
+const emptyViewport: CanvasViewportReadModel = {
+  cssWidth: 0,
+  cssHeight: 0,
+  backingWidth: 0,
+  backingHeight: 0,
+  devicePixelRatio: window.devicePixelRatio,
+};
+const channel = createReadModelChannel<ShellReadModel>({
+  revision: 0,
+  phase: {
+    kind: "loading",
+    message: "Checking WebGL2 support…",
+  },
+  viewport: emptyViewport,
+  emittedIntentCount: 0,
+  capturedKeyboardCount: 0,
+  lastIntentType: null,
+});
+let model = channel.source.getSnapshot();
 let persistenceStatus: PersistenceStatus = {
   kind: "idle",
   message:
     "No operation yet. Local browser saves are best-effort and user-tamperable.",
 };
+
 const faultInjector = new PersistenceFaultInjector();
 const repository = new IndexedDbSaveRepository({
   databaseName: "rarpg-phase0-persistence-v1",
@@ -71,7 +95,7 @@ const repository = new IndexedDbSaveRepository({
 const service = new PersistenceFixtureService(repository, {
   publish(status) {
     persistenceStatus = status;
-    show();
+    renderApp();
   },
 });
 const persistenceActions: PersistenceFixtureActions = {
@@ -85,65 +109,102 @@ const persistenceActions: PersistenceFixtureActions = {
   },
 };
 
-function show(): void {
+function publish(changes: Partial<ShellReadModel>): void {
+  model = {
+    ...model,
+    ...changes,
+    revision: model.revision + 1,
+  };
+  channel.publisher.publish(model);
+}
+
+const intentSink: ShellBindings["intents"] = {
+  emit(intent: Readonly<ShellIntent>) {
+    const isKeyboard = intent.type === "shell.canvas-keyboard-observed";
+    publish({
+      emittedIntentCount: model.emittedIntentCount + 1,
+      capturedKeyboardCount: model.capturedKeyboardCount + (isKeyboard ? 1 : 0),
+      lastIntentType: intent.type,
+    });
+    if (intent.type === "shell.renderer-retry-requested") {
+      window.location.reload();
+    }
+  },
+};
+const bindings: ShellBindings = {
+  models: channel.source,
+  intents: intentSink,
+};
+const mount = requireElement<HTMLDivElement>("#app");
+
+function renderApp(): void {
   render(
     <App
-      state={bootState}
+      bindings={bindings}
       persistenceStatus={persistenceStatus}
       persistenceActions={persistenceActions}
+      showPersistence={!worldAutomation || persistenceAutomation}
     />,
-    shell,
+    mount,
   );
-
-  if (worldAutomation && !persistenceAutomation) {
-    const persistenceFixture = shell.querySelector<HTMLElement>(
-      ".persistence-fixture",
-    );
-    if (persistenceFixture !== null) {
-      persistenceFixture.style.display = "none";
-    }
-  }
 }
+
+renderApp();
+
+const host = requireElement<HTMLDivElement>("#game-host");
+const canvas = requireElement<HTMLCanvasElement>("#game-canvas");
+const skipLink = requireElement<HTMLAnchorElement>(".skip-link");
+const initialViewport = measureCanvasViewport(host, window.devicePixelRatio);
+applyCanvasViewport(canvas, initialViewport);
+publish({ viewport: initialViewport });
+installKeyboardCapture(canvas, intentSink, skipLink);
 
 function fail(detail: string): void {
-  canvas.hidden = true;
   document.body.dataset.appState = "unsupported";
-  bootState = { kind: "unsupported", detail };
-  show();
+  publish({
+    phase: {
+      kind: "error",
+      heading: "WebGL2 is required.",
+      detail,
+      canRetry: true,
+    },
+  });
 }
 
-show();
-
 const support = preflightWebGL2(canvas);
-
 if (!support.supported) {
   fail(support.reason);
 } else {
   void bootPhaser(canvas, support.context)
-    .then(({ rendererVersion, world }) => {
-      const diagnostics = world.diagnostics();
+    .then((renderer) => {
+      const diagnostics = renderer.world.diagnostics();
       if (diagnostics.zoneId === null) {
         throw new Error("Technical zone reported ready without a zone ID.");
       }
+      observeCanvasViewport(host, (viewport) => {
+        renderer.resize(viewport);
+        publish({ viewport });
+      });
       if (worldAutomation) {
         window.__RARPG_WORLD_TEST__ = {
-          diagnostics: () => world.diagnostics(),
-          load: () => world.load(),
+          diagnostics: () => renderer.world.diagnostics(),
+          load: () => renderer.world.load(),
           pick: (screenX, screenY) => {
-            world.pick(screenX, screenY);
+            renderer.world.pick(screenX, screenY);
           },
           unload: () => {
-            world.unload();
+            renderer.world.unload();
           },
         };
       }
       document.body.dataset.appState = "ready";
-      bootState = {
-        kind: "ready",
-        rendererVersion,
-        zoneId: diagnostics.zoneId,
-      };
-      show();
+      publish({
+        phase: {
+          kind: "ready",
+          rendererVersion: renderer.rendererVersion,
+          zoneId: diagnostics.zoneId,
+        },
+      });
     })
     .catch((error: unknown) => {
       const detail = error instanceof Error ? error.message : String(error);
@@ -182,7 +243,7 @@ if (persistenceAutomation) {
         kind: "idle",
         message: "Synthetic persistence fixture reset.",
       };
-      show();
+      renderApp();
     },
     armFault(fault) {
       faultInjector.arm(fault);

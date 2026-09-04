@@ -35,6 +35,7 @@ export type {
   EventSink,
   EventsFrom,
 } from "./messages";
+export type { IntentSink, ReadModelSource } from "./ui-boundary";
 export {
   MULBERRY32_ALGORITHM,
   Mulberry32,

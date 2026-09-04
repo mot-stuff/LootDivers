@@ -1,10 +1,15 @@
 import Phaser from "phaser";
 
+import type { CanvasViewportReadModel } from "../../presentation/shell-contracts";
+import { applyCanvasViewport } from "../browser/canvas-viewport";
 import { assertWebGL2Context } from "../browser/webgl2";
 import {
   IsometricZoneAdapter,
   type ZoneLifecycleDiagnostics,
 } from "./isometric-world";
+
+const LOGICAL_WORLD_WIDTH = 960;
+const LOGICAL_WORLD_HEIGHT = 540;
 
 class TechnicalWorldScene extends Phaser.Scene {
   readonly #onReady: (adapter: IsometricZoneAdapter) => void;
@@ -20,6 +25,7 @@ class TechnicalWorldScene extends Phaser.Scene {
   }
 
   public create(): void {
+    this.configureLogicalViewport();
     this.add
       .text(16, 16, "TASK-P0-006 · SYNTHETIC ISOMETRIC FIXTURE", {
         color: "#e8f1ff",
@@ -40,6 +46,18 @@ class TechnicalWorldScene extends Phaser.Scene {
         );
       });
   }
+
+  public configureLogicalViewport(): void {
+    const widthScale = this.scale.gameSize.width / LOGICAL_WORLD_WIDTH;
+    const heightScale = this.scale.gameSize.height / LOGICAL_WORLD_HEIGHT;
+    const zoom = Math.min(widthScale, heightScale);
+    this.cameras.main
+      .setZoom(zoom)
+      .setScroll(
+        (LOGICAL_WORLD_WIDTH - this.scale.gameSize.width) / 2,
+        (LOGICAL_WORLD_HEIGHT - this.scale.gameSize.height) / 2,
+      );
+  }
 }
 
 export interface TechnicalWorldController {
@@ -53,6 +71,7 @@ export interface PhaserBootResult {
   readonly game: Phaser.Game;
   readonly rendererVersion: string;
   readonly world: TechnicalWorldController;
+  resize(viewport: CanvasViewportReadModel): void;
 }
 
 export function bootPhaser(
@@ -73,6 +92,11 @@ export function bootPhaser(
             game,
             rendererVersion: assertWebGL2Context(game.canvas),
             world,
+            resize(viewport) {
+              game.scale.resize(viewport.backingWidth, viewport.backingHeight);
+              scene.configureLogicalViewport();
+              applyCanvasViewport(game.canvas, viewport);
+            },
           });
         } catch (error: unknown) {
           game.destroy(true);
@@ -81,8 +105,8 @@ export function bootPhaser(
       }, reject);
       gameRef.current = new Phaser.Game({
         type: Phaser.WEBGL,
-        width: 960,
-        height: 540,
+        width: canvas.width,
+        height: canvas.height,
         canvas,
         // Phaser 4.2.1's GameConfig declaration omits WebGL2RenderingContext,
         // although its WebGL renderer accepts and uses the supplied context.
@@ -91,6 +115,11 @@ export function bootPhaser(
         render: {
           antialias: true,
           transparent: false,
+        },
+        // Keyboard ownership stays in the browser adapter so DOM focus can gate
+        // input before an intent is emitted.
+        input: {
+          keyboard: false,
         },
         scene,
       });
