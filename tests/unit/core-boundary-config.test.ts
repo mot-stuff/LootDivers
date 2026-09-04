@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { ESLint, type Linter } from "eslint";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -12,6 +13,55 @@ function configuredSeverity(rule: unknown): unknown {
 }
 
 describe("core boundary configuration", () => {
+  it("applies typed ESLint rules and Node globals to TypeScript tooling", async () => {
+    const eslint = new ESLint({ cwd: repositoryRoot });
+    const config = (await eslint.calculateConfigForFile(
+      "scripts/content.mts",
+    )) as Linter.Config | undefined;
+
+    expect(config).toBeDefined();
+    expect(
+      configuredSeverity(
+        config?.rules?.["@typescript-eslint/no-unsafe-assignment"] as unknown,
+      ),
+    ).toBe(2);
+    const parserOptions = config?.languageOptions?.parserOptions as
+      Record<string, unknown> | undefined;
+    const configuredGlobals = config?.languageOptions?.globals as
+      Record<string, unknown> | undefined;
+    expect(parserOptions?.projectService).toBe(true);
+    expect(configuredGlobals?.process).toBeDefined();
+  });
+
+  it("strict TypeScript compilation includes content tooling", () => {
+    const configPath = fileURLToPath(
+      new URL("../../tsconfig.json", import.meta.url),
+    );
+    const loaded = ts.readConfigFile(configPath, (path) =>
+      ts.sys.readFile(path),
+    );
+    expect(loaded.error).toBeUndefined();
+    const parsed = ts.parseJsonConfigFileContent(
+      loaded.config as object,
+      ts.sys,
+      repositoryRoot,
+      undefined,
+      configPath,
+    );
+    const contentTool = fileURLToPath(
+      new URL("../../scripts/content.mts", import.meta.url),
+    );
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.options.strict).toBe(true);
+    const normalizedFiles = parsed.fileNames.map((path) =>
+      path.replaceAll("\\", "/").toLowerCase(),
+    );
+    expect(normalizedFiles).toContain(
+      contentTool.replaceAll("\\", "/").toLowerCase(),
+    );
+  });
+
   it("applies framework and DOM lint restrictions to future TSX files", async () => {
     const eslint = new ESLint({ cwd: repositoryRoot });
     const config = (await eslint.calculateConfigForFile(

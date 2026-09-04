@@ -19,7 +19,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc -p tsconfig.core.json && tsc -p tsconfig.json",
     "test": "vitest run",
     "test:smoke": "playwright test --project=chromium",

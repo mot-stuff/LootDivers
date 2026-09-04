@@ -118,10 +118,10 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx,mts}"],
   })),
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx,mts}"],
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -139,7 +139,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["scripts/**/*.mjs", "eslint.config.mjs"],
+    files: ["scripts/**/*.{mjs,mts}", "eslint.config.mjs"],
     languageOptions: {
       globals: globals.node,
     },
