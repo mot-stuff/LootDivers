@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { compileTiledMap, serializeZoneBundle } from "../../src/world/compiler";
 import {
   compareFootDepth,
+  normalizeCanvasPoint,
   pickAuthoredCell,
   projectIsometric,
   unprojectIsometric,
@@ -44,6 +45,26 @@ describe("isometric projection convention", () => {
       const screen = projectIsometric(source, projection);
       expect(unprojectIsometric(screen, elevation, projection)).toEqual(source);
     }
+  });
+
+  it("normalizes responsive and high-DPR canvas coordinates", () => {
+    expect(
+      normalizeCanvasPoint(
+        { x: 340, y: 185 },
+        { left: 100, top: 50, width: 480, height: 270 },
+        { width: 960, height: 540 },
+        { width: 960, height: 540 },
+      ),
+    ).toEqual({ x: 480, y: 270 });
+
+    expect(
+      normalizeCanvasPoint(
+        { x: 490, y: 320 },
+        { left: 10, top: 50, width: 960, height: 540 },
+        { width: 1920, height: 1080 },
+        { width: 960, height: 540 },
+      ),
+    ).toEqual({ x: 480, y: 270 });
   });
 
   it("sorts by elevation, foot row, then stable fixture ID", () => {

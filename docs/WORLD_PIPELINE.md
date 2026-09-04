@@ -74,8 +74,10 @@ signal; real Safari remains `NOT RUN — hardware unavailable`.
 All package browser scripts use `scripts/run-playwright.mjs`, which reserves a
 free loopback port once and passes it to the preview server and every Playwright
 worker, with artifacts isolated by port. Tests wait for semantic fixture
-diagnostics and invoke the same screen-coordinate picking path through stable
-canvas coordinates; they do not depend on CSS-scaled physical mouse positions.
+diagnostics. The runtime converts physical pointer client coordinates through
+the canvas DOM bounds, backing dimensions, logical camera dimensions, and camera
+world transform before isometric picking. Playwright physically clicks known
+ground and elevated cells at expanded DPR 1 and compact DPR 2 viewports.
 
 On 2026-09-04, pinned Playwright `1.62.1` attempted
 `npm exec playwright -- install chrome`. Download began, but installation

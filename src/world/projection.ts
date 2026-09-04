@@ -15,6 +15,18 @@ export interface ScreenPoint {
   readonly y: number;
 }
 
+export interface CanvasBounds {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface PixelDimensions {
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface PickedZoneCell extends GridPoint {
   readonly x: number;
   readonly y: number;
@@ -45,6 +57,34 @@ export function unprojectIsometric(
   const y = screenY / projection.tileHeight - screenX / projection.tileWidth;
 
   return { x, y, elevation };
+}
+
+export function normalizeCanvasPoint(
+  clientPoint: ScreenPoint,
+  bounds: CanvasBounds,
+  backing: PixelDimensions,
+  logical: PixelDimensions,
+): ScreenPoint | null {
+  if (
+    bounds.width <= 0 ||
+    bounds.height <= 0 ||
+    backing.width <= 0 ||
+    backing.height <= 0 ||
+    logical.width <= 0 ||
+    logical.height <= 0
+  ) {
+    return null;
+  }
+
+  const backingX =
+    (clientPoint.x - bounds.left) * (backing.width / bounds.width);
+  const backingY =
+    (clientPoint.y - bounds.top) * (backing.height / bounds.height);
+
+  return {
+    x: backingX * (logical.width / backing.width),
+    y: backingY * (logical.height / backing.height),
+  };
 }
 
 export function footDepthKey(marker: ZoneMarker): string {

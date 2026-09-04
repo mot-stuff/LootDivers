@@ -8,6 +8,7 @@ import {
 } from "../../world/contracts";
 import {
   compareFootDepth,
+  normalizeCanvasPoint,
   pickAuthoredCell,
   projectIsometric,
 } from "../../world/projection";
@@ -211,7 +212,35 @@ export class IsometricZoneAdapter {
       .setDepth(4_000_000);
     this.#objects.push(this.#pickLabel);
     this.#pointerHandler = (pointer) => {
-      this.pick(pointer.worldX, pointer.worldY);
+      const event = pointer.event;
+      if (
+        event === null ||
+        !("clientX" in event) ||
+        !("clientY" in event) ||
+        typeof event.clientX !== "number" ||
+        typeof event.clientY !== "number"
+      ) {
+        return;
+      }
+      const canvas = this.#scene.game.canvas;
+      const bounds = canvas.getBoundingClientRect();
+      const camera = this.#scene.cameras.main;
+      const screenPoint = normalizeCanvasPoint(
+        { x: event.clientX, y: event.clientY },
+        {
+          left: bounds.left,
+          top: bounds.top,
+          width: bounds.width,
+          height: bounds.height,
+        },
+        { width: canvas.width, height: canvas.height },
+        { width: camera.width, height: camera.height },
+      );
+      if (screenPoint === null) {
+        return;
+      }
+      const worldPoint = camera.getWorldPoint(screenPoint.x, screenPoint.y);
+      this.pick(worldPoint.x, worldPoint.y);
     };
     this.#scene.input.on("pointerdown", this.#pointerHandler);
   }
