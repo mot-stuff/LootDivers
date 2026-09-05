@@ -17,6 +17,8 @@ import {
 
 const LOGICAL_WORLD_WIDTH = 960;
 const LOGICAL_WORLD_HEIGHT = 540;
+let lastFixtureFailureDiagnostics: SyntheticPresentationDiagnostics | null =
+  null;
 
 class TechnicalWorldScene extends Phaser.Scene {
   readonly #onReady: (adapter: IsometricZoneAdapter) => void;
@@ -68,6 +70,8 @@ class TechnicalWorldScene extends Phaser.Scene {
         this.#onReady(adapter);
       })
       .catch((error: unknown) => {
+        lastFixtureFailureDiagnostics =
+          this.#fixture?.diagnostics() ?? lastFixtureFailureDiagnostics;
         this.#onError(
           error instanceof Error ? error : new Error(String(error)),
         );
@@ -135,6 +139,20 @@ class TechnicalWorldScene extends Phaser.Scene {
     }
     return this.#fixture.rawSamples();
   }
+
+  public cycleFixtureActor(actor: number): {
+    readonly destroyed: number;
+    readonly created: number;
+  } {
+    if (this.#fixture === null) {
+      throw new Error("Full lifecycle fixture is not active.");
+    }
+    return this.#fixture.cycleActor(actor);
+  }
+
+  public invalidateFixtureSample(reason: string): void {
+    this.#fixture?.invalidateSample(reason);
+  }
 }
 
 export interface TechnicalWorldController {
@@ -156,6 +174,10 @@ export interface PhaserBootResult {
     reset(): Promise<void>;
     resetAtStep(steps: number): Promise<void>;
     rawSamples(): RawFrameSamples;
+    cycleActor(actor: number): {
+      readonly destroyed: number;
+      readonly created: number;
+    };
   };
   resize(viewport: CanvasViewportReadModel): void;
 }
@@ -169,6 +191,7 @@ export function bootPhaser(
   context: WebGL2RenderingContext,
   options: PhaserBootOptions = {},
 ): Promise<PhaserBootResult> {
+  lastFixtureFailureDiagnostics = null;
   return new Promise((resolve, reject) => {
     try {
       const gameRef: { current?: Phaser.Game } = {};
@@ -198,8 +221,10 @@ export function bootPhaser(
                 reset: () => scene.resetFixture(),
                 resetAtStep: (steps) => scene.resetFixtureAtStep(steps),
                 rawSamples: () => scene.fixtureRawSamples(),
+                cycleActor: (actor) => scene.cycleFixtureActor(actor),
               },
               resize(viewport) {
+                scene.invalidateFixtureSample("viewport-resized");
                 game.scale.resize(
                   viewport.backingWidth,
                   viewport.backingHeight,
@@ -213,7 +238,10 @@ export function bootPhaser(
             reject(error instanceof Error ? error : new Error(String(error)));
           }
         },
-        reject,
+        (error) => {
+          gameRef.current?.destroy(true);
+          reject(error);
+        },
         options.fullFixture ?? false,
       );
       gameRef.current = new Phaser.Game({
@@ -240,4 +268,8 @@ export function bootPhaser(
       reject(error instanceof Error ? error : new Error(String(error)));
     }
   });
+}
+
+export function fixtureFailureDiagnostics(): SyntheticPresentationDiagnostics | null {
+  return lastFixtureFailureDiagnostics;
 }

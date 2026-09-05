@@ -425,7 +425,8 @@ function runRepetition(navigation: CompiledNavigationGridBundle): {
       const candidates = computeLocalSeparation(
         spatial,
         agent.id,
-        agent,
+        agent.x,
+        agent.y,
         0,
         96,
         12,

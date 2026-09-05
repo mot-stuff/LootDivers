@@ -104,6 +104,13 @@ interface MutablePathRequest {
   goal: GridPoint;
 }
 
+interface MutableAabb {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 class FixturePathSink implements PathCompletionSink {
   completed = 0;
   noPath = 0;
@@ -142,14 +149,12 @@ export class SyntheticLifecycleFixture {
   readonly actorDirections = new Uint8Array(SYNTHETIC_ACTOR_COUNT);
   readonly actorFrames = new Uint8Array(SYNTHETIC_ACTOR_COUNT);
   readonly particleAlpha = new Float32Array(SYNTHETIC_PARTICLE_COUNT);
-  readonly #actorTransformIndices = new Uint16Array(SYNTHETIC_ACTOR_COUNT);
-  readonly #projectileTransformIndices = new Uint16Array(
-    SYNTHETIC_PROJECTILE_COUNT,
+  readonly #actorSeparationX = new Float32Array(SYNTHETIC_ACTOR_COUNT);
+  readonly #actorSeparationY = new Float32Array(SYNTHETIC_ACTOR_COUNT);
+  readonly #actorBounds: MutableAabb[] = Array.from(
+    { length: SYNTHETIC_ACTOR_COUNT },
+    () => ({ minX: 0, minY: 0, maxX: 0, maxY: 0 }),
   );
-  readonly #particleTransformIndices = new Uint16Array(
-    SYNTHETIC_PARTICLE_COUNT,
-  );
-  readonly #lootTransformIndices = new Uint16Array(SYNTHETIC_LOOT_COUNT);
   readonly #actorWaypointsX = new Float32Array(
     SYNTHETIC_ACTOR_COUNT * WAYPOINTS_PER_ACTOR,
   );
@@ -241,6 +246,7 @@ export class SyntheticLifecycleFixture {
       },
     );
     this.#rebuildSpatialIndex();
+    this.#runActorQueries(false);
     this.#spatial.writeAllocationDiagnostics(this.#spatialDiagnostics);
     this.#warmupStructuralAllocations = this.#structuralAllocations();
     this.assertPopulations();
@@ -330,6 +336,55 @@ export class SyntheticLifecycleFixture {
     }
   }
 
+  public replaceActor(
+    actor: number,
+    onDestroyed?: (id: RuntimeEntityId) => void,
+  ): {
+    readonly destroyed: RuntimeEntityId;
+    readonly created: RuntimeEntityId;
+  } {
+    if (
+      !Number.isSafeInteger(actor) ||
+      actor < 0 ||
+      actor >= this.actorIds.length
+    ) {
+      throw new RangeError(
+        "Technical actor slot is outside the fixed population.",
+      );
+    }
+    const destroyed = this.actorIds[actor] as RuntimeEntityId;
+    const transformIndex = this.lifecycle.transforms.indexOf(destroyed);
+    if (transformIndex < 0) {
+      throw new Error(`Technical actor ${destroyed} has no transform.`);
+    }
+    const transform = {
+      x: this.lifecycle.transforms.x[transformIndex] ?? 0,
+      y: this.lifecycle.transforms.y[transformIndex] ?? 0,
+      elevation: this.lifecycle.transforms.elevation[transformIndex] ?? 0,
+    };
+    if (!this.lifecycle.requestDestroy(destroyed)) {
+      throw new Error(`Technical actor ${destroyed} could not be destroyed.`);
+    }
+    this.lifecycle.flushCleanup((id) => {
+      this.#spatial.remove(id);
+      onDestroyed?.(id);
+    });
+    const created = this.lifecycle.create(
+      transform,
+      PresentationKind.Actor,
+      actor % 4,
+    );
+    this.actorIds[actor] = created;
+    const request = this.#pathRequests[actor];
+    if (request === undefined) {
+      throw new Error("Technical actor path request slot is missing.");
+    }
+    request.requesterId = created;
+    this.#rebuildSpatialIndex();
+    this.assertPopulations();
+    return { destroyed, created };
+  }
+
   public dispose(): void {
     this.#pathScheduler.clear();
     this.#spatial.clear();
@@ -389,8 +444,6 @@ export class SyntheticLifecycleFixture {
         actor % 4,
       );
       this.actorIds[actor] = id;
-      this.#actorTransformIndices[actor] =
-        this.lifecycle.transforms.indexOf(id);
       for (let waypoint = 0; waypoint < WAYPOINTS_PER_ACTOR; waypoint += 1) {
         const index = actor * WAYPOINTS_PER_ACTOR + waypoint;
         const offsetX = waypoint === 0 || waypoint === 3 ? -48 : 48;
@@ -435,8 +488,6 @@ export class SyntheticLifecycleFixture {
         projectile % 4,
       );
       this.projectileIds[projectile] = id;
-      this.#projectileTransformIndices[projectile] =
-        this.lifecycle.transforms.indexOf(id);
       this.#projectileVelocityX[projectile] = Math.cos(angle) * speed;
       this.#projectileVelocityY[projectile] = Math.sin(angle) * speed;
     }
@@ -455,8 +506,6 @@ export class SyntheticLifecycleFixture {
         particle % 4,
       );
       this.particleIds[particle] = id;
-      this.#particleTransformIndices[particle] =
-        this.lifecycle.transforms.indexOf(id);
       this.#particleVelocityX[particle] = random.nextFloat() * 36 - 18;
       this.#particleVelocityY[particle] = random.nextFloat() * 36 - 18;
       this.#particleLifetime[particle] = lifetime;
@@ -477,14 +526,17 @@ export class SyntheticLifecycleFixture {
         random.nextInteger(4),
       );
       this.lootIds[loot] = id;
-      this.#lootTransformIndices[loot] = this.lifecycle.transforms.indexOf(id);
     }
   }
 
   #advanceActors(deltaSeconds: number): void {
     const transforms = this.lifecycle.transforms;
     for (let actor = 0; actor < SYNTHETIC_ACTOR_COUNT; actor += 1) {
-      const transformIndex = this.#actorTransformIndices[actor] ?? 0;
+      const id = this.actorIds[actor] as RuntimeEntityId;
+      const transformIndex = transforms.indexOf(id);
+      if (transformIndex < 0) {
+        throw new Error(`Technical actor ${id} has no transform.`);
+      }
       const waypoint =
         actor * WAYPOINTS_PER_ACTOR + (this.#actorWaypoint[actor] ?? 0);
       const x = transforms.x[transformIndex] ?? 0;
@@ -494,20 +546,6 @@ export class SyntheticLifecycleFixture {
       let dx = targetX - x;
       let dy = targetY - y;
       const distance = Math.hypot(dx, dy);
-      const id = this.actorIds[actor] as RuntimeEntityId;
-      computeLocalSeparation(
-        this.#spatial,
-        id,
-        { x, y },
-        0,
-        ACTOR_QUERY_RADIUS,
-        0.45,
-        this.#circleQuery,
-        this.#actorQuery,
-        this.#separation,
-      );
-      this.#actorQueries += 1;
-      this.#actorCandidates += this.#actorQuery.count;
       if (distance < 3) {
         this.#actorWaypoint[actor] =
           ((this.#actorWaypoint[actor] ?? 0) + 1) % WAYPOINTS_PER_ACTOR;
@@ -515,8 +553,10 @@ export class SyntheticLifecycleFixture {
       }
       dx /= distance;
       dy /= distance;
-      const velocityX = (dx + this.#separation.x) * ACTOR_SPEED;
-      const velocityY = (dy + this.#separation.y) * ACTOR_SPEED;
+      const velocityX =
+        (dx + (this.#actorSeparationX[actor] ?? 0)) * ACTOR_SPEED;
+      const velocityY =
+        (dy + (this.#actorSeparationY[actor] ?? 0)) * ACTOR_SPEED;
       transforms.x[transformIndex] = clamp(
         x + velocityX * deltaSeconds,
         8,
@@ -539,7 +579,12 @@ export class SyntheticLifecycleFixture {
       projectile < SYNTHETIC_PROJECTILE_COUNT;
       projectile += 1
     ) {
-      const index = this.#projectileTransformIndices[projectile] ?? 0;
+      const id = this.projectileIds[projectile] as RuntimeEntityId;
+      const index = transforms.indexOf(id);
+      if (index < 0) {
+        throw new Error(`Technical projectile ${id} has no transform.`);
+      }
+      let wrapped = false;
       let x =
         (transforms.x[index] ?? 0) +
         (this.#projectileVelocityX[projectile] ?? 0) * deltaSeconds;
@@ -549,26 +594,38 @@ export class SyntheticLifecycleFixture {
       if (x < 0) {
         x += SYNTHETIC_WORLD_SIZE;
         this.#projectileWraps += 1;
+        wrapped = true;
       } else if (x >= SYNTHETIC_WORLD_SIZE) {
         x -= SYNTHETIC_WORLD_SIZE;
         this.#projectileWraps += 1;
+        wrapped = true;
       }
       if (y < 0) {
         y += SYNTHETIC_WORLD_SIZE;
         this.#projectileWraps += 1;
+        wrapped = true;
       } else if (y >= SYNTHETIC_WORLD_SIZE) {
         y -= SYNTHETIC_WORLD_SIZE;
         this.#projectileWraps += 1;
+        wrapped = true;
       }
       transforms.x[index] = x;
       transforms.y[index] = y;
+      if (wrapped) {
+        transforms.previousX[index] = x;
+        transforms.previousY[index] = y;
+      }
     }
   }
 
   #advanceParticles(deltaSeconds: number): void {
     const transforms = this.lifecycle.transforms;
     for (let particle = 0; particle < SYNTHETIC_PARTICLE_COUNT; particle += 1) {
-      const index = this.#particleTransformIndices[particle] ?? 0;
+      const id = this.particleIds[particle] as RuntimeEntityId;
+      const index = transforms.indexOf(id);
+      if (index < 0) {
+        throw new Error(`Technical particle ${id} has no transform.`);
+      }
       let lifetime = (this.#particleLifetime[particle] ?? 0) - deltaSeconds;
       if (lifetime <= 0) {
         const maximum = this.#particleMaximumLifetime[particle] ?? 1;
@@ -577,6 +634,8 @@ export class SyntheticLifecycleFixture {
           ((particle * 67 + this.#simulationSteps * 3) % 128) * 32 + 16;
         transforms.y[index] =
           ((particle * 97 + this.#simulationSteps * 5) % 128) * 32 + 16;
+        transforms.previousX[index] = transforms.x[index] ?? 0;
+        transforms.previousY[index] = transforms.y[index] ?? 0;
         this.#particleRecycles += 1;
       } else {
         transforms.x[index] = wrap(
@@ -596,13 +655,18 @@ export class SyntheticLifecycleFixture {
 
   #runSpatialQueries(): void {
     this.#rebuildSpatialIndex();
+    this.#runActorQueries();
     const transforms = this.lifecycle.transforms;
     for (
       let projectile = 0;
       projectile < SYNTHETIC_PROJECTILE_COUNT;
       projectile += 1
     ) {
-      const index = this.#projectileTransformIndices[projectile] ?? 0;
+      const id = this.projectileIds[projectile] as RuntimeEntityId;
+      const index = transforms.indexOf(id);
+      if (index < 0) {
+        throw new Error(`Technical projectile ${id} has no transform.`);
+      }
       this.#segmentQuery.startX = transforms.previousX[index] ?? 0;
       this.#segmentQuery.startY = transforms.previousY[index] ?? 0;
       this.#segmentQuery.endX = transforms.x[index] ?? 0;
@@ -613,18 +677,54 @@ export class SyntheticLifecycleFixture {
     }
   }
 
+  #runActorQueries(countDiagnostics = true): void {
+    const transforms = this.lifecycle.transforms;
+    for (let actor = 0; actor < SYNTHETIC_ACTOR_COUNT; actor += 1) {
+      const id = this.actorIds[actor] as RuntimeEntityId;
+      const index = transforms.indexOf(id);
+      if (index < 0) {
+        throw new Error(`Technical actor ${id} has no transform.`);
+      }
+      computeLocalSeparation(
+        this.#spatial,
+        id,
+        transforms.x[index] ?? 0,
+        transforms.y[index] ?? 0,
+        0,
+        ACTOR_QUERY_RADIUS,
+        0.45,
+        this.#circleQuery,
+        this.#actorQuery,
+        this.#separation,
+      );
+      this.#actorSeparationX[actor] = this.#separation.x;
+      this.#actorSeparationY[actor] = this.#separation.y;
+      if (countDiagnostics) {
+        this.#actorQueries += 1;
+        this.#actorCandidates += this.#actorQuery.count;
+      }
+    }
+  }
+
   #rebuildSpatialIndex(): void {
     const transforms = this.lifecycle.transforms;
     for (let actor = 0; actor < SYNTHETIC_ACTOR_COUNT; actor += 1) {
-      const index = this.#actorTransformIndices[actor] ?? 0;
+      const id = this.actorIds[actor] as RuntimeEntityId;
+      const index = transforms.indexOf(id);
+      if (index < 0) {
+        throw new Error(`Technical actor ${id} has no transform.`);
+      }
       const x = transforms.x[index] ?? 0;
       const y = transforms.y[index] ?? 0;
-      this.#spatial.upsert(this.actorIds[actor] ?? 0, 0, {
-        minX: x - ACTOR_RADIUS,
-        minY: y - ACTOR_RADIUS,
-        maxX: x + ACTOR_RADIUS,
-        maxY: y + ACTOR_RADIUS,
-      });
+      const bounds = this.#actorBounds[actor];
+      if (bounds === undefined) {
+        throw new Error("Technical actor bounds capacity drifted.");
+      }
+      bounds.minX = x - ACTOR_RADIUS;
+      bounds.minY = y - ACTOR_RADIUS;
+      bounds.maxX = x + ACTOR_RADIUS;
+      bounds.maxY = y + ACTOR_RADIUS;
+      this.#spatial.upsert(id, 0, bounds);
     }
   }
 

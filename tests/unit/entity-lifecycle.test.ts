@@ -8,7 +8,10 @@ import {
   SyntheticLifecycleFixture,
   TECHNICAL_UPDATE_ORDER,
   TechnicalEntityLifecycle,
+  type RuntimeEntityId,
+  type RuntimeEntityIdSource,
 } from "../../src/core";
+import { FixedPresentationPool } from "../../src/adapters/phaser/fixed-presentation-pool";
 
 function fixtureGrid(): NavigationGrid {
   const size = 128 * 128;
@@ -82,6 +85,65 @@ describe("technical entity lifecycle", () => {
     expect(lifecycle.transforms.indexOf(middle)).toBe(-1);
     expect(lifecycle.transforms.ids[1]).toBe(last);
   });
+
+  it("rejects a duplicate generated ID before mutating existing components", () => {
+    const duplicate = 7 as RuntimeEntityId;
+    const ids: RuntimeEntityIdSource = {
+      next: () => duplicate,
+    };
+    const lifecycle = new TechnicalEntityLifecycle(2, ids);
+    lifecycle.create({ x: 1, y: 2, elevation: 0 }, PresentationKind.Actor);
+
+    expect(() =>
+      lifecycle.create({ x: 3, y: 4, elevation: 0 }, PresentationKind.Loot),
+    ).toThrow("duplicate ID 7");
+    expect(lifecycle.transforms.has(duplicate)).toBe(true);
+    expect(lifecycle.presentations.has(duplicate)).toBe(true);
+    expect(lifecycle.diagnostics()).toMatchObject({
+      liveEntities: 1,
+      transformComponents: 1,
+      presentationComponents: 1,
+      created: 1,
+      destroyed: 0,
+    });
+  });
+});
+
+describe("fixed presentation pool", () => {
+  it("acquires, releases, reuses, and reports bounded failures", () => {
+    const activated: number[] = [];
+    const deactivated: number[] = [];
+    const pool = new FixedPresentationPool(
+      2,
+      (slot) => ({ slot }),
+      (resource, id) => {
+        activated.push(resource.slot * 100 + id);
+      },
+      (resource) => {
+        deactivated.push(resource.slot);
+      },
+    );
+
+    const first = pool.acquire(10);
+    pool.acquire(11);
+    expect(() => pool.acquire(12)).toThrow("capacity exhausted");
+    expect(() => pool.acquire(10)).toThrow("already exists");
+    expect(pool.release(10)).toBe(true);
+    expect(pool.release(10)).toBe(false);
+    expect(pool.acquire(12)).toBe(first);
+    expect(pool.diagnostics()).toEqual({
+      capacity: 2,
+      active: 2,
+      available: 0,
+      highWaterMark: 2,
+      acquisitions: 3,
+      releases: 1,
+      exhaustionAttempts: 1,
+      overflowAttempts: 1,
+    });
+    expect(activated).toHaveLength(3);
+    expect(deactivated.length).toBeGreaterThanOrEqual(3);
+  });
 });
 
 describe("P0-002 lifecycle fixture", () => {
@@ -142,5 +204,70 @@ describe("P0-002 lifecycle fixture", () => {
     expect(Array.from(first.lifecycle.transforms.y)).toEqual(
       Array.from(second.lifecycle.transforms.y),
     );
+  });
+
+  it("survives individual actor swap-removal and respawn cycles", () => {
+    const fixture = new SyntheticLifecycleFixture(fixtureGrid());
+    const transformXIdentity = fixture.lifecycle.transforms.x;
+    const presentationKindsIdentity = fixture.lifecycle.presentations.kinds;
+    const movedId = fixture.lootIds[
+      fixture.lootIds.length - 1
+    ] as RuntimeEntityId;
+    for (let cycle = 0; cycle < 20; cycle += 1) {
+      const before = fixture.actorIds[0] as RuntimeEntityId;
+      const result = fixture.replaceActor(0);
+      expect(result.destroyed).toBe(before);
+      expect(result.created).not.toBe(before);
+      expect(fixture.lifecycle.isAlive(before)).toBe(false);
+      expect(fixture.lifecycle.transforms.has(before)).toBe(false);
+      expect(fixture.lifecycle.presentations.has(before)).toBe(false);
+      expect(fixture.lifecycle.transforms.has(result.created)).toBe(true);
+      fixture.step();
+      fixture.assertPopulations();
+    }
+    expect(fixture.lifecycle.transforms.has(movedId)).toBe(true);
+    expect(fixture.lifecycle.transforms.x).toBe(transformXIdentity);
+    expect(fixture.lifecycle.presentations.kinds).toBe(
+      presentationKindsIdentity,
+    );
+    expect(fixture.lifecycle.transforms.capacity).toBe(SYNTHETIC_ENTITY_COUNT);
+    expect(fixture.lifecycle.diagnostics()).toMatchObject({
+      liveEntities: SYNTHETIC_ENTITY_COUNT,
+      created: SYNTHETIC_ENTITY_COUNT + 20,
+      destroyed: 20,
+    });
+  });
+
+  it("resets interpolation history when records wrap or recycle", () => {
+    const fixture = new SyntheticLifecycleFixture(fixtureGrid());
+    fixture.step(20);
+    expect(
+      fixture.diagnostics().projectAllocations.projectileWraps,
+    ).toBeGreaterThan(0);
+    const transforms = fixture.lifecycle.transforms;
+    let resetProjectiles = 0;
+    for (const numericId of fixture.projectileIds) {
+      const index = transforms.indexOf(numericId as RuntimeEntityId);
+      if (
+        transforms.previousX[index] === transforms.x[index] &&
+        transforms.previousY[index] === transforms.y[index]
+      ) {
+        resetProjectiles += 1;
+      }
+    }
+    expect(resetProjectiles).toBeGreaterThan(0);
+
+    const recyclesBefore =
+      fixture.diagnostics().projectAllocations.particleRecycles;
+    fixture.step(10);
+    expect(
+      fixture.diagnostics().projectAllocations.particleRecycles -
+        recyclesBefore,
+    ).toBe(1_000);
+    for (const numericId of fixture.particleIds) {
+      const index = transforms.indexOf(numericId as RuntimeEntityId);
+      expect(transforms.previousX[index]).toBe(transforms.x[index]);
+      expect(transforms.previousY[index]).toBe(transforms.y[index]);
+    }
   });
 });

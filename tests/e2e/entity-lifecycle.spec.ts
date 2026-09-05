@@ -46,12 +46,48 @@ test("runs exact P0-002 populations, queries, paths, culling, and pools", async 
   expect(diagnostics?.terrainChunks).toBe(320);
   expect(diagnostics?.foregroundCells).toBe(1_639);
   expect((diagnostics?.visible ?? 0) + (diagnostics?.culled ?? 0)).toBe(1_800);
-  expect(diagnostics?.listenerCount).toBe(1);
+  expect(diagnostics?.listenerCount).toBe(4);
   expect(diagnostics?.pools).toEqual({
-    actors: { capacity: 200, active: 200, highWaterMark: 200 },
-    projectiles: { capacity: 500, active: 500, highWaterMark: 500 },
-    particles: { capacity: 1_000, active: 1_000, highWaterMark: 1_000 },
-    loot: { capacity: 100, active: 100, highWaterMark: 100 },
+    actors: {
+      capacity: 200,
+      active: 200,
+      available: 0,
+      highWaterMark: 200,
+      acquisitions: 200,
+      releases: 0,
+      exhaustionAttempts: 0,
+      overflowAttempts: 0,
+    },
+    projectiles: {
+      capacity: 500,
+      active: 500,
+      available: 0,
+      highWaterMark: 500,
+      acquisitions: 500,
+      releases: 0,
+      exhaustionAttempts: 0,
+      overflowAttempts: 0,
+    },
+    particles: {
+      capacity: 1_000,
+      active: 1_000,
+      available: 0,
+      highWaterMark: 1_000,
+      acquisitions: 1_000,
+      releases: 0,
+      exhaustionAttempts: 0,
+      overflowAttempts: 0,
+    },
+    loot: {
+      capacity: 100,
+      active: 100,
+      available: 0,
+      highWaterMark: 100,
+      acquisitions: 100,
+      releases: 0,
+      exhaustionAttempts: 0,
+      overflowAttempts: 0,
+    },
   });
   expect(diagnostics?.simulation?.populations).toEqual({
     actors: 200,
@@ -72,6 +108,7 @@ test("runs exact P0-002 populations, queries, paths, culling, and pools", async 
 test("releases every owned object and remains flat across lifecycle cycles", async ({
   page,
 }) => {
+  const heapSamples: number[] = [];
   for (let cycle = 0; cycle < 5; cycle += 1) {
     await page.evaluate(() => window.__RARPG_FIXTURE_TEST__?.dispose());
     const released = await page.evaluate(() =>
@@ -105,9 +142,50 @@ test("releases every owned object and remains flat across lifecycle cycles", asy
       atlasCount: 1,
       presentationObjects: 1_800,
       terrainChunks: 320,
-      listenerCount: 1,
+      listenerCount: 4,
     });
+    if (restored?.jsHeapBytes !== null && restored?.jsHeapBytes !== undefined) {
+      heapSamples.push(restored.jsHeapBytes);
+    }
   }
+  if (heapSamples.length > 1) {
+    expect(Math.max(...heapSamples) - Math.min(...heapSamples)).toBeLessThan(
+      64 * 1024 * 1024,
+    );
+  }
+});
+
+test("releases and reacquires one actor without stale ownership", async ({
+  page,
+}) => {
+  for (let cycle = 0; cycle < 20; cycle += 1) {
+    const ids = await page.evaluate(() =>
+      window.__RARPG_FIXTURE_TEST__?.cycleActor(0),
+    );
+    expect(ids?.created).not.toBe(ids?.destroyed);
+  }
+  const diagnostics = await page.evaluate(() =>
+    window.__RARPG_FIXTURE_TEST__?.diagnostics(),
+  );
+  expect(diagnostics?.presentationObjects).toBe(1_800);
+  expect(diagnostics?.listenerCount).toBe(4);
+  expect(diagnostics?.pools.actors).toMatchObject({
+    capacity: 200,
+    active: 200,
+    available: 0,
+    highWaterMark: 200,
+    acquisitions: 220,
+    releases: 20,
+    exhaustionAttempts: 0,
+    overflowAttempts: 0,
+  });
+  expect(diagnostics?.simulation?.lifecycle).toMatchObject({
+    liveEntities: 1_800,
+    transformComponents: 1_800,
+    presentationComponents: 1_800,
+    created: 1_820,
+    destroyed: 20,
+  });
 });
 
 test("samples allocation and frame diagnostics", async ({ page }) => {
@@ -127,6 +205,35 @@ test("samples allocation and frame diagnostics", async ({ page }) => {
   ).toBe(0);
 });
 
+test("invalidates samples across focus and visibility transitions", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.__RARPG_FIXTURE_TEST__?.beginSample();
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("focus"));
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.waitForTimeout(100);
+  const summary = await page.evaluate(() =>
+    window.__RARPG_FIXTURE_TEST__?.endSample(),
+  );
+  expect(summary?.invalidReasons).toEqual(
+    expect.arrayContaining(["focus-lost", "visibility-hidden"]),
+  );
+  expect(summary?.droppedMilliseconds).toBe(0);
+  expect(summary?.maximumStepsPerCallback).toBeLessThanOrEqual(5);
+});
+
 test("matches deterministic full fixture presentation", async ({
   page,
 }, testInfo) => {
@@ -135,6 +242,23 @@ test("matches deterministic full fixture presentation", async ({
     "Canonical visual baseline uses pinned Chromium.",
   );
   await page.evaluate(() => window.__RARPG_FIXTURE_TEST__?.resetAtStep(120));
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            window.__RARPG_FIXTURE_TEST__?.diagnostics()?.simulation
+              ?.simulationSteps ?? -1,
+        ),
+      { timeout: 5_000 },
+    )
+    .toBe(120);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   await expect(
     page.getByLabel("RARPG Phaser diagnostic canvas"),
   ).toHaveScreenshot(`entity-lifecycle-${testInfo.project.name}.png`, {

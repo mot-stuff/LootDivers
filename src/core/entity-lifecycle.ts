@@ -9,7 +9,7 @@ export const TECHNICAL_UPDATE_ORDER = [
   "technical-waypoints",
   "projectile-wrap",
   "cosmetic-particle-lifetimes",
-  "spatial-index-and-queries",
+  "spatial-rebuild-and-queries",
   "bounded-path-requests",
   "cleanup",
   "publish-diagnostics",
@@ -211,7 +211,10 @@ export class TechnicalEntityLifecycle {
   #created = 0;
   #destroyed = 0;
 
-  public constructor(capacity: number, ids = new SequentialRuntimeEntityIds()) {
+  public constructor(
+    capacity: number,
+    ids: RuntimeEntityIdSource = new SequentialRuntimeEntityIds(),
+  ) {
     this.#ids = ids;
     this.transforms = new TransformComponentStore(capacity);
     this.presentations = new PresentationComponentStore(capacity);
@@ -231,6 +234,9 @@ export class TechnicalEntityLifecycle {
     variant = 0,
   ): RuntimeEntityId {
     const id = this.#ids.next();
+    if (this.#live.has(id)) {
+      throw new Error(`Runtime entity ID source returned duplicate ID ${id}.`);
+    }
     this.#live.add(id);
     try {
       this.transforms.add(id, transform);

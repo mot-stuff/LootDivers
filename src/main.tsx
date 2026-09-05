@@ -16,7 +16,7 @@ import {
   WebCryptoSha256,
 } from "./adapters/browser/persistence-platform";
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
-import { bootPhaser } from "./adapters/phaser/boot";
+import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
 import type {
   FrameSampleSummary,
@@ -59,7 +59,12 @@ declare global {
       reset: () => Promise<void>;
       resetAtStep: (steps: number) => Promise<void>;
       rawSamples: () => RawFrameSamples;
+      cycleActor: (actor: number) => {
+        readonly destroyed: number;
+        readonly created: number;
+      };
     };
+    __RARPG_FIXTURE_FAILURE__?: SyntheticPresentationDiagnostics | null;
   }
 }
 
@@ -232,6 +237,7 @@ if (!support.supported) {
           reset: () => renderer.fixture.reset(),
           resetAtStep: (steps) => renderer.fixture.resetAtStep(steps),
           rawSamples: () => renderer.fixture.rawSamples(),
+          cycleActor: (actor) => renderer.fixture.cycleActor(actor),
         };
       }
       document.body.dataset.appState = "ready";
@@ -244,6 +250,7 @@ if (!support.supported) {
       });
     })
     .catch((error: unknown) => {
+      window.__RARPG_FIXTURE_FAILURE__ = fixtureFailureDiagnostics();
       const detail = error instanceof Error ? error.message : String(error);
       fail(`Renderer startup failed: ${detail}`);
     });

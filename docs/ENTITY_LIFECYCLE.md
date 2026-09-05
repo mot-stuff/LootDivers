@@ -1,6 +1,7 @@
 # TASK-P0-008 Entity and Presentation Lifecycle
 
-**Status:** Implemented as technical Phase 0 infrastructure  
+**Status:** Implemented as technical Phase 0 infrastructure
+
 **Decision basis:** DEC-010 and the P0-002 fixture contract; no new ADR required
 
 ## Boundaries
@@ -17,7 +18,7 @@ The declared technical update order is:
 2. advance seeded closed actor waypoints;
 3. wrap projectile records;
 4. recycle fixed-pool cosmetic particle records;
-5. update/query the shared spatial index;
+5. rebuild/query the shared spatial index after record movement;
 6. issue/process bounded path requests;
 7. clean pending entities;
 8. publish diagnostics.
@@ -40,12 +41,24 @@ contains:
 - 200 radius and 500 swept-segment queries per simulation step;
 - one 2,048-expansion-capped A* request every three 60 Hz steps.
 
-The committed synthetic atlas is
-`public/assets/technical-entities.svg`. Presentation pools are allocated once,
-interpolate previous/current transforms, and cull outside the camera margin.
-Diagnostics report populations, simulation steps, camera phase, visible/culled
-counts, pools, path/query work, structural allocations, stage timings, frame
-samples, heap/draw calls when exposed, and lifecycle ownership.
+The committed synthetic atlas is `public/assets/technical-entities.svg`.
+Presentation pools have fixed capacities, explicit acquire/release ownership,
+high-water and exhaustion diagnostics, interpolation, and culling. Per-entity
+destruction releases the mapped Phaser image before a replacement ID acquires a
+slot. Phaser objects contain no authoritative state.
+
+The browser adapter uses the established `FixedStepRunner`. Reports separate
+warm-up and sample steps/callbacks, catch-up and discarded time, visibility and
+focus invalidation, simulation/presentation/render work, exact query/path rates,
+and every P0-002 threshold. The overall state remains `INELIGIBLE` on the
+current machine, while each hypothetical threshold is still reported as
+`PASS` or `FAIL`.
+
+The project-authored fixture reuses query specifications, bounds, transform
+storage, fixed-step records, projection output, and fixed-capacity frame sample
+buffers in routine hot loops. This is not a claim that Phaser, browser engines,
+`Map`, or JavaScript runtimes perform zero internal allocation. Heap trend is
+reported only where the browser exposes `performance.memory`.
 
 ## Verification
 
