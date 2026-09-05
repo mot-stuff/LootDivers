@@ -2030,3 +2030,96 @@ Presentation-only; the DEC-005 core/presentation boundary is unchanged.
 Rarity colors from the DEC-020 loot UI and the simulation-fed minimap
 zone colors from DEC-027 are preserved exactly. First accepted packet of
 the Phase 7 kickoff (TASK-701).
+
+---
+
+# DEC-030
+
+### Status
+
+Accepted.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Tutorial zone and core-owned tutorial progression. Wakeshore Landing
+(`zone:wakeshore-landing`) is the fourth `ZONE_CATALOG` zone, an
+unsafe wilderness containing exactly one very weak normal melee enemy
+(the Wakeshore Scuttler: 18 health, 2 damage, slow cadence, 150 aggro
+leash), one tutorial-only Veinshard ore node, and one exit portal to
+Hearthmere. No vendor, forge, or quest giver. `ZoneKind` is unchanged.
+
+A new core module (`src/core/tutorial.ts`) follows the quest-stage
+pattern: an ordered six-step list (move, attack, dodge, loot, gather,
+travel) defined as core data with core-owned prompt copy, and a
+`TutorialTracker` that observes simulation verbs. Steps advance
+strictly in order; out-of-order actions neither advance nor break the
+sequence. The tracker is receptive only while the tutorial zone is
+current: entering shows the current step, leaving hides prompts but
+keeps progress, and re-entry after completion shows nothing. The exit
+portal always works regardless of progress — walking out IS the skip
+mechanism; nothing gates input and no dedicated skip UI exists.
+
+Tutorial state (step id, prompt, completed count/total) is exposed
+through `diagnostics()` and a nullable `tutorial` field on the combat
+HUD read model, forwarded by the Phaser adapter exactly like zone name
+and quest label. One new framed prompt block in `App.tsx` renders it
+top-center using the DEC-029 design tokens. The gather lookup now
+resolves ore nodes from the current zone's node list (the tutorial
+node deliberately stays out of `ORE_NODE_CATALOG`, which Ashtrail
+consumes wholesale), with identical behavior for all existing zones.
+
+### Context
+
+Phase 7 kickoff (TASK-702) asked for a small landing zone where a fresh
+character learns the core verbs via staged prompts before reaching
+Hearthmere, without touching `reset()` or session-start semantics that
+Phase 1–6 tests depend on.
+
+### Options Considered
+
+1. A presentation-layer tutorial (prompt copy and step logic in Preact).
+2. A new `"tutorial"` `ZoneKind` union member.
+3. A core data module following the quest-stage pattern, with the zone
+   as a plain wilderness catalog entry.
+
+### Chosen Approach
+
+Option 3. Core owns the step list, copy, ordering, and activation;
+Phaser only forwards a read model; Preact only renders it. The zone
+stays `"wilderness"` because nothing needed a new kind.
+
+### Why
+
+Keeping copy and ordering in core data preserves the DEC-005 boundary,
+makes the sequence unit-testable without a browser, and mirrors how
+`QuestDefinition.summary` already owns player-facing quest text.
+
+### Tradeoffs
+
+- Strict ordering means a verb performed early (for example picking up
+  the only loot drop during the dodge step) is not banked, and that
+  step can strand until the node/portal path is used; the always-open
+  exit portal is the escape hatch.
+- Tutorial completion is not persisted (per packet; persistence is
+  TASK-705 territory).
+- The tutorial enemy reuses the shared melee brain and geometric
+  rendering; no bespoke art or behavior.
+
+### Systems Affected
+
+- Zone catalog (`world-zones.ts`) and new `tutorial.ts` core module
+- Combat arena tracker integration, node lookup, and diagnostics
+- Shell contracts, Phaser HUD forwarding, `App.tsx` prompt block,
+  additive `styles.css` rules
+- New tutorial unit tests and `tests/e2e/tutorial.spec.ts`
+
+### Relationship to Earlier Decisions
+
+`reset()` still spawns the Ashtrail prototype and the playable session
+still starts in Hearthmere (DEC-025/026/027 unchanged). Consumes the
+DEC-029 design tokens. Second accepted packet of the Phase 7 kickoff
+(TASK-702); TASK-703's New Game flow will travel into this zone.

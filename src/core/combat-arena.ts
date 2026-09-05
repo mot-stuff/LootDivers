@@ -64,16 +64,19 @@ import {
 import {
   INTERACT_RADIUS,
   ProfessionProgression,
-  oreNodeById,
   recipeById,
+  type OreNodeDefinition,
   type ProfessionReadModel,
   type WorldInteractableKind,
 } from "./professions";
+import { TutorialTracker, type TutorialReadModel } from "./tutorial";
 import {
   ASHTRAIL_ENEMY,
   ASHTRAIL_EXPANSE_ID,
   HOLLOWDEEP_BRUISER_ID,
   HOLLOWDEEP_CULLING_QUEST,
+  WAKESHORE_LANDING_ID,
+  WAKESHORE_SCUTTLER_ID,
   ZONE_CATALOG,
   vendorOfferById,
   zoneById,
@@ -128,13 +131,7 @@ export interface CombatTargetReadModel {
 }
 
 export type MinimapMarkerKind =
-  | "player"
-  | "enemy"
-  | "portal"
-  | "node"
-  | "forge"
-  | "vendor"
-  | "quest";
+  "player" | "enemy" | "portal" | "node" | "forge" | "vendor" | "quest";
 
 export interface MinimapMarkerReadModel {
   readonly id: string;
@@ -432,6 +429,7 @@ export interface CombatArenaDiagnostics {
   readonly zoneId: ZoneId;
   readonly zoneName: string;
   readonly quest: QuestReadModel;
+  readonly tutorial: TutorialReadModel;
 }
 
 export const DEFAULT_COMBAT_ARENA_CONFIG: CombatArenaConfig = {
@@ -473,6 +471,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   readonly #characterItems = new CharacterItemLoadout();
   readonly #progression = new CharacterProgression();
   readonly #professions = new ProfessionProgression();
+  readonly #tutorial = new TutorialTracker();
   #zoneId: ZoneId = ASHTRAIL_EXPANSE_ID;
   #questStage: QuestStage = "inactive";
   #vendorOpen = false;
@@ -1094,6 +1093,9 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       this.#lifecycle.transforms.y[transformIndex] =
         (this.#lifecycle.transforms.y[transformIndex] ?? 0) +
         directionY * speed * step.deltaSeconds;
+      if (this.#movementX !== 0 || this.#movementY !== 0) {
+        this.#tutorial.notify("move");
+      }
     }
     this.clampToArena();
 
@@ -1176,6 +1178,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#forgeOpen = false;
     this.#vendorOpen = false;
     this.#questStage = "inactive";
+    this.#tutorial.reset();
     this.resetNodeCharges();
     this.#abilityEngine = this.createAbilityEngine();
   }
@@ -1283,6 +1286,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       zoneId: this.#zoneId,
       zoneName: this.currentZone().displayName,
       quest: this.quest(),
+      tutorial: this.#tutorial.readModel(),
     };
   }
 
@@ -1620,8 +1624,10 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       );
       const endX = projectile.x + projectile.directionX * travel;
       const endY = projectile.y + projectile.directionY * travel;
-      let nearestHit: { readonly enemy: SimpleMeleeEnemy; readonly hit: number } | null =
-        null;
+      let nearestHit: {
+        readonly enemy: SimpleMeleeEnemy;
+        readonly hit: number;
+      } | null = null;
       for (const enemy of this.#enemies) {
         const snapshot = enemy.diagnostics();
         if (snapshot.dead) continue;
@@ -1635,10 +1641,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
           snapshot.y,
           snapshot.radius,
         );
-        if (
-          hit !== null &&
-          (nearestHit === null || hit < nearestHit.hit)
-        ) {
+        if (hit !== null && (nearestHit === null || hit < nearestHit.hit)) {
           nearestHit = { enemy, hit };
         }
       }
@@ -1708,6 +1711,9 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       this.#questStage === "accepted"
     ) {
       this.#questStage = "ready";
+    }
+    if (target.id === WAKESHORE_SCUTTLER_ID) {
+      this.#tutorial.notify("attack");
     }
 
     const generated = this.#lootGenerator.generateForKill();
@@ -1790,6 +1796,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       dropId: drop.dropId,
       item: drop.item,
     });
+    this.#tutorial.notify("loot");
     return { pickedUp: true, dropId: drop.dropId, item: drop.item };
   }
 
@@ -1831,6 +1838,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#dodgeTicksRemaining = this.#dodgeDurationTicks;
     this.#cooldownTicksRemaining = this.#dodgeCooldownTicks;
     this.#dodgeCount += 1;
+    this.#tutorial.notify("dodge");
   }
 
   private cancelPlayerActions(): void {
@@ -1968,9 +1976,18 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     ];
   }
 
+  /**
+   * Resolves an ore node from the current zone's node list. Every zone owns
+   * its nodes (Ashtrail consumes the shared catalog; Wakeshore Landing has a
+   * tutorial-only node), so gather targets never leak across zones.
+   */
+  private zoneNodeById(nodeId: ContentId): OreNodeDefinition | undefined {
+    return this.currentZone().nodes.find((node) => node.id === nodeId);
+  }
+
   private gatheringReadModel(): GatheringReadModel | null {
     if (this.#gathering === undefined) return null;
-    const node = oreNodeById(this.#gathering.nodeId);
+    const node = this.zoneNodeById(this.#gathering.nodeId);
     return {
       nodeId: this.#gathering.nodeId,
       displayName: node?.displayName ?? "Ore",
@@ -1997,7 +2014,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   private beginGather(nodeId: ContentId): InteractResult {
-    const node = oreNodeById(nodeId);
+    const node = this.zoneNodeById(nodeId);
     if (node === undefined) {
       return { kind: "rejected", reason: "nothing-in-range" };
     }
@@ -2026,7 +2043,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   private completeGather(nodeId: ContentId): void {
-    const node = oreNodeById(nodeId);
+    const node = this.zoneNodeById(nodeId);
     if (node === undefined) return;
     const remaining = this.#nodeCharges.get(node.id) ?? 0;
     if (remaining <= 0) return;
@@ -2038,6 +2055,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     const added = this.#characterItems.addItem(item);
     if (!added.accepted) return;
     this.#professions.grantExperience("mining", node.experience);
+    this.#tutorial.notify("gather");
     const nextCharges = remaining - 1;
     this.#nodeCharges.set(node.id, nextCharges);
     if (nextCharges <= 0) {
@@ -2110,6 +2128,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#activeExecutions.clear();
     this.#statuses.clear();
     this.#zoneId = zone.id;
+    this.#tutorial.setInZone(zone.id === WAKESHORE_LANDING_ID);
     this.spawnEncounter(zone.enemies);
     this.placePlayer(
       arrivalX ?? zone.playerSpawnX,
@@ -2133,6 +2152,10 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     if (portal === undefined) {
       return { kind: "rejected", reason: "nothing-in-range" };
     }
+    // The tutorial exit portal doubles as the final step AND the skip path:
+    // it always works, and the tracker only advances when `travel` is the
+    // current step. Notify before traveling so the tracker is still in-zone.
+    this.#tutorial.notify("travel");
     const traveled = this.travelTo(
       portal.destinationZoneId,
       portal.arrivalX,
@@ -2245,9 +2268,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       : { x: x / length, y: y / length };
   }
 
-  private spawnEncounter(
-    configs: readonly SimpleMeleeEnemyConfig[],
-  ): void {
+  private spawnEncounter(configs: readonly SimpleMeleeEnemyConfig[]): void {
     if (configs.length === 0) {
       const dormant = this.dormantEnemy();
       dormant.applyDamage({ amount: 10_000, sourceId: "zone-safe" });

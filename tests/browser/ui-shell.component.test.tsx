@@ -102,6 +102,7 @@ const combatHudModel: CombatHudReadModel = {
   gatheringProgress: 0,
   zoneName: "Ashtrail Expanse",
   questLabel: null,
+  tutorial: null,
   minimap: {
     width: 1_200,
     height: 800,
@@ -592,6 +593,49 @@ describe("technical UI shell component", () => {
     expect(emit).toHaveBeenCalledWith({
       type: "shell.renderer-retry-requested",
     });
+  });
+
+  it("shows the tutorial prompt block only while a tutorial step is active", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+        />,
+        container,
+      );
+    });
+
+    expect(
+      container.querySelector('[data-testid="combat-tutorial"]'),
+    ).toBeNull();
+
+    await publishCombatHud({
+      ...combatHudModel,
+      tutorial: {
+        stepId: "move",
+        prompt: "Move with W, A, S, and D.",
+        stepsCompleted: 0,
+        totalSteps: 6,
+      },
+    });
+
+    const tutorial = container.querySelector('[data-testid="combat-tutorial"]');
+    expect(tutorial).not.toBeNull();
+    expect(tutorial?.getAttribute("data-step-id")).toBe("move");
+    expect(tutorial?.textContent).toContain("Step 1 of 6");
+    expect(
+      container.querySelector('[data-testid="combat-tutorial-prompt"]')
+        ?.textContent,
+    ).toBe("Move with W, A, S, and D.");
+
+    await publishCombatHud({ ...combatHudModel, tutorial: null });
+    expect(
+      container.querySelector('[data-testid="combat-tutorial"]'),
+    ).toBeNull();
   });
 
   it("renders one compact player vitals HUD without enemy DOM UI", async () => {

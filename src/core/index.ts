@@ -223,6 +223,11 @@ export {
   HOLLOWDEEP_ID,
   ROADWARDEN,
   ROADWARDEN_ID,
+  WAKESHORE_LANDING_ID,
+  WAKESHORE_SCUTTLER,
+  WAKESHORE_SCUTTLER_ID,
+  WAKESHORE_VEINSHARD_NODE,
+  WAKESHORE_VEINSHARD_NODE_ID,
   WICK_PROVISIONS,
   WICK_PROVISIONS_ID,
   WICK_TRAIL_VEST_OFFER_ID,
@@ -250,6 +255,14 @@ export {
   type GeneratedEnemyLoot,
   type WorldLootDrop,
 } from "./enemy-loot";
+export {
+  TUTORIAL_STEP_IDS,
+  TUTORIAL_STEPS,
+  TutorialTracker,
+  type TutorialReadModel,
+  type TutorialStepDefinition,
+  type TutorialStepId,
+} from "./tutorial";
 export {
   SimpleMeleeEnemy,
   type EnemyRank,

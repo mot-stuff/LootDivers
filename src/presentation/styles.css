@@ -1491,3 +1491,91 @@ a:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * TASK-702 (DEC-030): tutorial prompt block. Additive rules only, consuming
+ * the DEC-029 design tokens and echoing the shared framed-panel treatment.
+ * Top-center so it reads prominently without covering the ability bar
+ * (bottom-left), vitals (bottom-right), or minimap (top-right).
+ */
+.combat-tutorial {
+  position: absolute;
+  z-index: 3;
+  top: 1rem;
+  left: 50%;
+  display: grid;
+  gap: 0.3rem;
+  width: min(21rem, calc(100vw - 2rem));
+  padding: 0.55rem 0.8rem 0.65rem;
+  border: 1px solid var(--ui-border);
+  border-radius: 0.45rem;
+  background-color: var(--ui-panel-bg);
+  background-image: var(--ui-panel-vignette);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-inlay),
+    inset 0 0 0 2px var(--ui-border-dim),
+    0 0.6rem 1.8rem rgb(0 0 0 / 45%);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.combat-tutorial::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background-image:
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft));
+  background-position:
+    left top,
+    left top,
+    right top,
+    right top,
+    left bottom,
+    left bottom,
+    right bottom,
+    right bottom;
+  background-repeat: no-repeat;
+  background-size:
+    0.7rem 1px,
+    1px 0.7rem,
+    0.7rem 1px,
+    1px 0.7rem,
+    0.7rem 1px,
+    1px 0.7rem,
+    0.7rem 1px,
+    1px 0.7rem;
+  pointer-events: none;
+}
+
+.combat-tutorial-heading {
+  margin: 0;
+  color: var(--ui-heading);
+  font-family: var(--ui-font-heading);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.combat-tutorial-prompt {
+  margin: 0;
+  color: var(--ui-text-bright);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 700px) {
+  .combat-tutorial {
+    top: 0.5rem;
+    width: min(16rem, calc(100vw - 1rem));
+    padding: 0.4rem 0.6rem 0.5rem;
+  }
+}

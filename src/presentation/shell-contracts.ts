@@ -49,13 +49,7 @@ export interface CombatStatusHudReadModel {
 }
 
 export type MinimapHudMarkerKind =
-  | "player"
-  | "enemy"
-  | "portal"
-  | "node"
-  | "forge"
-  | "vendor"
-  | "quest";
+  "player" | "enemy" | "portal" | "node" | "forge" | "vendor" | "quest";
 
 export type MinimapHudEnemyRank = "normal" | "elite" | "boss";
 
@@ -83,6 +77,13 @@ export interface MinimapHudReadModel {
   readonly markers: readonly MinimapHudMarkerReadModel[];
 }
 
+export interface TutorialHudReadModel {
+  readonly stepId: string;
+  readonly prompt: string;
+  readonly stepsCompleted: number;
+  readonly totalSteps: number;
+}
+
 export interface CombatHudReadModel {
   readonly paused: boolean;
   readonly playerHealth: number;
@@ -99,6 +100,8 @@ export interface CombatHudReadModel {
   readonly gatheringProgress: number;
   readonly zoneName: string;
   readonly questLabel: string | null;
+  /** Active tutorial prompt; null outside the tutorial or once completed. */
+  readonly tutorial: TutorialHudReadModel | null;
   readonly minimap: MinimapHudReadModel;
 }
 

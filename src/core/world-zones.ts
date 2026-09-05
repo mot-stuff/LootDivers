@@ -13,16 +13,21 @@ export const ZONE_IDS = [
   "zone:ashtrail-expanse",
   "zone:hearthmere",
   "zone:hollowdeep",
+  "zone:wakeshore-landing",
 ] as const;
 export type ZoneId = (typeof ZONE_IDS)[number];
 
 export const ASHTRAIL_EXPANSE_ID = contentId("zone:ashtrail-expanse") as ZoneId;
 export const HEARTHMERE_ID = contentId("zone:hearthmere") as ZoneId;
 export const HOLLOWDEEP_ID = contentId("zone:hollowdeep") as ZoneId;
+export const WAKESHORE_LANDING_ID = contentId(
+  "zone:wakeshore-landing",
+) as ZoneId;
 
 export const HOLLOWDEEP_BRUISER_ID = "enemy:hollowdeep-bruiser";
 export const ASHTRAIL_BRUTE_ID = "enemy:ashtrail-brute";
 export const EMBERCLEFT_ID = "enemy:embercleft";
+export const WAKESHORE_SCUTTLER_ID = "enemy:wakeshore-scuttler";
 export const ELITE_KILL_EXPERIENCE = ENEMY_KILL_EXPERIENCE * 2;
 export const BOSS_KILL_EXPERIENCE = ENEMY_KILL_EXPERIENCE * 4;
 export const HOLLOWDEEP_CULLING_QUEST_ID = contentId(
@@ -216,6 +221,51 @@ export const EMBERCLEFT: SimpleMeleeEnemyConfig = {
   aggroRadius: 180,
 };
 
+/**
+ * The one tutorial opponent: deliberately frail, slow to strike, and leashed
+ * to a small aggro radius so an idle newcomer is never ambushed. Its death
+ * feeds the tutorial `attack` step and the shared deterministic loot path.
+ */
+export const WAKESHORE_SCUTTLER: SimpleMeleeEnemyConfig = {
+  id: WAKESHORE_SCUTTLER_ID,
+  displayName: "Wakeshore Scuttler",
+  rank: "normal",
+  spawnX: 760,
+  spawnY: 400,
+  radius: 12,
+  maxHealth: 18,
+  moveSpeed: 110,
+  meleeRange: 48,
+  attackDamage: 2,
+  attackWindupTicks: 26,
+  attackIntervalTicks: 96,
+  aggroRadius: 150,
+};
+
+/**
+ * Tutorial-only Veinshard node. It deliberately does NOT join
+ * `ORE_NODE_CATALOG`, which Ashtrail Expanse consumes wholesale; the combat
+ * arena resolves gather targets from the current zone's node list.
+ */
+export const WAKESHORE_VEINSHARD_NODE_ID = contentId(
+  "node:wakeshore-veinshard",
+);
+export const WAKESHORE_VEINSHARD_NODE: OreNodeDefinition = {
+  id: WAKESHORE_VEINSHARD_NODE_ID,
+  kind: "ore-node",
+  displayName: "Veinshard Outcrop",
+  materialId: VEINSHARD_ORE_ID,
+  requiredMiningLevel: 1,
+  experience: 8,
+  yieldQuantity: 1,
+  gatherSeconds: 1.2,
+  charges: 4,
+  respawnSeconds: 8,
+  x: 420,
+  y: 620,
+  radius: 22,
+};
+
 export const HOLLOWDEEP_CULLING_QUEST: QuestDefinition = {
   id: HOLLOWDEEP_CULLING_QUEST_ID,
   displayName: "Hollowdeep Culling",
@@ -353,6 +403,33 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
         radius: 24,
         arrivalX: 1_040,
         arrivalY: 220,
+      },
+    ],
+  },
+  {
+    id: WAKESHORE_LANDING_ID,
+    kind: "wilderness",
+    displayName: "Wakeshore Landing",
+    summary: "A quiet shoreline where new arrivals learn the core skills",
+    safe: false,
+    floorColor: 0x203228,
+    edgeColor: 0x8fd6b0,
+    playerSpawnX: 220,
+    playerSpawnY: 400,
+    enemies: [WAKESHORE_SCUTTLER],
+    nodes: [WAKESHORE_VEINSHARD_NODE],
+    forges: [],
+    portals: [
+      {
+        id: contentId("portal:wakeshore-to-hearthmere"),
+        kind: "portal",
+        displayName: "Hearthmere Road",
+        destinationZoneId: HEARTHMERE_ID,
+        x: 1_080,
+        y: 400,
+        radius: 24,
+        arrivalX: 780,
+        arrivalY: 400,
       },
     ],
   },

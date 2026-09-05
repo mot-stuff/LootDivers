@@ -1104,6 +1104,17 @@ export class CombatArenaPresentation {
         state.quest.stage === "inactive"
           ? null
           : `${state.quest.displayName}: ${state.quest.stage}`,
+      tutorial:
+        state.tutorial.active &&
+        state.tutorial.stepId !== null &&
+        state.tutorial.prompt !== null
+          ? {
+              stepId: state.tutorial.stepId,
+              prompt: state.tutorial.prompt,
+              stepsCompleted: state.tutorial.stepsCompleted,
+              totalSteps: state.tutorial.totalSteps,
+            }
+          : null,
       minimap: {
         width: state.minimap.width,
         height: state.minimap.height,

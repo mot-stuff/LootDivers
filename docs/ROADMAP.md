@@ -181,14 +181,22 @@ death across eight facings; the character faces the movement direction and
 attacks orient to the cursor) per DEC-028 (2026-09-05).
 
 Phase 7 kickoff in progress: fantasy UI restyle (DEC-029) shipped, tutorial
-level (DEC-030) open, and main menu with New Game flow (DEC-031) open. Local
+level (DEC-030) shipped, and main menu with New Game flow (DEC-031) open. Local
 save/continue and accounts remain deferred (the menu reserves a disabled
 Continue slot); sound, VFX, enemy and world art, balance, and performance
 polish remain open.
 
 ---
 
-## Phase 8 - Map builder
+## Phase 8 - Main menu and system
+We need a character picker as we will have multiple characters
+Account creation which will tie into final phase
+Title screen with settings
+Escape menu when playing so they can exit, adjust settings/pause/change keybinds
+The game name is Loot Divers
+
+
+## Phase 9 - Map builder
 We will need to build something so i can build towns
 Zones/dungeons will be procedurally generated ideally using isometric tilesets
 

@@ -1405,6 +1405,7 @@ export function App({
     gatheringProgress: 0,
     zoneName: "Hearthmere",
     questLabel: null,
+    tutorial: null,
     minimap: EMPTY_MINIMAP,
   });
 
@@ -1718,6 +1719,26 @@ export function App({
         <CombatActionBar model={combatHud} flasks={itemHud.flaskSlots} />
       )}
       {showCombatPrototype && <CombatMinimap model={combatHud.minimap} />}
+      {showCombatPrototype && combatHud.tutorial !== null && (
+        <section
+          class="combat-tutorial"
+          data-testid="combat-tutorial"
+          aria-label="Tutorial"
+          aria-live="polite"
+          data-step-id={combatHud.tutorial.stepId}
+        >
+          <p class="combat-tutorial-heading">
+            Tutorial · Step {combatHud.tutorial.stepsCompleted + 1} of{" "}
+            {combatHud.tutorial.totalSteps}
+          </p>
+          <p
+            class="combat-tutorial-prompt"
+            data-testid="combat-tutorial-prompt"
+          >
+            {combatHud.tutorial.prompt}
+          </p>
+        </section>
+      )}
       {showCombatPrototype && (
         <div class="combat-vitals-stack" data-testid="combat-vitals-stack">
           <div class="combat-menu-toggles">
