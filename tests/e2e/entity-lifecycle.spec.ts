@@ -194,6 +194,7 @@ test("releases every owned object and remains flat across lifecycle cycles", asy
 test("releases and reacquires one actor without stale ownership", async ({
   page,
 }) => {
+  test.skip(RUNNING_IN_CI, "hardware-sensitive on GPU-less CI (DEC-033)");
   for (let cycle = 0; cycle < 20; cycle += 1) {
     const ids = await page.evaluate(() =>
       window.__RARPG_FIXTURE_TEST__?.cycleActor(0),
