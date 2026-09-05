@@ -67,10 +67,33 @@ body.combat-mode #app,
   font-size: clamp(1rem, 2vw, 1.25rem);
 }
 
-.combat-shell .diagnostics,
 .combat-shell .boot-status,
 .combat-shell .persistence-fixture {
   display: none;
+}
+
+.combat-shell .diagnostics {
+  display: flex;
+  gap: 0.35rem 0.8rem;
+  margin-top: 0.4rem;
+}
+
+.combat-shell .diagnostics > div {
+  display: none;
+}
+
+.combat-shell .diagnostics > .combat-essential-diagnostic {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0.67rem;
+  line-height: 1.2;
+}
+
+.combat-shell .diagnostics > .combat-essential-diagnostic dd {
+  margin: 0;
 }
 
 .combat-shell .shell-controls {
@@ -318,7 +341,7 @@ body.combat-mode #app,
 .combat-paused-hud {
   position: absolute;
   z-index: 2;
-  top: 6rem;
+  top: 8rem;
   left: 1rem;
   display: grid;
   gap: 0.2rem;

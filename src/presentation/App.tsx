@@ -319,7 +319,7 @@ export function App({
             <dt>UI</dt>
             <dd>Preact 10.29.8</dd>
           </div>
-          <div>
+          <div class="combat-essential-diagnostic">
             <dt>Renderer</dt>
             <dd>
               {model.phase.kind === "ready"
@@ -327,7 +327,7 @@ export function App({
                 : "WebGL2 required"}
             </dd>
           </div>
-          <div>
+          <div class="combat-essential-diagnostic">
             <dt>Zone</dt>
             <dd>
               {model.phase.kind === "ready"
