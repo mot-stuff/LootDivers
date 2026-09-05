@@ -1522,7 +1522,7 @@ Accepted for the Phase 4 playable character-progression loop.
 
 Keep XP, levels, attributes, masteries, and respec in the
 framework-independent core. Enemy kills grant a fixed 20 experience. The
-level curve is `40 + 20 × (level âˆ’ 1)` with no hardcoded cap. A new
+level curve is `40 + 20 × (level − 1)` with no hardcoded cap. A new
 character starts at level 1 with 2 attribute points and 1 mastery point;
 each later level awards the same amounts.
 
@@ -1599,7 +1599,7 @@ Accepted for the Phase 5 playable Mining and Smithing loop.
 
 Keep profession XP, materials, nodes, and recipes in the
 framework-independent core. Mining and Smithing use the curve
-`20 + 10 × (level âˆ’ 1)` and stay independent of combat level.
+`20 + 10 × (level − 1)` and stay independent of combat level.
 
 The current arena hosts two geometric ore nodes and one forge. F is a
 shared interact: loot pickup wins when a drop is in range, otherwise the
