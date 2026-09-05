@@ -48,6 +48,57 @@ export {
   type HealthReadModel,
 } from "./health";
 export {
+  ABILITY_STONE_BASE_ID,
+  AFFIX_CATALOG,
+  EQUIPMENT_BASE_CATALOG,
+  IMPLEMENTED_ABILITY_CATALOG,
+  MAXIMUM_HEALTH_STAT_ID,
+  affixById,
+  equipmentBaseById,
+  isAffixLegalForBase,
+  type AffixDefinition,
+  type AffixModifierDefinition,
+  type EquipmentBaseDefinition,
+  type EquipmentSlot,
+  type ItemRarity,
+  type ItemStatModifier,
+  type MaximumHealthModifier,
+  type OutgoingAbilityDamageModifier,
+} from "./item-catalog";
+export {
+  createAbilityStoneStack,
+  equipmentSlotOf,
+  generateEquipmentItem,
+  modifiersForEquipment,
+  type AbilityStoneStack,
+  type EquipmentItemInstance,
+  type GenerateEquipmentItemOptions,
+  type ItemInstance,
+  type RolledAffix,
+} from "./item-generation";
+export {
+  CharacterItemLoadout,
+  DEFAULT_BASE_CHARACTER_STATS,
+  aggregateEquipmentStats,
+  applyOutgoingAbilityDamage,
+  type BaseCharacterStats,
+  type EquipmentStats,
+  type EquipFailure,
+  type EquipResult,
+  type LoadoutAssignmentFailure,
+  type LoadoutAssignmentResult,
+  type LoadoutSlot,
+  type StoneConsumptionFailure,
+  type StoneConsumptionResult,
+} from "./item-loadout";
+export {
+  ABILITY_STONE_STACK_LIMIT,
+  INVENTORY_SLOT_COUNT,
+  Inventory,
+  type InventoryAddFailure,
+  type InventoryAddResult,
+} from "./inventory";
+export {
   SimpleMeleeEnemy,
   type MeleeEnemyState,
   type MeleeEnemyTarget,
