@@ -557,7 +557,7 @@ for (const viewport of [
   { width: 900, height: 900 },
   { width: 480, height: 720 },
 ]) {
-  test(`player vitals stay compact at top-right at ${viewport.width}x${viewport.height}`, async ({
+  test(`player vitals stay compact at bottom-right at ${viewport.width}x${viewport.height}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -593,11 +593,13 @@ for (const viewport of [
     ).toHaveCount(0);
     const hudBox = await hud.boundingBox();
     expect(hudBox).not.toBeNull();
-    expect(hudBox?.y).toBeCloseTo(16, 0);
     expect(hudBox?.width).toBeLessThanOrEqual(224);
     expect(
       viewport.width - ((hudBox?.x ?? 0) + (hudBox?.width ?? 0)),
-    ).toBeCloseTo(16, 0);
+    ).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
+    expect(
+      viewport.height - ((hudBox?.y ?? 0) + (hudBox?.height ?? 0)),
+    ).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
     expect(hudBox?.x).toBeGreaterThanOrEqual(0);
     expect(hudBox?.y).toBeGreaterThanOrEqual(0);
     expect((hudBox?.x ?? 0) + (hudBox?.width ?? 0)).toBeLessThanOrEqual(
