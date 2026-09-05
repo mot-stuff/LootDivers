@@ -285,7 +285,13 @@ describe("Phase 3 inventory and equipment", () => {
       outgoingAbilityDamageMultiplier: commonLoadout.damage / 10_000,
     });
 
-    expect(character.equipFromInventory(1)).toEqual({ accepted: true });
+    expect(character.equipFromInventory(1, undefined, 1)).toEqual({
+      accepted: false,
+      reason: "level-requirement",
+    });
+    expect(character.equipFromInventory(1, undefined, 2)).toEqual({
+      accepted: true,
+    });
     expect(character.inventorySlots()[1]).toEqual(commonWeapon);
     expect(character.equipment()["main-hand"]).toEqual(rareWeapon);
 

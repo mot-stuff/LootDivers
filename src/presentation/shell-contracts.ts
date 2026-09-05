@@ -48,6 +48,41 @@ export interface CombatStatusHudReadModel {
   readonly remainingSeconds: number;
 }
 
+export type MinimapHudMarkerKind =
+  | "player"
+  | "enemy"
+  | "portal"
+  | "node"
+  | "forge"
+  | "vendor"
+  | "quest";
+
+export type MinimapHudEnemyRank = "normal" | "elite" | "boss";
+
+export interface MinimapHudMarkerReadModel {
+  readonly id: string;
+  readonly kind: MinimapHudMarkerKind;
+  readonly x: number;
+  readonly y: number;
+  readonly rank?: MinimapHudEnemyRank;
+}
+
+export interface MinimapHudBoundsReadModel {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface MinimapHudReadModel {
+  readonly width: number;
+  readonly height: number;
+  readonly floorColor: string;
+  readonly edgeColor: string;
+  readonly walkable: MinimapHudBoundsReadModel;
+  readonly markers: readonly MinimapHudMarkerReadModel[];
+}
+
 export interface CombatHudReadModel {
   readonly paused: boolean;
   readonly playerHealth: number;
@@ -55,10 +90,16 @@ export interface CombatHudReadModel {
   readonly playerDead: boolean;
   readonly manaCurrent: number;
   readonly manaMaximum: number;
-  readonly placeholderExperienceCurrent: number;
-  readonly placeholderExperienceMaximum: number;
+  readonly level: number;
+  readonly experienceCurrent: number;
+  readonly experienceToNextLevel: number;
   readonly abilities: readonly CombatAbilityHudReadModel[];
   readonly activeStatuses: readonly CombatStatusHudReadModel[];
+  readonly gatheringLabel: string | null;
+  readonly gatheringProgress: number;
+  readonly zoneName: string;
+  readonly questLabel: string | null;
+  readonly minimap: MinimapHudReadModel;
 }
 
 export type ItemEquipmentSlot =
@@ -103,6 +144,8 @@ export interface EquipmentItemHudReadModel {
   readonly rarity: ItemRarityHud;
   readonly slotKind: ItemEquipmentSlotKind;
   readonly typeLabel: string;
+  readonly requiredLevel: number;
+  readonly origin: "loot" | "crafted";
   readonly modifiers: readonly ItemModifierHudReadModel[];
 }
 
@@ -115,8 +158,20 @@ export interface AbilityStoneItemHudReadModel {
   readonly quantity: number;
 }
 
+export interface MaterialItemHudReadModel {
+  readonly kind: "material";
+  readonly instanceId: string;
+  readonly displayName: string;
+  readonly rarity: "common";
+  readonly typeLabel: "Material";
+  readonly quantity: number;
+  readonly summary: string;
+}
+
 export type ItemHudReadModel =
-  EquipmentItemHudReadModel | AbilityStoneItemHudReadModel;
+  | EquipmentItemHudReadModel
+  | AbilityStoneItemHudReadModel
+  | MaterialItemHudReadModel;
 
 export interface InventorySlotHudReadModel {
   readonly index: number;
@@ -182,13 +237,124 @@ export type ItemUiCommand =
       readonly abilityId: string;
     };
 
+export type CharacterAttributeId =
+  "strength" | "dexterity" | "vitality" | "intelligence";
+
+export interface CharacterAttributeHudReadModel {
+  readonly id: CharacterAttributeId;
+  readonly label: string;
+  readonly summary: string;
+  readonly allocated: number;
+}
+
+export interface CharacterPassiveHudReadModel {
+  readonly id: string;
+  readonly displayName: string;
+  readonly summary: string;
+  readonly rank: number;
+  readonly maximumRank: number;
+}
+
+export interface CharacterHudReadModel {
+  readonly revision: number;
+  readonly level: number;
+  readonly experienceCurrent: number;
+  readonly experienceToNextLevel: number;
+  readonly unspentAttributePoints: number;
+  readonly unspentPassivePoints: number;
+  readonly attributes: readonly CharacterAttributeHudReadModel[];
+  readonly passives: readonly CharacterPassiveHudReadModel[];
+  readonly maximumHealth: number;
+  readonly maximumMana: number;
+  readonly outgoingAbilityDamagePercent: number;
+  readonly moveSpeedPercent: number;
+  readonly abilityChoices: readonly AbilityChoiceHudReadModel[];
+  readonly loadout: readonly LoadoutAssignmentHudReadModel[];
+  readonly professions: readonly CharacterProfessionHudReadModel[];
+  readonly forgeOpen: boolean;
+  readonly recipes: readonly CraftingRecipeHudReadModel[];
+  readonly vendorOpen: boolean;
+  readonly vendorOffers: readonly VendorOfferHudReadModel[];
+  readonly quest: {
+    readonly id: string;
+    readonly displayName: string;
+    readonly summary: string;
+    readonly stage: "inactive" | "accepted" | "ready" | "completed";
+  };
+}
+
+export interface CharacterProfessionHudReadModel {
+  readonly id: string;
+  readonly label: string;
+  readonly level: number;
+  readonly experienceCurrent: number;
+  readonly experienceToNextLevel: number;
+}
+
+export interface CraftingRecipeHudReadModel {
+  readonly id: string;
+  readonly displayName: string;
+  readonly summary: string;
+  readonly requiredSmithingLevel: number;
+  readonly ingredients: readonly {
+    readonly materialId: string;
+    readonly displayName: string;
+    readonly required: number;
+    readonly owned: number;
+  }[];
+  readonly canCraft: boolean;
+  readonly blockedReason: string | null;
+}
+
+export type ProgressionUiCommand =
+  | {
+      readonly type: "progression.allocate-attribute";
+      readonly attribute: CharacterAttributeId;
+    }
+  | {
+      readonly type: "progression.deallocate-attribute";
+      readonly attribute: CharacterAttributeId;
+    }
+  | {
+      readonly type: "progression.allocate-passive";
+      readonly passiveId: string;
+    }
+  | { readonly type: "progression.respec" };
+
+export type ProfessionUiCommand =
+  | { readonly type: "profession.craft"; readonly recipeId: string }
+  | { readonly type: "profession.close-forge" };
+
+export interface VendorOfferHudReadModel {
+  readonly id: string;
+  readonly displayName: string;
+  readonly summary: string;
+  readonly materialName: string;
+  readonly required: number;
+  readonly owned: number;
+  readonly canBuy: boolean;
+}
+
+export type WorldUiCommand =
+  | { readonly type: "world.vendor-buy"; readonly offerId: string }
+  | { readonly type: "world.close-vendor" };
+
+export const WORLD_COMMAND_EVENT = "rarpg:world-command";
+
 export const ITEM_HUD_EVENT = "rarpg:item-hud";
 export const ITEM_COMMAND_EVENT = "rarpg:item-command";
+export const CHARACTER_HUD_EVENT = "rarpg:character-hud";
+export const PROGRESSION_COMMAND_EVENT = "rarpg:progression-command";
+export const PROFESSION_COMMAND_EVENT = "rarpg:profession-command";
 
 declare global {
   interface WindowEventMap {
     "rarpg:item-hud": CustomEvent<InventoryHudReadModel>;
     "rarpg:item-command": CustomEvent<ItemUiCommand>;
+    "rarpg:character-hud": CustomEvent<CharacterHudReadModel>;
+    "rarpg:progression-command": CustomEvent<ProgressionUiCommand>;
+    "rarpg:profession-command": CustomEvent<ProfessionUiCommand>;
+    "rarpg:world-command": CustomEvent<WorldUiCommand>;
   }
 }
 

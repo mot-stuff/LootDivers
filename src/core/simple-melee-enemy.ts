@@ -5,9 +5,12 @@ import {
   type DamageResult,
   type HealthReadModel,
 } from "./health";
+import { ENEMY_KILL_EXPERIENCE } from "./progression";
 
 export type MeleeEnemyState =
   "approaching" | "windup" | "recovering" | "idle" | "dead";
+
+export type EnemyRank = "normal" | "elite" | "boss";
 
 export interface SimpleMeleeEnemyConfig {
   readonly id: string;
@@ -20,6 +23,10 @@ export interface SimpleMeleeEnemyConfig {
   readonly attackDamage: number;
   readonly attackWindupTicks: number;
   readonly attackIntervalTicks: number;
+  readonly rank?: EnemyRank;
+  readonly displayName?: string;
+  readonly experience?: number;
+  readonly aggroRadius?: number;
 }
 
 export interface MeleeEnemyTarget {
@@ -46,6 +53,10 @@ export interface SimpleMeleeEnemyDiagnostics {
   readonly attackCount: number;
   readonly damageAttemptCount: number;
   readonly damageAppliedCount: number;
+  readonly rank: EnemyRank;
+  readonly displayName: string;
+  readonly experience: number;
+  readonly attackWindupTicks: number;
 }
 
 export type PlayerDamageApplicator = (request: DamageRequest) => DamageResult;
@@ -118,6 +129,11 @@ export class SimpleMeleeEnemy {
       this.#facingY = deltaY / distance;
     }
     const inRange = distance <= this.config.meleeRange;
+    const aggroRadius = this.config.aggroRadius ?? Number.POSITIVE_INFINITY;
+    if (distance > aggroRadius) {
+      this.returnToSpawn(step, modifiers.moveSpeedMultiplier);
+      return;
+    }
 
     if (!inRange) {
       if (this.#state === "windup") {
@@ -195,7 +211,37 @@ export class SimpleMeleeEnemy {
       attackCount: this.#attackCount,
       damageAttemptCount: this.#damageAttemptCount,
       damageAppliedCount: this.#damageAppliedCount,
+      rank: this.config.rank ?? "normal",
+      displayName: this.config.displayName ?? this.config.id,
+      experience: this.config.experience ?? ENEMY_KILL_EXPERIENCE,
+      attackWindupTicks: this.config.attackWindupTicks,
     };
+  }
+
+  private returnToSpawn(
+    step: FixedStep,
+    moveSpeedMultiplier: number,
+  ): void {
+    this.#windupTicksRemaining = 0;
+    this.#cadenceTicksRemaining = 0;
+    const deltaX = this.config.spawnX - this.#x;
+    const deltaY = this.config.spawnY - this.#y;
+    const distance = Math.hypot(deltaX, deltaY);
+    if (distance <= 1) {
+      this.#x = this.config.spawnX;
+      this.#y = this.config.spawnY;
+      this.#state = "idle";
+      return;
+    }
+    const travel = Math.min(
+      this.config.moveSpeed * moveSpeedMultiplier * step.deltaSeconds,
+      distance,
+    );
+    this.#facingX = deltaX / distance;
+    this.#facingY = deltaY / distance;
+    this.#x += this.#facingX * travel;
+    this.#y += this.#facingY * travel;
+    this.#state = "idle";
   }
 
   private beginWindup(): void {
@@ -249,7 +295,11 @@ function validateConfig(config: SimpleMeleeEnemyConfig): void {
     !Number.isSafeInteger(config.attackWindupTicks) ||
     config.attackWindupTicks < 1 ||
     !Number.isSafeInteger(config.attackIntervalTicks) ||
-    config.attackIntervalTicks <= config.attackWindupTicks
+    config.attackIntervalTicks <= config.attackWindupTicks ||
+    (config.experience !== undefined &&
+      (!Number.isSafeInteger(config.experience) || config.experience < 0)) ||
+    (config.aggroRadius !== undefined &&
+      (!Number.isFinite(config.aggroRadius) || config.aggroRadius <= 0))
   ) {
     throw new RangeError("Melee enemy configuration is invalid.");
   }

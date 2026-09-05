@@ -23,6 +23,7 @@ import {
   type ItemInstance,
 } from "./item-generation";
 import { Inventory, type InventoryAddResult } from "./inventory";
+import type { ContentId } from "./ids";
 
 export type LoadoutSlot = "lmb" | "q" | "e" | "r";
 
@@ -42,7 +43,8 @@ export const DEFAULT_BASE_CHARACTER_STATS: BaseCharacterStats = {
   outgoingAbilityDamageBasisPoints: 10_000,
 };
 
-export type EquipFailure = "not-equipment" | "empty-slot" | "incompatible-slot";
+export type EquipFailure =
+  "not-equipment" | "empty-slot" | "incompatible-slot" | "level-requirement";
 
 export interface EquipResult {
   readonly accepted: boolean;
@@ -161,6 +163,14 @@ export class CharacterItemLoadout {
     );
   }
 
+  public materialCount(materialId: ContentId): number {
+    return this.#inventory.materialCount(materialId);
+  }
+
+  public consumeMaterial(materialId: ContentId, quantity: number): boolean {
+    return this.#inventory.consumeMaterial(materialId, quantity);
+  }
+
   public addItem(item: ItemInstance): InventoryAddResult {
     if (
       EQUIPMENT_SLOTS.some(
@@ -185,11 +195,15 @@ export class CharacterItemLoadout {
   public equipFromInventory(
     inventoryIndex: number,
     targetSlot?: WearableSlot,
+    characterLevel = 1,
   ): EquipResult {
     const item = this.#inventory.itemAt(inventoryIndex);
     if (item === null) return { accepted: false, reason: "empty-slot" };
     if (item.kind !== "equipment") {
       return { accepted: false, reason: "not-equipment" };
+    }
+    if (item.requiredLevel > characterLevel) {
+      return { accepted: false, reason: "level-requirement" };
     }
 
     const kind = equipmentSlotKindOf(item);

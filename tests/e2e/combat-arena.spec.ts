@@ -31,7 +31,7 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(
-    page.getByRole("heading", { name: "Item and loadout combat arena" }),
+    page.getByRole("heading", { name: "Hearthmere world session" }),
   ).toBeVisible();
   await expect.poll(() => diagnostics(page)).not.toBeNull();
 
@@ -164,6 +164,9 @@ test("common enemy approaches and dies to two directional attacks", async ({
   expect(defeated).toMatchObject({
     attackCount: 2,
     attackHitCount: 1,
+    experience: 20,
+    level: 1,
+    experienceToNextLevel: 40,
     enemy: {
       health: 0,
       dead: true,
@@ -172,6 +175,9 @@ test("common enemy approaches and dies to two directional attacks", async ({
     deathFeedbackCount: 1,
     enemyHealthBarVisible: false,
   });
+  await expect(
+    page.getByRole("progressbar", { name: "Experience" }),
+  ).toHaveAttribute("aria-valuenow", "20");
   await expect(page.locator('[aria-label*="Enemy health"]')).toHaveCount(0);
   await expect(page.getByText("ENEMY DEFEATED", { exact: true })).toHaveCount(
     0,
@@ -569,6 +575,7 @@ for (const viewport of [
 
     const hud = page.getByTestId("combat-vitals-hud");
     const inventoryToggle = page.locator(".inventory-menu-toggle");
+    const characterToggle = page.locator(".character-menu-toggle");
     const stack = page.getByTestId("combat-vitals-stack");
     const rows = hud.locator(":scope > .combat-vitals-row");
     const labels = hud.locator(".combat-vitals-label");
@@ -587,7 +594,7 @@ for (const viewport of [
     ).toHaveAttribute("aria-valuenow", "100");
     await expect(
       page.getByRole("progressbar", {
-        name: "Reserved experience placeholder",
+        name: "Experience",
       }),
     ).toHaveAttribute("aria-valuenow", "0");
     await expect(
@@ -612,13 +619,19 @@ for (const viewport of [
     );
     await expect(stack).toBeVisible();
     await expect(inventoryToggle).toBeVisible();
+    await expect(characterToggle).toBeVisible();
     const toggleBox = await inventoryToggle.boundingBox();
+    const characterBox = await characterToggle.boundingBox();
     expect(toggleBox).not.toBeNull();
+    expect(characterBox).not.toBeNull();
     expect((toggleBox?.y ?? 0) + (toggleBox?.height ?? 0)).toBeLessThanOrEqual(
       hudBox?.y ?? 0,
     );
+    expect(characterBox?.x ?? 0).toBeGreaterThan(
+      (toggleBox?.x ?? 0) + (toggleBox?.width ?? 0) - 2,
+    );
     expect(
-      viewport.width - ((toggleBox?.x ?? 0) + (toggleBox?.width ?? 0)),
+      viewport.width - ((characterBox?.x ?? 0) + (characterBox?.width ?? 0)),
     ).toBeGreaterThanOrEqual(viewport.width <= 700 ? 6 : 14);
 
     const actionBar = page.getByTestId("combat-action-hud");

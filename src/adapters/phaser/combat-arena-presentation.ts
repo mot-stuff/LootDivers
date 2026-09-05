@@ -10,9 +10,15 @@ import {
   FixedStepRunner,
   IMPLEMENTED_ABILITY_CATALOG,
   WINTER_PULSE_ID,
+  CRAFTING_RECIPE_CATALOG,
+  HEARTHMERE_ID,
+  WICK_PROVISIONS,
   affixById,
+  contentId,
+  isZoneId,
   definitionById,
   equipmentBaseById,
+  materialById,
   type CombatArenaDiagnostics,
   type CombatArenaEvent,
   type CombatAbilityId,
@@ -29,14 +35,26 @@ import {
   type WorldLootDrop,
 } from "../../core";
 import {
+  CHARACTER_HUD_EVENT,
   ITEM_COMMAND_EVENT,
   ITEM_HUD_EVENT,
+  PROFESSION_COMMAND_EVENT,
+  PROGRESSION_COMMAND_EVENT,
+  WORLD_COMMAND_EVENT,
+  type CharacterHudReadModel,
   type CombatHudReadModel,
   type EquipmentItemHudReadModel,
   type InventoryHudReadModel,
   type ItemModifierHudReadModel,
   type ItemUiCommand,
+  type ProfessionUiCommand,
+  type ProgressionUiCommand,
+  type WorldUiCommand,
 } from "../../presentation/shell-contracts";
+import {
+  BarbarianSpritePresentation,
+  type BarbarianSpriteDiagnostics,
+} from "./barbarian-sprite";
 import { CombatInputAdapter } from "./combat-input";
 import { worldLootLabel } from "./loot-label";
 
@@ -121,6 +139,10 @@ const STATUS_LABELS = {
   weakened: "Weakened",
 } as const;
 
+function cssHex(color: number): string {
+  return `#${color.toString(16).padStart(6, "0")}`;
+}
+
 export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly pausedForUi: boolean;
   readonly playerCanvasX: number;
@@ -135,6 +157,9 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly impactCount: number;
   readonly deathFeedbackCount: number;
   readonly enemyStrikeFeedbackCount: number;
+  readonly playerSpriteReady: boolean;
+  readonly playerAnimation: string | null;
+  readonly playerDirectionRow: number | null;
   readonly renderedProjectileCount: number;
   readonly renderedAreaCount: number;
   readonly renderedStatusCount: number;
@@ -157,6 +182,12 @@ export class CombatArenaPresentation {
   readonly #arenaGraphics: Phaser.GameObjects.Graphics;
   readonly #combatGraphics: Phaser.GameObjects.Graphics;
   readonly #playerGraphics: Phaser.GameObjects.Graphics;
+  readonly #barbarian: BarbarianSpritePresentation;
+  #barbarianDiagnostics: BarbarianSpriteDiagnostics = {
+    ready: false,
+    animationKey: null,
+    directionRow: null,
+  };
   readonly #renderedPlayerPoint = new Phaser.Math.Vector2();
   readonly #renderedFacingPoint = new Phaser.Math.Vector2();
   readonly #renderedEnemyPoint = new Phaser.Math.Vector2();
@@ -165,7 +196,9 @@ export class CombatArenaPresentation {
   #automationPaused = false;
   #lastHudKey = "";
   #lastItemHudKey = "";
+  #lastCharacterHudKey = "";
   #itemHudRevision = 0;
+  #characterHudRevision = 0;
   #lastPointerX = ORIGIN_X + 150;
   #lastPointerY = ORIGIN_Y + 180;
   #impactCount = 0;
@@ -181,6 +214,19 @@ export class CombatArenaPresentation {
   readonly #lootLabels = new Map<string, Phaser.GameObjects.Text>();
   readonly #itemCommand = (event: CustomEvent<ItemUiCommand>): void => {
     this.executeItemCommand(event.detail);
+  };
+  readonly #progressionCommand = (
+    event: CustomEvent<ProgressionUiCommand>,
+  ): void => {
+    this.executeProgressionCommand(event.detail);
+  };
+  readonly #professionCommand = (
+    event: CustomEvent<ProfessionUiCommand>,
+  ): void => {
+    this.executeProfessionCommand(event.detail);
+  };
+  readonly #worldCommand = (event: CustomEvent<WorldUiCommand>): void => {
+    this.executeWorldCommand(event.detail);
   };
 
   public constructor(
@@ -199,7 +245,18 @@ export class CombatArenaPresentation {
     this.#playerGraphics = scene.add
       .graphics()
       .setDepth(PRESENTATION_DEPTH + 2);
+    this.#barbarian = new BarbarianSpritePresentation(
+      scene,
+      PRESENTATION_DEPTH + 2,
+    );
     window.addEventListener(ITEM_COMMAND_EVENT, this.#itemCommand);
+    window.addEventListener(
+      PROGRESSION_COMMAND_EVENT,
+      this.#progressionCommand,
+    );
+    window.addEventListener(PROFESSION_COMMAND_EVENT, this.#professionCommand);
+    window.addEventListener(WORLD_COMMAND_EVENT, this.#worldCommand);
+    this.#simulation.travelTo(HEARTHMERE_ID);
     this.drawArena();
     this.render(0);
   }
@@ -214,36 +271,42 @@ export class CombatArenaPresentation {
     }
     this.#pausedForUi = !focused;
 
-    this.#simulation.setMovement(input.movementX, input.movementY);
+    const player = this.#simulation.diagnostics();
+    const playerPoint = this.project(player.x, player.y);
+    this.scene.cameras.main.centerOn(playerPoint.x, playerPoint.y);
     if (input.dodgeRequested) {
       this.#simulation.requestDodge();
     }
     if (input.lootPickupRequested) {
-      this.#simulation.requestLootPickup();
+      const previousZone = this.#simulation.currentZone().id;
+      this.#simulation.requestInteract();
+      if (this.#simulation.currentZone().id !== previousZone) {
+        this.drawArena();
+      }
     }
-    if (input.hasPointer) {
-      this.#lastPointerX = input.pointerX;
-      this.#lastPointerY = input.pointerY;
-    }
-    const player = this.#simulation.diagnostics();
-    const playerPoint = this.project(player.x, player.y);
-    this.scene.cameras.main.centerOn(playerPoint.x, playerPoint.y);
-    const aimOriginY = playerPoint.y - 8;
-    const pointerPoint = this.scene.cameras.main.getWorldPoint(
-      this.#lastPointerX,
-      this.#lastPointerY,
-    );
-    const aim = this.inverseProjectDelta(
-      pointerPoint.x - playerPoint.x,
-      pointerPoint.y - aimOriginY,
-    );
-    this.#simulation.setAim(aim.x, aim.y);
-    for (const slot of input.abilitySlotsRequested) {
-      this.#simulation.requestAbilitySlot(slot, {
-        kind: "point",
-        x: player.x + aim.x,
-        y: player.y + aim.y,
-      });
+    if (!this.#automationPaused) {
+      this.#simulation.setMovement(input.movementX, input.movementY);
+      if (input.hasPointer) {
+        this.#lastPointerX = input.pointerX;
+        this.#lastPointerY = input.pointerY;
+      }
+      const aimOriginY = playerPoint.y - 8;
+      const pointerPoint = this.scene.cameras.main.getWorldPoint(
+        this.#lastPointerX,
+        this.#lastPointerY,
+      );
+      const aim = this.inverseProjectDelta(
+        pointerPoint.x - playerPoint.x,
+        pointerPoint.y - aimOriginY,
+      );
+      this.#simulation.setAim(aim.x, aim.y);
+      for (const slot of input.abilitySlotsRequested) {
+        this.#simulation.requestAbilitySlot(slot, {
+          kind: "point",
+          x: player.x + aim.x,
+          y: player.y + aim.y,
+        });
+      }
     }
 
     const result = this.#runner.advance();
@@ -254,6 +317,7 @@ export class CombatArenaPresentation {
   public reset(): void {
     this.#runner.reset();
     this.#simulation.reset();
+    this.drawArena();
     this.#impactCount = 0;
     this.#deathFeedbackCount = 0;
     this.#enemyStrikeFeedbackCount = 0;
@@ -275,10 +339,15 @@ export class CombatArenaPresentation {
       enemyCanvasY: this.#renderedEnemyPoint.y,
       enemyHealthBarCanvasX: this.#renderedEnemyHealthBarPoint.x,
       enemyHealthBarCanvasY: this.#renderedEnemyHealthBarPoint.y,
-      enemyHealthBarVisible: !this.#simulation.diagnostics().enemy.dead,
+      enemyHealthBarVisible:
+        !this.#simulation.currentZone().safe &&
+        !this.#simulation.diagnostics().enemy.dead,
       impactCount: this.#impactCount,
       deathFeedbackCount: this.#deathFeedbackCount,
       enemyStrikeFeedbackCount: this.#enemyStrikeFeedbackCount,
+      playerSpriteReady: this.#barbarianDiagnostics.ready,
+      playerAnimation: this.#barbarianDiagnostics.animationKey,
+      playerDirectionRow: this.#barbarianDiagnostics.directionRow,
       renderedProjectileCount: this.#renderedProjectileCount,
       renderedAreaCount: this.#renderedAreaCount,
       renderedStatusCount: this.#renderedStatusCount,
@@ -317,6 +386,22 @@ export class CombatArenaPresentation {
 
   public requestDodge(): void {
     this.#simulation.requestDodge();
+  }
+
+  public requestInteract(): void {
+    const previousZone = this.#simulation.currentZone().id;
+    this.#simulation.requestInteract();
+    if (this.#simulation.currentZone().id !== previousZone) {
+      this.drawArena();
+    }
+    this.render(0, true);
+  }
+
+  public travelTo(zoneId: string): void {
+    if (!isZoneId(zoneId)) return;
+    if (!this.#simulation.travelTo(zoneId).accepted) return;
+    this.drawArena();
+    this.render(0, true);
   }
 
   public requestPrimaryAttack(): void {
@@ -367,6 +452,10 @@ export class CombatArenaPresentation {
     return this.createItemHud(this.#itemHudRevision);
   }
 
+  public characterHud(): CharacterHudReadModel {
+    return this.createCharacterHud(this.#characterHudRevision);
+  }
+
   public executeItemCommand(command: ItemUiCommand): void {
     if (command.type === "item.equip") {
       this.#simulation.equipCharacterItem(
@@ -395,10 +484,51 @@ export class CombatArenaPresentation {
     this.render(0, true);
   }
 
+  public executeProgressionCommand(command: ProgressionUiCommand): void {
+    if (command.type === "progression.allocate-attribute") {
+      this.#simulation.allocateAttribute(command.attribute);
+    } else if (command.type === "progression.deallocate-attribute") {
+      this.#simulation.deallocateAttribute(command.attribute);
+    } else if (command.type === "progression.allocate-passive") {
+      this.#simulation.allocatePassive(contentId(command.passiveId));
+    } else {
+      this.#simulation.respecProgression();
+    }
+    this.render(0, true);
+  }
+
+  public executeWorldCommand(command: WorldUiCommand): void {
+    if (command.type === "world.vendor-buy") {
+      this.#simulation.tradeVendorOffer(contentId(command.offerId));
+    } else {
+      this.#simulation.closeVendor();
+    }
+    this.render(0, true);
+  }
+
+  public executeProfessionCommand(command: ProfessionUiCommand): void {
+    if (command.type === "profession.craft") {
+      this.#simulation.craftRecipe(contentId(command.recipeId));
+    } else {
+      this.#simulation.closeForge();
+    }
+    this.render(0, true);
+  }
+
   public dispose(): void {
     this.#runner.pause();
     this.#input.dispose();
     window.removeEventListener(ITEM_COMMAND_EVENT, this.#itemCommand);
+    window.removeEventListener(
+      PROGRESSION_COMMAND_EVENT,
+      this.#progressionCommand,
+    );
+    window.removeEventListener(
+      PROFESSION_COMMAND_EVENT,
+      this.#professionCommand,
+    );
+    window.removeEventListener(WORLD_COMMAND_EVENT, this.#worldCommand);
+    this.#barbarian.dispose();
     this.#arenaGraphics.destroy();
     this.#combatGraphics.destroy();
     this.#playerGraphics.destroy();
@@ -409,6 +539,8 @@ export class CombatArenaPresentation {
   }
 
   private drawArena(): void {
+    this.#arenaGraphics.clear();
+    const zone = this.#simulation.currentZone();
     const top = this.project(0, 0);
     const right = this.project(this.#simulation.config.width, 0);
     const bottom = this.project(
@@ -420,9 +552,9 @@ export class CombatArenaPresentation {
       ({ x, y }) => new Phaser.Math.Vector2(x, y),
     );
 
-    this.#arenaGraphics.fillStyle(0x10263a, 0.98);
+    this.#arenaGraphics.fillStyle(zone.floorColor, 0.98);
     this.#arenaGraphics.fillPoints(points, true);
-    this.#arenaGraphics.lineStyle(5, 0x64d8cb, 1);
+    this.#arenaGraphics.lineStyle(5, zone.edgeColor, 1);
     this.#arenaGraphics.strokePoints(points, true);
 
     this.#arenaGraphics.lineStyle(1, 0x31536a, 0.55);
@@ -454,27 +586,51 @@ export class CombatArenaPresentation {
     this.drawAttack(state, point);
     this.drawAbilityFeedback(state);
     this.drawWorldLoot(state.worldLoot);
+    this.drawInteractables(state);
     this.drawEnemy(state, alpha);
 
     this.#playerGraphics.clear();
+    const flashing = performance.now() < this.#playerFlashUntil;
     const playerColor = state.playerDead
       ? 0x59636f
-      : performance.now() < this.#playerFlashUntil
+      : flashing
         ? 0xff6b6b
         : state.dodging
           ? 0xf9f3a6
           : 0x5ce1e6;
-    this.#playerGraphics.fillStyle(playerColor, 0.24);
-    this.#playerGraphics.fillEllipse(point.x, point.y + 8, 52, 25);
-    this.#playerGraphics.fillStyle(playerColor, 1);
-    this.#playerGraphics.fillCircle(point.x, point.y - 8, 17);
-    this.#playerGraphics.lineStyle(5, 0x08111f, 1);
-    this.#playerGraphics.lineBetween(
-      point.x,
-      point.y - 8,
-      facingEndX,
-      facingEndY,
-    );
+    if (!this.#barbarian.ready) {
+      // The sprite ships its own frame-aligned cast shadow; the ellipse
+      // only backs the geometric fallback while textures load.
+      this.#playerGraphics.fillStyle(playerColor, 0.24);
+      this.#playerGraphics.fillEllipse(point.x, point.y + 8, 52, 25);
+    }
+    this.#barbarianDiagnostics = this.#barbarian.update({
+      canvasX: point.x,
+      canvasY: point.y,
+      facingScreenX: facingScreenX,
+      facingScreenY: facingScreenY,
+      movementScreenX: (state.movementX - state.movementY) * ISO_X_SCALE,
+      movementScreenY: (state.movementX + state.movementY) * ISO_Y_SCALE,
+      moving: state.movementX !== 0 || state.movementY !== 0,
+      dead: state.playerDead,
+      dodging: state.dodging,
+      attackPhase: state.attackPhase,
+      attackAimScreenX: (state.attackAimX - state.attackAimY) * ISO_X_SCALE,
+      attackAimScreenY: (state.attackAimX + state.attackAimY) * ISO_Y_SCALE,
+      paused: this.#pausedForUi,
+      flashing,
+    });
+    if (!this.#barbarianDiagnostics.ready) {
+      this.#playerGraphics.fillStyle(playerColor, 1);
+      this.#playerGraphics.fillCircle(point.x, point.y - 8, 17);
+      this.#playerGraphics.lineStyle(5, 0x08111f, 1);
+      this.#playerGraphics.lineBetween(
+        point.x,
+        point.y - 8,
+        facingEndX,
+        facingEndY,
+      );
+    }
     const cameraMatrix = this.scene.cameras.main.matrixCombined;
     cameraMatrix.transformPoint(
       point.x,
@@ -489,6 +645,7 @@ export class CombatArenaPresentation {
 
     this.publishHud(state);
     this.publishItemHud(forceItemHud);
+    this.publishCharacterHud(forceItemHud);
   }
 
   private drawAttack(
@@ -522,86 +679,185 @@ export class CombatArenaPresentation {
     this.#combatGraphics.strokePoints(points.slice(1), false);
   }
 
-  private drawEnemy(state: CombatArenaDiagnostics, alpha: number): void {
-    const enemy = state.enemy;
-    const x = Phaser.Math.Linear(enemy.previousX, enemy.x, alpha);
-    const y = Phaser.Math.Linear(enemy.previousY, enemy.y, alpha);
-    const point = this.project(x, y);
-    const flashing = performance.now() < this.#targetFlashUntil;
-    const color = enemy.dead ? 0x4b5563 : flashing ? 0xffffff : 0xef476f;
-    this.#combatGraphics.fillStyle(color, enemy.dead ? 0.45 : 1);
-    this.#combatGraphics.fillCircle(point.x, point.y - 8, enemy.radius);
-    this.#combatGraphics.lineStyle(4, 0x08111f, 1);
-    if (enemy.dead) {
-      this.#combatGraphics.lineBetween(
-        point.x - 12,
-        point.y - 20,
-        point.x + 12,
-        point.y + 4,
-      );
-      this.#combatGraphics.lineBetween(
-        point.x + 12,
-        point.y - 20,
-        point.x - 12,
-        point.y + 4,
-      );
-    } else {
-      const facingScreenX = (enemy.facingX - enemy.facingY) * ISO_X_SCALE;
-      const facingScreenY = (enemy.facingX + enemy.facingY) * ISO_Y_SCALE;
-      const facingLength = Math.hypot(facingScreenX, facingScreenY) || 1;
-      this.#combatGraphics.lineBetween(
-        point.x,
-        point.y - 8,
-        point.x + (facingScreenX / facingLength) * 25,
-        point.y - 8 + (facingScreenY / facingLength) * 25,
-      );
-      if (enemy.state === "windup") {
-        const progress =
-          1 -
-          enemy.windupTicksRemaining /
-            this.#simulation.config.enemy.attackWindupTicks;
-        this.#combatGraphics.lineStyle(3 + progress * 5, 0xffd166, 0.95);
-        this.#combatGraphics.strokeCircle(
+  private drawInteractables(state: CombatArenaDiagnostics): void {
+    for (const interactable of state.interactables) {
+      const point = this.project(interactable.x, interactable.y);
+      const gathering =
+        state.gathering !== null && state.gathering.nodeId === interactable.id;
+      if (interactable.kind === "forge") {
+        this.#combatGraphics.fillStyle(0xc2410c, 0.95);
+        this.#combatGraphics.fillRect(point.x - 16, point.y - 22, 32, 28);
+        this.#combatGraphics.lineStyle(3, 0x7c2d12, 1);
+        this.#combatGraphics.strokeRect(point.x - 16, point.y - 22, 32, 28);
+      } else if (interactable.kind === "portal") {
+        this.#combatGraphics.fillStyle(0x22d3ee, 0.95);
+        this.#combatGraphics.fillCircle(
           point.x,
-          point.y - 8,
-          enemy.radius + 8 + progress * 8,
+          point.y - 6,
+          interactable.radius,
         );
-      } else if (performance.now() < this.#enemyStrikeUntil) {
-        this.#combatGraphics.lineStyle(7, 0xff9f1c, 0.9);
+        this.#combatGraphics.lineStyle(3, 0x155e75, 1);
         this.#combatGraphics.strokeCircle(
           point.x,
+          point.y - 6,
+          interactable.radius,
+        );
+      } else if (interactable.kind === "vendor") {
+        this.#combatGraphics.fillStyle(0xf59e0b, 0.95);
+        this.#combatGraphics.fillCircle(
+          point.x,
+          point.y - 6,
+          interactable.radius,
+        );
+        this.#combatGraphics.lineStyle(3, 0x92400e, 1);
+        this.#combatGraphics.strokeCircle(
+          point.x,
+          point.y - 6,
+          interactable.radius,
+        );
+      } else if (interactable.kind === "quest-giver") {
+        this.#combatGraphics.fillStyle(0xa855f7, 0.95);
+        this.#combatGraphics.fillCircle(
+          point.x,
+          point.y - 6,
+          interactable.radius,
+        );
+        this.#combatGraphics.lineStyle(3, 0x6b21a8, 1);
+        this.#combatGraphics.strokeCircle(
+          point.x,
+          point.y - 6,
+          interactable.radius,
+        );
+      } else {
+        const color = interactable.depleted
+          ? 0x57534e
+          : interactable.id.includes("deepvein")
+            ? 0x64748b
+            : 0xb45309;
+        this.#combatGraphics.fillStyle(color, interactable.depleted ? 0.45 : 1);
+        this.#combatGraphics.fillCircle(
+          point.x,
+          point.y - 6,
+          interactable.radius,
+        );
+        this.#combatGraphics.lineStyle(3, 0x1c1917, 1);
+        this.#combatGraphics.strokeCircle(
+          point.x,
+          point.y - 6,
+          interactable.radius,
+        );
+        if (gathering && state.gathering !== null) {
+          const progress =
+            1 - state.gathering.ticksRemaining / state.gathering.totalTicks;
+          this.#combatGraphics.lineStyle(4, 0xfbbf24, 0.95);
+          this.#combatGraphics.strokeCircle(
+            point.x,
+            point.y - 6,
+            interactable.radius + 6 + progress * 6,
+          );
+        }
+      }
+    }
+  }
+
+  private drawEnemy(state: CombatArenaDiagnostics, alpha: number): void {
+    if (this.#simulation.currentZone().safe) return;
+    const flashing = performance.now() < this.#targetFlashUntil;
+    for (const enemy of state.enemies) {
+      const x = Phaser.Math.Linear(enemy.previousX, enemy.x, alpha);
+      const y = Phaser.Math.Linear(enemy.previousY, enemy.y, alpha);
+      const point = this.project(x, y);
+      const liveColor =
+        enemy.rank === "boss"
+          ? 0xa855f7
+          : enemy.rank === "elite"
+            ? 0xf59e0b
+            : 0xef476f;
+      const color = enemy.dead ? 0x4b5563 : flashing ? 0xffffff : liveColor;
+      this.#combatGraphics.fillStyle(color, enemy.dead ? 0.45 : 1);
+      this.#combatGraphics.fillCircle(point.x, point.y - 8, enemy.radius);
+      this.#combatGraphics.lineStyle(4, 0x08111f, 1);
+      if (enemy.dead) {
+        this.#combatGraphics.lineBetween(
+          point.x - 12,
+          point.y - 20,
+          point.x + 12,
+          point.y + 4,
+        );
+        this.#combatGraphics.lineBetween(
+          point.x + 12,
+          point.y - 20,
+          point.x - 12,
+          point.y + 4,
+        );
+      } else {
+        const facingScreenX = (enemy.facingX - enemy.facingY) * ISO_X_SCALE;
+        const facingScreenY = (enemy.facingX + enemy.facingY) * ISO_Y_SCALE;
+        const facingLength = Math.hypot(facingScreenX, facingScreenY) || 1;
+        this.#combatGraphics.lineBetween(
+          point.x,
           point.y - 8,
-          enemy.radius + 15,
+          point.x + (facingScreenX / facingLength) * 25,
+          point.y - 8 + (facingScreenY / facingLength) * 25,
+        );
+        if (enemy.state === "windup") {
+          const progress =
+            1 - enemy.windupTicksRemaining / enemy.attackWindupTicks;
+          this.#combatGraphics.lineStyle(3 + progress * 5, 0xffd166, 0.95);
+          this.#combatGraphics.strokeCircle(
+            point.x,
+            point.y - 8,
+            enemy.radius + 8 + progress * 8,
+          );
+        } else if (
+          enemy.state === "recovering" &&
+          performance.now() < this.#enemyStrikeUntil
+        ) {
+          this.#combatGraphics.lineStyle(7, 0xff9f1c, 0.9);
+          this.#combatGraphics.strokeCircle(
+            point.x,
+            point.y - 8,
+            enemy.radius + 15,
+          );
+        }
+        const healthBarWidth = Math.max(28, enemy.radius * 2.4);
+        const healthBarY = point.y - enemy.radius - 14;
+        const healthWidth = healthBarWidth * (enemy.health / enemy.maxHealth);
+        this.#combatGraphics.fillStyle(0x32131b, 1);
+        this.#combatGraphics.fillRect(
+          point.x - healthBarWidth / 2,
+          healthBarY,
+          healthBarWidth,
+          4,
+        );
+        this.#combatGraphics.fillStyle(
+          enemy.rank === "boss"
+            ? 0xc084fc
+            : enemy.rank === "elite"
+              ? 0xfbbf24
+              : 0xff6b6b,
+          1,
+        );
+        this.#combatGraphics.fillRect(
+          point.x - healthBarWidth / 2,
+          healthBarY,
+          healthWidth,
+          4,
         );
       }
-      const healthBarWidth = Math.max(28, enemy.radius * 2.4);
-      const healthBarY = point.y - enemy.radius - 14;
-      const healthWidth = healthBarWidth * (enemy.health / enemy.maxHealth);
-      this.#combatGraphics.fillStyle(0x32131b, 1);
-      this.#combatGraphics.fillRect(
-        point.x - healthBarWidth / 2,
-        healthBarY,
-        healthBarWidth,
-        4,
-      );
-      this.#combatGraphics.fillStyle(0xff6b6b, 1);
-      this.#combatGraphics.fillRect(
-        point.x - healthBarWidth / 2,
-        healthBarY,
-        healthWidth,
-        4,
-      );
+      if (enemy.id === state.enemy.id) {
+        this.scene.cameras.main.matrixCombined.transformPoint(
+          point.x,
+          point.y - 8,
+          this.#renderedEnemyPoint,
+        );
+        this.scene.cameras.main.matrixCombined.transformPoint(
+          point.x,
+          point.y - enemy.radius - 14,
+          this.#renderedEnemyHealthBarPoint,
+        );
+      }
     }
-    this.scene.cameras.main.matrixCombined.transformPoint(
-      point.x,
-      point.y - 8,
-      this.#renderedEnemyPoint,
-    );
-    this.scene.cameras.main.matrixCombined.transformPoint(
-      point.x,
-      point.y - enemy.radius - 14,
-      this.#renderedEnemyHealthBarPoint,
-    );
   }
 
   private drawAbilityFeedback(state: CombatArenaDiagnostics): void {
@@ -637,17 +893,19 @@ export class CombatArenaPresentation {
         projectile.radius + 3,
       );
     }
-    const enemyStatus = state.statuses.some(
-      (status) => status.targetId === state.enemy.id,
-    );
-    if (enemyStatus && !state.enemy.dead) {
-      const point = this.project(state.enemy.x, state.enemy.y);
-      this.#combatGraphics.lineStyle(3, 0x9adff5, 0.95);
-      this.#combatGraphics.strokeCircle(
-        point.x,
-        point.y - 8,
-        state.enemy.radius + 6,
+    for (const enemy of state.enemies) {
+      const enemyStatus = state.statuses.some(
+        (status) => status.targetId === enemy.id,
       );
+      if (enemyStatus && !enemy.dead) {
+        const point = this.project(enemy.x, enemy.y);
+        this.#combatGraphics.lineStyle(3, 0x9adff5, 0.95);
+        this.#combatGraphics.strokeCircle(
+          point.x,
+          point.y - 8,
+          enemy.radius + 6,
+        );
+      }
     }
   }
 
@@ -667,11 +925,13 @@ export class CombatArenaPresentation {
       const color =
         drop.item.kind === "ability-stone"
           ? 0xc084fc
-          : drop.item.rarity === "rare"
-            ? 0xffd166
-            : drop.item.rarity === "magic"
-              ? 0x60a5fa
-              : 0xd1d5db;
+          : drop.item.kind === "material"
+            ? 0xd97706
+            : drop.item.rarity === "rare"
+              ? 0xffd166
+              : drop.item.rarity === "magic"
+                ? 0x60a5fa
+                : 0xd1d5db;
       this.#combatGraphics.fillStyle(0x06101c, 0.55);
       this.#combatGraphics.fillEllipse(point.x, point.y + 3, 28, 12);
       this.#combatGraphics.fillStyle(color, 0.92);
@@ -802,8 +1062,9 @@ export class CombatArenaPresentation {
       playerDead: state.playerDead,
       manaCurrent: state.mana,
       manaMaximum: state.maxMana,
-      placeholderExperienceCurrent: 0,
-      placeholderExperienceMaximum: 100,
+      level: state.level,
+      experienceCurrent: state.experience,
+      experienceToNextLevel: state.experienceToNextLevel,
       abilities: HUD_SLOTS.map((slot) => {
         const abilityId = assignments[slot.slot];
         const definition =
@@ -833,6 +1094,39 @@ export class CombatArenaPresentation {
           state: hudState,
         };
       }),
+      gatheringLabel: state.gathering?.displayName ?? null,
+      gatheringProgress:
+        state.gathering === null || state.gathering.totalTicks === 0
+          ? 0
+          : 1 - state.gathering.ticksRemaining / state.gathering.totalTicks,
+      zoneName: state.zoneName,
+      questLabel:
+        state.quest.stage === "inactive"
+          ? null
+          : `${state.quest.displayName}: ${state.quest.stage}`,
+      minimap: {
+        width: state.minimap.width,
+        height: state.minimap.height,
+        floorColor: cssHex(state.minimap.floorColor),
+        edgeColor: cssHex(state.minimap.edgeColor),
+        walkable: state.minimap.walkable,
+        markers: state.minimap.markers.map((marker) =>
+          marker.rank === undefined
+            ? {
+                id: marker.id,
+                kind: marker.kind,
+                x: Math.round(marker.x),
+                y: Math.round(marker.y),
+              }
+            : {
+                id: marker.id,
+                kind: marker.kind,
+                x: Math.round(marker.x),
+                y: Math.round(marker.y),
+                rank: marker.rank,
+              },
+        ),
+      },
       activeStatuses: state.statuses.map((status) => ({
         id: `${status.targetId}:${status.statusId}`,
         label: STATUS_LABELS[status.statusId],
@@ -918,17 +1212,139 @@ export class CombatArenaPresentation {
     };
   }
 
-  private itemHudModel(item: ItemInstance) {
-    return item.kind === "equipment"
-      ? this.equipmentHudModel(item)
-      : {
-          kind: "ability-stone" as const,
-          instanceId: item.instanceId,
-          displayName: "Ability Stone",
-          rarity: "common" as const,
-          typeLabel: "Ability Stone" as const,
-          quantity: item.quantity,
+  private publishCharacterHud(force = false): void {
+    const comparable = this.createCharacterHud(0);
+    const key = JSON.stringify(comparable);
+    if (!force && key === this.#lastCharacterHudKey) return;
+    this.#lastCharacterHudKey = key;
+    this.#characterHudRevision += 1;
+    window.dispatchEvent(
+      new CustomEvent<CharacterHudReadModel>(CHARACTER_HUD_EVENT, {
+        detail: this.createCharacterHud(this.#characterHudRevision),
+      }),
+    );
+  }
+
+  private createCharacterHud(revision: number): CharacterHudReadModel {
+    const items = this.createItemHud(revision);
+    const progression = this.#simulation.characterProgression();
+    const stats = this.#simulation.characterItemLoadout().stats;
+    return {
+      revision,
+      level: progression.level,
+      experienceCurrent: progression.experience,
+      experienceToNextLevel: progression.experienceToNextLevel,
+      unspentAttributePoints: progression.unspentAttributePoints,
+      unspentPassivePoints: progression.unspentPassivePoints,
+      attributes: progression.attributes,
+      passives: progression.passives,
+      maximumHealth: stats.maximumHealth,
+      maximumMana: stats.maximumMana,
+      outgoingAbilityDamagePercent:
+        stats.outgoingAbilityDamageBasisPoints / 100,
+      moveSpeedPercent: stats.moveSpeedBasisPoints / 100,
+      abilityChoices: items.abilityChoices,
+      loadout: items.loadout,
+      professions: this.#simulation.professions().map((profession) => ({
+        id: profession.id,
+        label: profession.label,
+        level: profession.level,
+        experienceCurrent: profession.experience,
+        experienceToNextLevel: profession.experienceToNextLevel,
+      })),
+      forgeOpen: this.#simulation.forgeOpen(),
+      recipes: CRAFTING_RECIPE_CATALOG.map((recipe) => {
+        const smithing =
+          this.#simulation
+            .professions()
+            .find((profession) => profession.id === "smithing")?.level ?? 1;
+        const ingredients = recipe.ingredients.map((ingredient) => {
+          const material = materialById(ingredient.materialId);
+          return {
+            materialId: ingredient.materialId,
+            displayName: material?.displayName ?? String(ingredient.materialId),
+            required: ingredient.quantity,
+            owned: this.#simulation
+              .characterItemLoadout()
+              .inventory.reduce((total, item) => {
+                if (
+                  item?.kind !== "material" ||
+                  item.materialId !== ingredient.materialId
+                ) {
+                  return total;
+                }
+                return total + item.quantity;
+              }, 0),
+          };
+        });
+        const missing = ingredients.some(
+          (ingredient) => ingredient.owned < ingredient.required,
+        );
+        const levelBlocked = smithing < recipe.requiredSmithingLevel;
+        return {
+          id: recipe.id,
+          displayName: recipe.displayName,
+          summary: recipe.summary,
+          requiredSmithingLevel: recipe.requiredSmithingLevel,
+          ingredients,
+          canCraft: !missing && !levelBlocked,
+          blockedReason: levelBlocked
+            ? `Requires Smithing ${recipe.requiredSmithingLevel}`
+            : missing
+              ? "Missing materials"
+              : null,
         };
+      }),
+      vendorOpen: this.#simulation.vendorOpen(),
+      vendorOffers: WICK_PROVISIONS.offers.map((offer) => {
+        const material = materialById(offer.materialId);
+        const owned = this.#simulation
+          .characterItemLoadout()
+          .inventory.reduce((total, item) => {
+            if (
+              item?.kind !== "material" ||
+              item.materialId !== offer.materialId
+            ) {
+              return total;
+            }
+            return total + item.quantity;
+          }, 0);
+        return {
+          id: offer.id,
+          displayName: offer.displayName,
+          summary: offer.summary,
+          materialName: material?.displayName ?? "Ore",
+          required: offer.materialQuantity,
+          owned,
+          canBuy: owned >= offer.materialQuantity,
+        };
+      }),
+      quest: this.#simulation.quest(),
+    };
+  }
+
+  private itemHudModel(item: ItemInstance) {
+    if (item.kind === "equipment") return this.equipmentHudModel(item);
+    if (item.kind === "material") {
+      const material = materialById(item.materialId);
+      return {
+        kind: "material" as const,
+        instanceId: item.instanceId,
+        displayName: material?.displayName ?? "Ore",
+        rarity: "common" as const,
+        typeLabel: "Material" as const,
+        quantity: item.quantity,
+        summary: material?.summary ?? "",
+      };
+    }
+    return {
+      kind: "ability-stone" as const,
+      instanceId: item.instanceId,
+      displayName: "Ability Stone",
+      rarity: "common" as const,
+      typeLabel: "Ability Stone" as const,
+      quantity: item.quantity,
+    };
   }
 
   private equipmentHudModel(
@@ -966,6 +1382,8 @@ export class CombatArenaPresentation {
           : `${affixNames.join(" ")} ${base.displayName}`,
       rarity: item.rarity,
       slotKind: base.slot,
+      requiredLevel: item.requiredLevel,
+      origin: item.origin,
       typeLabel:
         base.slot === "flask"
           ? base.tags.some((tag) => String(tag) === "tag:life-flask")

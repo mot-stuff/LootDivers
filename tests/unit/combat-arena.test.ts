@@ -7,8 +7,12 @@ import {
   DEFAULT_COMBAT_ARENA_CONFIG,
   DEFIANT_SIGNAL_ID,
   DeterministicEnemyLootGenerator,
+  ENEMY_KILL_EXPERIENCE,
   EQUIPMENT_BASE_CATALOG,
   ITEM_BASE_CATALOG,
+  VITALITY_MAXIMUM_HEALTH,
+  contentId,
+  experienceToNextLevel,
   FIXED_STEP_SECONDS,
   INVENTORY_SLOT_COUNT,
   WINTER_PULSE_ID,
@@ -878,5 +882,74 @@ describe("CombatArenaSimulation", () => {
             event.targetId === DEFAULT_COMBAT_ARENA_CONFIG.enemy.id,
         ),
     ).toContainEqual(expect.objectContaining({ amount: focusedDamage }));
+  });
+});
+
+describe("Phase 4 progression in the combat arena", () => {
+  it("awards kill experience, spends vitality into max health, and respecs", () => {
+    const simulation = lootArena();
+    expect(simulation.diagnostics()).toMatchObject({
+      level: 1,
+      experience: 0,
+      experienceToNextLevel: experienceToNextLevel(1),
+    });
+
+    killArenaEnemy(simulation);
+    expect(simulation.diagnostics()).toMatchObject({
+      level: 1,
+      experience: ENEMY_KILL_EXPERIENCE,
+      experienceToNextLevel: experienceToNextLevel(1),
+    });
+
+    simulation.reset();
+    killArenaEnemy(simulation);
+    expect(simulation.diagnostics()).toMatchObject({
+      level: 2,
+      experience: 0,
+      experienceToNextLevel: experienceToNextLevel(2),
+    });
+    expect(simulation.characterProgression()).toMatchObject({
+      unspentAttributePoints: 4,
+      unspentPassivePoints: 2,
+    });
+
+    expect(simulation.allocateAttribute("vitality")).toEqual({
+      accepted: true,
+    });
+    expect(simulation.diagnostics()).toMatchObject({
+      playerMaxHealth: 100 + VITALITY_MAXIMUM_HEALTH,
+      playerHealth: 100 + VITALITY_MAXIMUM_HEALTH,
+    });
+
+    simulation.respecProgression();
+    expect(simulation.diagnostics()).toMatchObject({
+      playerMaxHealth: 100,
+      playerHealth: 100,
+    });
+  });
+
+  it("increases Cinder Dart damage after training Cinder Channel", () => {
+    const simulation = new CombatArenaSimulation({
+      ...DEFAULT_COMBAT_ARENA_CONFIG,
+      enemy: {
+        ...DEFAULT_COMBAT_ARENA_CONFIG.enemy,
+        spawnX: 750,
+        spawnY: 400,
+        maxHealth: 100,
+      },
+    });
+    unlockPhaseTwoAbilities(simulation);
+    const before = applyOutgoingAbilityDamage(
+      30,
+      simulation.characterItemLoadout().stats,
+    );
+    expect(
+      simulation.allocatePassive(contentId("passive:cinder-channel")),
+    ).toEqual({ accepted: true });
+    expect(simulation.requestAbility(CINDER_DART_ID).accepted).toBe(true);
+    step(simulation, 22);
+    expect(simulation.diagnostics().enemy.health).toBe(
+      100 - Math.floor(before * 1.12),
+    );
   });
 });

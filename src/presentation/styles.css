@@ -140,6 +140,83 @@ body.combat-mode #app,
   pointer-events: none;
 }
 
+.combat-minimap {
+  position: absolute;
+  z-index: 3;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.25rem;
+  width: min(11.5rem, calc(100vw - 2rem));
+  padding: 0.4rem 0.45rem 0.5rem;
+  border: 1px solid rgb(196 205 217 / 55%);
+  border-radius: 0.45rem;
+  background: rgb(8 17 31 / 84%);
+  pointer-events: none;
+}
+
+.combat-minimap-label {
+  margin: 0;
+  color: #9eb6d4;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.combat-minimap-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border-radius: 0.25rem;
+}
+
+.combat-minimap-void {
+  fill: #071018;
+}
+
+.combat-minimap-bounds {
+  fill: none;
+  stroke-width: 22;
+  stroke-linejoin: miter;
+}
+
+.combat-minimap-marker-player {
+  fill: #e8f1ff;
+}
+
+.combat-minimap-marker-enemy {
+  fill: #ef476f;
+}
+
+.combat-minimap-marker-elite {
+  fill: #f59e0b;
+}
+
+.combat-minimap-marker-boss {
+  fill: #a855f7;
+}
+
+.combat-minimap-marker-portal {
+  fill: #64d8cb;
+}
+
+.combat-minimap-marker-node {
+  fill: #b45309;
+}
+
+.combat-minimap-marker-forge {
+  fill: #fb923c;
+}
+
+.combat-minimap-marker-vendor {
+  fill: #e8b86d;
+}
+
+.combat-minimap-marker-quest {
+  fill: #c084fc;
+}
+
 .combat-action-hud {
   position: absolute;
   z-index: 2;
@@ -384,15 +461,23 @@ body.combat-mode #app,
   background: rgb(8 17 31 / 86%);
 }
 
-.inventory-menu-toggle {
-  justify-self: end;
+.combat-menu-toggles {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  pointer-events: auto;
+}
+
+.inventory-menu-toggle,
+.character-menu-toggle {
   min-height: 2.4rem;
-  padding: 0.45rem 0.7rem;
+  padding: 0.4rem 0.55rem;
   background: rgb(8 17 31 / 92%);
   pointer-events: auto;
 }
 
 .inventory-menu-toggle kbd,
+.character-menu-toggle kbd,
 .item-menu kbd {
   padding: 0.15rem 0.32rem;
   border: 1px solid #7893b2;
@@ -830,6 +915,102 @@ body.combat-mode #app,
   text-align: left;
 }
 
+.character-menu-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.character-summary,
+.character-attribute-list,
+.character-passive-list,
+.character-loadout-list {
+  margin: 0;
+  padding: 0;
+}
+
+.character-attribute-list,
+.character-passive-list,
+.character-loadout-list {
+  display: grid;
+  gap: 0.55rem;
+  list-style: none;
+}
+
+.character-attribute-list li,
+.character-passive-list li,
+.character-loadout-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #29405e;
+  border-radius: 0.45rem;
+  background: #101c2e;
+}
+
+.character-attribute-list p,
+.character-passive-list p,
+.character-summary p {
+  margin: 0.25rem 0 0;
+  color: #9eb6d4;
+  font-size: 0.8rem;
+}
+
+.character-derived-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.8rem;
+  margin: 0.75rem 0;
+}
+
+.character-derived-stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.character-derived-stats dt {
+  color: #9eb6d4;
+}
+
+.character-derived-stats dd {
+  margin: 0;
+  color: #f4f8ff;
+}
+
+.character-spend-buttons,
+.character-loadout-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: flex-start;
+}
+
+.respec-button,
+.character-spend-buttons button,
+.character-passive-list button,
+.character-loadout-choices button {
+  min-height: 2rem;
+  padding: 0.3rem 0.55rem;
+}
+
+.combat-gathering {
+  margin-top: 0.25rem;
+  color: #fbbf24;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.combat-zone {
+  margin-top: 0.25rem;
+  color: #9eb6d4;
+  font-size: 0.72rem;
+}
+
 @media (max-width: 700px) {
   .combat-vitals-stack {
     right: 0.5rem;
@@ -872,7 +1053,8 @@ body.combat-mode #app,
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .item-menu-layout {
+  .item-menu-layout,
+  .character-menu-layout {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -887,7 +1069,8 @@ body.combat-mode #app,
     bottom: 8.5rem;
   }
 
-  .item-menu-layout {
+  .item-menu-layout,
+  .character-menu-layout {
     grid-template-columns: 1fr;
   }
 

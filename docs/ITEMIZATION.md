@@ -26,8 +26,9 @@ Phase 3 proves a focused loot loop rather than the final item model:
 - readable inventory, equipment, affix, and Ability Stone UI.
 
 Combat loadout assignment is not shown in the inventory menu. Ability Stones
-can still create owned abilities; slotting them onto LMB/Q/E/R moves to the
-Phase 4 character screen.
+can still create owned abilities; slotting them onto LMB/Q/E/R happens on
+the Phase 4 character screen. Generated gear and flasks carry a required
+level: Common and Magic require 1, Rare requires 2.
 
 Base items declare a slot kind rather than a concrete character slot. Every
 kind maps to one slot except rings: a ring-kind item may occupy Ring 1 or
@@ -105,8 +106,8 @@ Not every field must exist initially.
 # Ability Stones
 
 Abilities will be obtained through lootable Ability Stones. Using a stone lets
-the player choose an ability to create; the resulting ability can later be
-assigned to the left-click, Q, E, or R combat slot through inventory or menu UI.
+the player choose an ability to create; the resulting ability is assigned
+to the left-click, Q, E, or R combat slot on the character screen.
 
 Phase 3 keeps the four Phase 2 assignments as borrowed prototype defaults so
 existing controls continue to work. Basic Cleave is initially owned. A consumed
@@ -275,3 +276,8 @@ Mining may supply:
 - rare crafting materials
 
 Profession systems should complement random loot rather than completely replace it.
+
+Phase 5 adds a crafted-only catalog (Tempering Cleaver, Tempering Vest,
+Deepvein Cleaver). Those bases are generated through Smithing recipes and
+are never rolled by enemy loot. Crafted items remain ordinary equipment
+instances so they can be equipped, compared, and replaced like dropped gear.

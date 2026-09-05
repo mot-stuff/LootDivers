@@ -1,5 +1,6 @@
 import {
   equipmentBaseById,
+  materialById,
   type ItemInstance,
   type ItemRarity,
 } from "../../core";
@@ -22,6 +23,7 @@ export const LOOT_LABEL_RARITY_COLORS: Readonly<Record<ItemRarity, string>> = {
  * distinguishable from common equipment at a glance.
  */
 export const ABILITY_STONE_LABEL_COLOR = "#c084fc";
+export const MATERIAL_LABEL_COLOR = "#d97706";
 
 export interface WorldLootLabel {
   /** Compact base display name; affix-decorated names are menu-only. */
@@ -34,6 +36,12 @@ export interface WorldLootLabel {
 export function worldLootLabel(item: ItemInstance): WorldLootLabel {
   if (item.kind === "ability-stone") {
     return { text: "Ability Stone", color: ABILITY_STONE_LABEL_COLOR };
+  }
+  if (item.kind === "material") {
+    return {
+      text: materialById(item.materialId)?.displayName ?? "Ore",
+      color: MATERIAL_LABEL_COLOR,
+    };
   }
   return {
     text: equipmentBaseById(item.baseId)?.displayName ?? String(item.baseId),

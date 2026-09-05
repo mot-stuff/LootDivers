@@ -1,23 +1,45 @@
-import { useEffect, useLayoutEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
-import { FOUNDATION_ID, INVENTORY_SLOT_COUNT, slotAcceptsKind } from "../core";
+import {
+  ATTRIBUTE_IDS,
+  ATTRIBUTE_LABELS,
+  ATTRIBUTE_SUMMARIES,
+  FOUNDATION_ID,
+  INVENTORY_SLOT_COUNT,
+  PASSIVE_CATALOG,
+  experienceToNextLevel,
+  slotAcceptsKind,
+} from "../core";
 import type {
   FixtureSaveState,
   PersistenceStatus,
   SaveLoadResult,
 } from "../persistence";
 import type {
+  CharacterHudReadModel,
   CombatHudReadModel,
+  MinimapHudMarkerReadModel,
+  MinimapHudReadModel,
   EquipmentItemHudReadModel,
   InventoryHudReadModel,
   ItemEquipmentSlot,
   ItemEquipmentSlotKind,
   ItemHudReadModel,
   ItemUiCommand,
+  ProfessionUiCommand,
+  ProgressionUiCommand,
+  WorldUiCommand,
   ShellBindings,
   ShellReadModel,
 } from "./shell-contracts";
-import { ITEM_COMMAND_EVENT, ITEM_HUD_EVENT } from "./shell-contracts";
+import {
+  CHARACTER_HUD_EVENT,
+  ITEM_COMMAND_EVENT,
+  ITEM_HUD_EVENT,
+  PROFESSION_COMMAND_EVENT,
+  PROGRESSION_COMMAND_EVENT,
+  WORLD_COMMAND_EVENT,
+} from "./shell-contracts";
 
 export interface PersistenceFixtureActions {
   save(state: FixtureSaveState): Promise<void>;
@@ -37,6 +59,29 @@ export interface AppProps {
 interface CombatVitalsProps {
   readonly model: CombatHudReadModel;
 }
+
+const EMPTY_MINIMAP: MinimapHudReadModel = {
+  width: 1_200,
+  height: 800,
+  floorColor: "#10263a",
+  edgeColor: "#64d8cb",
+  walkable: { x: 18, y: 18, width: 1_164, height: 764 },
+  markers: [],
+};
+
+const MINIMAP_VIEW_PAD = 36;
+
+const MINIMAP_MARKER_CLASS: Readonly<
+  Record<MinimapHudMarkerReadModel["kind"], string>
+> = {
+  player: "player",
+  enemy: "enemy",
+  portal: "portal",
+  node: "node",
+  forge: "forge",
+  vendor: "vendor",
+  quest: "quest",
+};
 
 const EMPTY_ITEM_HUD: InventoryHudReadModel = {
   revision: 0,
@@ -100,6 +145,60 @@ const EMPTY_ITEM_HUD: InventoryHudReadModel = {
   outgoingAbilityDamagePercent: 100,
 };
 
+const EMPTY_CHARACTER_HUD: CharacterHudReadModel = {
+  revision: 0,
+  level: 1,
+  experienceCurrent: 0,
+  experienceToNextLevel: experienceToNextLevel(1),
+  unspentAttributePoints: 2,
+  unspentPassivePoints: 1,
+  attributes: ATTRIBUTE_IDS.map((id) => ({
+    id,
+    label: ATTRIBUTE_LABELS[id],
+    summary: ATTRIBUTE_SUMMARIES[id],
+    allocated: 0,
+  })),
+  passives: PASSIVE_CATALOG.map((passive) => ({
+    id: passive.id,
+    displayName: passive.displayName,
+    summary: passive.summary,
+    rank: 0,
+    maximumRank: passive.maximumRank,
+  })),
+  maximumHealth: 100,
+  maximumMana: 100,
+  outgoingAbilityDamagePercent: 100,
+  moveSpeedPercent: 100,
+  abilityChoices: [],
+  loadout: EMPTY_ITEM_HUD.loadout,
+  professions: [
+    {
+      id: "mining",
+      label: "Mining",
+      level: 1,
+      experienceCurrent: 0,
+      experienceToNextLevel: 20,
+    },
+    {
+      id: "smithing",
+      label: "Smithing",
+      level: 1,
+      experienceCurrent: 0,
+      experienceToNextLevel: 20,
+    },
+  ],
+  forgeOpen: false,
+  recipes: [],
+  vendorOpen: false,
+  vendorOffers: [],
+  quest: {
+    id: "quest:hollowdeep-culling",
+    displayName: "Hollowdeep Culling",
+    summary: "Slay the Hollowdeep Bruiser and return to the Roadwarden.",
+    stage: "inactive",
+  },
+};
+
 type ItemSelection =
   | { readonly kind: "inventory"; readonly index: number }
   | { readonly kind: "equipment"; readonly slot: ItemEquipmentSlot };
@@ -154,6 +253,13 @@ interface ItemMenuProps {
   readonly onCommand: (command: ItemUiCommand) => void;
 }
 
+interface CharacterMenuProps {
+  readonly model: CharacterHudReadModel;
+  readonly onClose: () => void;
+  readonly onProgressionCommand: (command: ProgressionUiCommand) => void;
+  readonly onItemCommand: (command: ItemUiCommand) => void;
+}
+
 function selectedItem(
   model: InventoryHudReadModel,
   selection: ItemSelection | null,
@@ -206,9 +312,10 @@ function ItemTooltip({ item }: { readonly item: ItemHudReadModel | null }) {
       <h3>{item.displayName}</h3>
       <p>
         {item.kind === "equipment"
-          ? `${itemSlotLabel(item.slotKind)} · ${item.typeLabel}`
+          ? `${itemSlotLabel(item.slotKind)} · ${item.typeLabel} · Requires level ${item.requiredLevel}${item.origin === "crafted" ? " · Crafted" : ""}`
           : `${item.typeLabel} · Stack ${item.quantity}`}
       </p>
+      {item.kind === "material" && <p>{item.summary}</p>}
       {item.kind === "equipment" && (
         <ul aria-label="Item modifiers">
           {item.modifiers.map((modifier) => (
@@ -362,7 +469,7 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
     >
       <header>
         <div>
-          <p class="eyebrow">Phase 3 loadout</p>
+          <p class="eyebrow">Equipment</p>
           <h2 id="inventory-menu-title">Inventory &amp; equipment</h2>
         </div>
         <button type="button" onClick={onClose} aria-label="Close inventory">
@@ -417,7 +524,8 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
                     }}
                   >
                     <span>{slot.item?.displayName ?? "Empty"}</span>
-                    {slot.item?.kind === "ability-stone" &&
+                    {(slot.item?.kind === "ability-stone" ||
+                      slot.item?.kind === "material") &&
                       slot.item.quantity > 1 && (
                         <small>×{slot.item.quantity}</small>
                       )}
@@ -616,6 +724,211 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
   );
 }
 
+function CharacterMenu({
+  model,
+  onClose,
+  onProgressionCommand,
+  onItemCommand,
+}: CharacterMenuProps) {
+  const ownedAbilities = model.abilityChoices.filter(
+    (ability) => ability.owned,
+  );
+
+  return (
+    <section
+      id="character-menu"
+      class="item-menu character-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="character-title"
+      data-testid="character-menu"
+      tabIndex={-1}
+    >
+      <header>
+        <div>
+          <p class="eyebrow">Phase 4 progression</p>
+          <h2 id="character-title">Character</h2>
+        </div>
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </header>
+      <div class="character-menu-layout">
+        <section
+          class="character-summary"
+          aria-labelledby="character-level-title"
+        >
+          <h3 id="character-level-title">Training</h3>
+          <p>
+            Level {model.level} · {model.experienceCurrent} /{" "}
+            {model.experienceToNextLevel} XP
+          </p>
+          <dl class="character-derived-stats">
+            <div>
+              <dt>Health</dt>
+              <dd>{model.maximumHealth}</dd>
+            </div>
+            <div>
+              <dt>Mana</dt>
+              <dd>{model.maximumMana}</dd>
+            </div>
+            <div>
+              <dt>Ability damage</dt>
+              <dd>{model.outgoingAbilityDamagePercent}%</dd>
+            </div>
+            <div>
+              <dt>Move speed</dt>
+              <dd>{model.moveSpeedPercent}%</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            class="respec-button"
+            onClick={() => onProgressionCommand({ type: "progression.respec" })}
+          >
+            Restore Training
+          </button>
+          <h3 id="character-quest-title">Roadwarden</h3>
+          <p data-testid="character-quest">
+            {model.quest.displayName} · {model.quest.stage}
+          </p>
+          <p>{model.quest.summary}</p>
+          <h3 id="character-professions-title">Professions</h3>
+          <dl
+            class="character-derived-stats"
+            aria-labelledby="character-professions-title"
+          >
+            {model.professions.map((profession) => (
+              <div key={profession.id}>
+                <dt>
+                  {profession.label} {profession.level}
+                </dt>
+                <dd>
+                  {profession.experienceCurrent} /{" "}
+                  {profession.experienceToNextLevel} XP
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section aria-labelledby="character-attributes-title">
+          <h3 id="character-attributes-title">
+            Attributes · {model.unspentAttributePoints} unspent
+          </h3>
+          <ul class="character-attribute-list">
+            {model.attributes.map((attribute) => (
+              <li key={attribute.id}>
+                <div>
+                  <strong>{attribute.label}</strong>
+                  <span>{attribute.allocated}</span>
+                  <p>{attribute.summary}</p>
+                </div>
+                <div class="character-spend-buttons">
+                  <button
+                    type="button"
+                    aria-label={`Reduce ${attribute.label}`}
+                    disabled={attribute.allocated < 1}
+                    onClick={() =>
+                      onProgressionCommand({
+                        type: "progression.deallocate-attribute",
+                        attribute: attribute.id,
+                      })
+                    }
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Increase ${attribute.label}`}
+                    disabled={model.unspentAttributePoints < 1}
+                    onClick={() =>
+                      onProgressionCommand({
+                        type: "progression.allocate-attribute",
+                        attribute: attribute.id,
+                      })
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section aria-labelledby="character-passives-title">
+          <h3 id="character-passives-title">
+            Masteries · {model.unspentPassivePoints} unspent
+          </h3>
+          <ul class="character-passive-list">
+            {model.passives.map((passive) => (
+              <li key={passive.id}>
+                <div>
+                  <strong>{passive.displayName}</strong>
+                  <span>
+                    {passive.rank} / {passive.maximumRank}
+                  </span>
+                  <p>{passive.summary}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Train ${passive.displayName}`}
+                  disabled={
+                    model.unspentPassivePoints < 1 ||
+                    passive.rank >= passive.maximumRank
+                  }
+                  onClick={() =>
+                    onProgressionCommand({
+                      type: "progression.allocate-passive",
+                      passiveId: passive.id,
+                    })
+                  }
+                >
+                  Train
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section aria-labelledby="character-loadout-title">
+          <h3 id="character-loadout-title">Combat loadout</h3>
+          <ol class="character-loadout-list">
+            {model.loadout.map((slot) => (
+              <li key={slot.slot}>
+                <div>
+                  <kbd>{slot.keyLabel}</kbd>
+                  <strong>{slot.displayName}</strong>
+                  {slot.borrowedDefault && <span>Borrowed default</span>}
+                </div>
+                <div class="character-loadout-choices">
+                  {ownedAbilities.map((ability) => (
+                    <button
+                      type="button"
+                      key={`${slot.slot}:${ability.id}`}
+                      disabled={slot.abilityId === ability.id}
+                      onClick={() =>
+                        onItemCommand({
+                          type: "item.assign-ability",
+                          loadoutSlot: slot.slot,
+                          abilityId: ability.id,
+                        })
+                      }
+                    >
+                      {ability.displayName}
+                    </button>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
+    </section>
+  );
+}
+
 function CombatVitals({ model }: CombatVitalsProps) {
   const healthPercent =
     model.playerMaxHealth > 0
@@ -632,14 +945,12 @@ function CombatVitals({ model }: CombatVitalsProps) {
         )
       : 0;
   const experiencePercent =
-    model.placeholderExperienceMaximum > 0
+    model.experienceToNextLevel > 0
       ? Math.max(
           0,
           Math.min(
             100,
-            (model.placeholderExperienceCurrent /
-              model.placeholderExperienceMaximum) *
-              100,
+            (model.experienceCurrent / model.experienceToNextLevel) * 100,
           ),
         )
       : 0;
@@ -686,11 +997,11 @@ function CombatVitals({ model }: CombatVitalsProps) {
         <div
           class="combat-vitals-meter combat-experience-meter"
           role="progressbar"
-          aria-label="Reserved experience placeholder"
+          aria-label="Experience"
           aria-valuemin={0}
-          aria-valuemax={model.placeholderExperienceMaximum}
-          aria-valuenow={model.placeholderExperienceCurrent}
-          aria-valuetext={`${model.placeholderExperienceCurrent} of ${model.placeholderExperienceMaximum} reserved experience placeholder`}
+          aria-valuemax={model.experienceToNextLevel}
+          aria-valuenow={model.experienceCurrent}
+          aria-valuetext={`Level ${model.level}, ${model.experienceCurrent} of ${model.experienceToNextLevel} experience`}
         >
           <span style={{ width: `${experiencePercent}%` }} />
         </div>
@@ -802,6 +1113,220 @@ function CombatActionBar({
           ))}
         </div>
       )}
+      {model.gatheringLabel !== null && (
+        <div class="combat-gathering" data-testid="combat-gathering">
+          Gathering {model.gatheringLabel}
+        </div>
+      )}
+      <div class="combat-zone" data-testid="combat-zone">
+        {model.zoneName}
+        {model.questLabel !== null && ` · ${model.questLabel}`}
+      </div>
+    </section>
+  );
+}
+
+function CombatMinimap({ model }: { readonly model: MinimapHudReadModel }) {
+  const viewWidth = model.width + MINIMAP_VIEW_PAD * 2;
+  const viewHeight = model.height + MINIMAP_VIEW_PAD * 2;
+  return (
+    <section
+      class="combat-minimap"
+      data-testid="combat-minimap"
+      aria-label="Minimap"
+    >
+      <p class="combat-minimap-label">Map</p>
+      <svg
+        class="combat-minimap-canvas"
+        viewBox={`${-MINIMAP_VIEW_PAD} ${-MINIMAP_VIEW_PAD} ${viewWidth} ${viewHeight}`}
+        role="img"
+        aria-label="Zone map"
+      >
+        <rect
+          class="combat-minimap-void"
+          x={-MINIMAP_VIEW_PAD}
+          y={-MINIMAP_VIEW_PAD}
+          width={viewWidth}
+          height={viewHeight}
+        />
+        <rect
+          class="combat-minimap-floor"
+          x={model.walkable.x}
+          y={model.walkable.y}
+          width={model.walkable.width}
+          height={model.walkable.height}
+          fill={model.floorColor}
+        />
+        <rect
+          class="combat-minimap-bounds"
+          data-testid="combat-minimap-bounds"
+          x={model.walkable.x}
+          y={model.walkable.y}
+          width={model.walkable.width}
+          height={model.walkable.height}
+          fill="none"
+          stroke={model.edgeColor}
+        />
+        {model.markers.map((marker) => (
+          <circle
+            key={marker.id}
+            class={`combat-minimap-marker combat-minimap-marker-${MINIMAP_MARKER_CLASS[marker.kind]}${
+              marker.rank !== undefined
+                ? ` combat-minimap-marker-${marker.rank}`
+                : ""
+            }`}
+            data-kind={marker.kind}
+            data-rank={marker.rank}
+            cx={marker.x}
+            cy={marker.y}
+            r={
+              marker.kind === "player"
+                ? 18
+                : marker.rank === "boss"
+                  ? 20
+                  : marker.rank === "elite"
+                    ? 16
+                    : marker.kind === "enemy"
+                      ? 12
+                      : 10
+            }
+          />
+        ))}
+      </svg>
+    </section>
+  );
+}
+
+function VendorMenu({
+  model,
+  onClose,
+  onCommand,
+}: {
+  readonly model: CharacterHudReadModel;
+  readonly onClose: () => void;
+  readonly onCommand: (command: WorldUiCommand) => void;
+}) {
+  return (
+    <section
+      id="vendor-menu"
+      class="item-menu craft-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="vendor-title"
+      data-testid="vendor-menu"
+      tabIndex={-1}
+    >
+      <header>
+        <div>
+          <p class="eyebrow">Phase 6 town</p>
+          <h2 id="vendor-title">Wick Provisions</h2>
+        </div>
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </header>
+      <div class="character-menu-layout">
+        <section>
+          <ul class="character-passive-list">
+            {model.vendorOffers.map((offer) => (
+              <li key={offer.id}>
+                <div>
+                  <strong>{offer.displayName}</strong>
+                  <p>{offer.summary}</p>
+                  <p>
+                    {offer.materialName} {offer.owned}/{offer.required}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!offer.canBuy}
+                  onClick={() =>
+                    onCommand({
+                      type: "world.vendor-buy",
+                      offerId: offer.id,
+                    })
+                  }
+                >
+                  Trade
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function CraftMenu({
+  model,
+  onClose,
+  onCommand,
+}: {
+  readonly model: CharacterHudReadModel;
+  readonly onClose: () => void;
+  readonly onCommand: (command: ProfessionUiCommand) => void;
+}) {
+  return (
+    <section
+      id="craft-menu"
+      class="item-menu craft-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="craft-title"
+      data-testid="craft-menu"
+      tabIndex={-1}
+    >
+      <header>
+        <div>
+          <p class="eyebrow">Phase 5 professions</p>
+          <h2 id="craft-title">Tempering Forge</h2>
+        </div>
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </header>
+      <div class="character-menu-layout">
+        <section>
+          <h3>
+            Smithing{" "}
+            {model.professions.find((p) => p.id === "smithing")?.level ?? 1}
+          </h3>
+          <ul class="character-passive-list">
+            {model.recipes.map((recipe) => (
+              <li key={recipe.id}>
+                <div>
+                  <strong>{recipe.displayName}</strong>
+                  <p>{recipe.summary}</p>
+                  <p>
+                    {recipe.ingredients
+                      .map(
+                        (ingredient) =>
+                          `${ingredient.displayName} ${ingredient.owned}/${ingredient.required}`,
+                      )
+                      .join(" · ")}
+                  </p>
+                  {recipe.blockedReason !== null && (
+                    <p>{recipe.blockedReason}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={!recipe.canCraft}
+                  onClick={() =>
+                    onCommand({
+                      type: "profession.craft",
+                      recipeId: recipe.id,
+                    })
+                  }
+                >
+                  Forge
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </section>
   );
 }
@@ -819,7 +1344,10 @@ export function App({
   const [counter, setCounter] = useState(1);
   const [serialized, setSerialized] = useState("");
   const [itemHud, setItemHud] = useState<InventoryHudReadModel>(EMPTY_ITEM_HUD);
+  const [characterHud, setCharacterHud] =
+    useState<CharacterHudReadModel>(EMPTY_CHARACTER_HUD);
   const [itemMenuOpen, setItemMenuOpen] = useState(false);
+  const [characterMenuOpen, setCharacterMenuOpen] = useState(false);
   const [combatHud, setCombatHud] = useState<CombatHudReadModel>({
     paused: true,
     playerHealth: 100,
@@ -827,8 +1355,9 @@ export function App({
     playerDead: false,
     manaCurrent: 100,
     manaMaximum: 100,
-    placeholderExperienceCurrent: 0,
-    placeholderExperienceMaximum: 100,
+    level: 1,
+    experienceCurrent: 0,
+    experienceToNextLevel: experienceToNextLevel(1),
     abilities: [
       {
         id: "ability:basic-cleave",
@@ -872,6 +1401,11 @@ export function App({
       },
     ],
     activeStatuses: [],
+    gatheringLabel: null,
+    gatheringProgress: 0,
+    zoneName: "Hearthmere",
+    questLabel: null,
+    minimap: EMPTY_MINIMAP,
   });
 
   useLayoutEffect(
@@ -898,6 +1432,32 @@ export function App({
   }, [showCombatPrototype]);
   useEffect(() => {
     if (!showCombatPrototype) return;
+    const updateCharacter = (event: CustomEvent<CharacterHudReadModel>) => {
+      setCharacterHud(event.detail);
+    };
+    window.addEventListener(CHARACTER_HUD_EVENT, updateCharacter);
+    return () =>
+      window.removeEventListener(CHARACTER_HUD_EVENT, updateCharacter);
+  }, [showCombatPrototype]);
+  // The menu key handler is a window-level capture listener, so it reads
+  // menu state through a ref updated every render. Reading captured
+  // closure state instead would race: a keypress landing between a menu
+  // state change and the next effect re-registration would see stale
+  // values and, for example, leave the menu open on Escape.
+  const menuKeyStateRef = useRef({
+    itemMenuOpen,
+    characterMenuOpen,
+    forgeOpen: characterHud.forgeOpen,
+    vendorOpen: characterHud.vendorOpen,
+  });
+  menuKeyStateRef.current = {
+    itemMenuOpen,
+    characterMenuOpen,
+    forgeOpen: characterHud.forgeOpen,
+    vendorOpen: characterHud.vendorOpen,
+  };
+  useEffect(() => {
+    if (!showCombatPrototype) return;
     const isTextEntryTarget = (target: EventTarget | null): boolean =>
       target instanceof HTMLElement &&
       (target instanceof HTMLInputElement ||
@@ -905,46 +1465,107 @@ export function App({
         target instanceof HTMLSelectElement ||
         target.isContentEditable);
     const handleMenuKey = (event: KeyboardEvent) => {
+      const menus = menuKeyStateRef.current;
       if (event.code === "Escape") {
-        if (itemMenuOpen) {
+        if (menus.itemMenuOpen || menus.characterMenuOpen) {
           event.preventDefault();
-          closeItemMenu();
+          closeMenus();
+        } else if (menus.forgeOpen) {
+          event.preventDefault();
+          emitProfessionCommand({ type: "profession.close-forge" });
+        } else if (menus.vendorOpen) {
+          event.preventDefault();
+          emitWorldCommand({ type: "world.close-vendor" });
         }
         return;
       }
-      if (event.code !== "KeyI" || event.repeat || event.isComposing) return;
+      if (
+        (event.code !== "KeyI" && event.code !== "KeyC") ||
+        event.repeat ||
+        event.isComposing
+      ) {
+        return;
+      }
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
         return;
       }
       if (isTextEntryTarget(event.target)) return;
       event.preventDefault();
-      if (itemMenuOpen) {
-        closeItemMenu();
-      } else {
-        setItemMenuOpen(true);
+      if (event.code === "KeyI") {
+        if (menuKeyStateRef.current.itemMenuOpen) closeMenus();
+        else openInventoryMenu();
+        return;
       }
+      if (menuKeyStateRef.current.characterMenuOpen) closeMenus();
+      else openCharacterMenu();
     };
     // Capture phase: the canvas keyboard-capture adapter stops propagation of
     // canvas-focused keydowns before the bubble phase reaches window.
     window.addEventListener("keydown", handleMenuKey, true);
     return () => window.removeEventListener("keydown", handleMenuKey, true);
-  }, [itemMenuOpen, showCombatPrototype]);
+  }, [showCombatPrototype]);
   useLayoutEffect(() => {
     if (itemMenuOpen) {
       document.querySelector<HTMLElement>("#inventory-menu")?.focus();
+    } else if (characterMenuOpen) {
+      document.querySelector<HTMLElement>("#character-menu")?.focus();
+    } else if (characterHud.forgeOpen) {
+      document.querySelector<HTMLElement>("#craft-menu")?.focus();
+    } else if (characterHud.vendorOpen) {
+      document.querySelector<HTMLElement>("#vendor-menu")?.focus();
     }
-  }, [itemMenuOpen]);
+  }, [
+    characterHud.forgeOpen,
+    characterHud.vendorOpen,
+    characterMenuOpen,
+    itemMenuOpen,
+  ]);
 
-  function closeItemMenu(): void {
+  function closeMenus(): void {
     setItemMenuOpen(false);
+    setCharacterMenuOpen(false);
     document
       .querySelector<HTMLCanvasElement>("#game-canvas")
       ?.focus({ preventScroll: true });
   }
 
+  function openInventoryMenu(): void {
+    setCharacterMenuOpen(false);
+    setItemMenuOpen(true);
+  }
+
+  function openCharacterMenu(): void {
+    setItemMenuOpen(false);
+    setCharacterMenuOpen(true);
+  }
+
   function emitItemCommand(command: ItemUiCommand): void {
     window.dispatchEvent(
       new CustomEvent<ItemUiCommand>(ITEM_COMMAND_EVENT, { detail: command }),
+    );
+  }
+
+  function emitProgressionCommand(command: ProgressionUiCommand): void {
+    window.dispatchEvent(
+      new CustomEvent<ProgressionUiCommand>(PROGRESSION_COMMAND_EVENT, {
+        detail: command,
+      }),
+    );
+  }
+
+  function emitProfessionCommand(command: ProfessionUiCommand): void {
+    window.dispatchEvent(
+      new CustomEvent<ProfessionUiCommand>(PROFESSION_COMMAND_EVENT, {
+        detail: command,
+      }),
+    );
+  }
+
+  function emitWorldCommand(command: WorldUiCommand): void {
+    window.dispatchEvent(
+      new CustomEvent<WorldUiCommand>(WORLD_COMMAND_EVENT, {
+        detail: command,
+      }),
     );
   }
 
@@ -970,12 +1591,12 @@ export function App({
         <div>
           <p class="eyebrow">
             {showCombatPrototype
-              ? "RARPG Phase 3 item prototype"
+              ? "RARPG Phase 6 vertical slice"
               : "RARPG technical foundation"}
           </p>
           <h1>
             {showCombatPrototype
-              ? "Item and loadout combat arena"
+              ? "Hearthmere world session"
               : "UI and renderer diagnostics"}
           </h1>
         </div>
@@ -1096,32 +1717,69 @@ export function App({
       {showCombatPrototype && (
         <CombatActionBar model={combatHud} flasks={itemHud.flaskSlots} />
       )}
+      {showCombatPrototype && <CombatMinimap model={combatHud.minimap} />}
       {showCombatPrototype && (
         <div class="combat-vitals-stack" data-testid="combat-vitals-stack">
-          <button
-            type="button"
-            class="inventory-menu-toggle"
-            aria-expanded={itemMenuOpen}
-            aria-controls="inventory-menu"
-            aria-keyshortcuts="I"
-            onClick={() => {
-              if (itemMenuOpen) {
-                closeItemMenu();
-              } else {
-                setItemMenuOpen(true);
-              }
-            }}
-          >
-            Inventory <kbd>I</kbd>
-          </button>
+          <div class="combat-menu-toggles">
+            <button
+              type="button"
+              class="inventory-menu-toggle"
+              aria-expanded={itemMenuOpen}
+              aria-controls="inventory-menu"
+              aria-keyshortcuts="I"
+              onClick={() => {
+                if (itemMenuOpen) closeMenus();
+                else openInventoryMenu();
+              }}
+            >
+              Inventory <kbd>I</kbd>
+            </button>
+            <button
+              type="button"
+              class="character-menu-toggle"
+              aria-expanded={characterMenuOpen}
+              aria-controls="character-menu"
+              aria-keyshortcuts="C"
+              onClick={() => {
+                if (characterMenuOpen) closeMenus();
+                else openCharacterMenu();
+              }}
+            >
+              Character <kbd>C</kbd>
+            </button>
+          </div>
           <CombatVitals model={combatHud} />
         </div>
       )}
       {showCombatPrototype && itemMenuOpen && (
         <ItemMenu
           model={itemHud}
-          onClose={closeItemMenu}
+          onClose={closeMenus}
           onCommand={emitItemCommand}
+        />
+      )}
+      {showCombatPrototype && characterMenuOpen && (
+        <CharacterMenu
+          model={characterHud}
+          onClose={closeMenus}
+          onProgressionCommand={emitProgressionCommand}
+          onItemCommand={emitItemCommand}
+        />
+      )}
+      {showCombatPrototype && characterHud.forgeOpen && (
+        <CraftMenu
+          model={characterHud}
+          onClose={() =>
+            emitProfessionCommand({ type: "profession.close-forge" })
+          }
+          onCommand={emitProfessionCommand}
+        />
+      )}
+      {showCombatPrototype && characterHud.vendorOpen && (
+        <VendorMenu
+          model={characterHud}
+          onClose={() => emitWorldCommand({ type: "world.close-vendor" })}
+          onCommand={emitWorldCommand}
         />
       )}
 
@@ -1135,7 +1793,7 @@ export function App({
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
           {showCombatPrototype
-            ? "Click the arena to play. Use left-click, Q, E, and R for assigned abilities. Press F near a drop to pick up loot. Press I anywhere outside text fields to toggle Inventory; Escape also closes it. Input pauses when interface controls have focus."
+            ? "Click the arena to play. Use left-click, Q, E, and R for assigned abilities. Press F to pick up loot, gather, open the forge or vendor, talk to the Roadwarden, or take a gate. Gates connect Hearthmere, Ashtrail Expanse, and Hollowdeep. Press I to toggle Inventory and C to toggle Character; Escape closes the open menu."
             : "Focus the canvas before using keyboard input. Tab away to keep keyboard input in the interface."}
         </p>
         <button

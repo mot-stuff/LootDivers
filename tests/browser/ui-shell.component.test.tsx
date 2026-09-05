@@ -4,18 +4,30 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { installKeyboardCapture } from "../../src/adapters/browser/keyboard-capture";
 import { createReadModelChannel } from "../../src/adapters/ui/read-model-channel";
-import { INVENTORY_SLOT_COUNT } from "../../src/core";
+import {
+  ATTRIBUTE_IDS,
+  ATTRIBUTE_LABELS,
+  ATTRIBUTE_SUMMARIES,
+  INVENTORY_SLOT_COUNT,
+  PASSIVE_CATALOG,
+} from "../../src/core";
 import { App } from "../../src/presentation/App";
 import type {
+  CharacterHudReadModel,
   CombatHudReadModel,
   InventoryHudReadModel,
   ItemUiCommand,
+  ProfessionUiCommand,
+  ProgressionUiCommand,
   ShellBindings,
   ShellReadModel,
 } from "../../src/presentation/shell-contracts";
 import {
+  CHARACTER_HUD_EVENT,
   ITEM_COMMAND_EVENT,
   ITEM_HUD_EVENT,
+  PROFESSION_COMMAND_EVENT,
+  PROGRESSION_COMMAND_EVENT,
 } from "../../src/presentation/shell-contracts";
 
 const readyModel: ShellReadModel = {
@@ -40,8 +52,9 @@ const combatHudModel: CombatHudReadModel = {
   playerDead: false,
   manaCurrent: 100,
   manaMaximum: 100,
-  placeholderExperienceCurrent: 0,
-  placeholderExperienceMaximum: 100,
+  level: 1,
+  experienceCurrent: 0,
+  experienceToNextLevel: 40,
   abilities: [
     {
       id: "ability:basic-cleave",
@@ -85,6 +98,35 @@ const combatHudModel: CombatHudReadModel = {
     },
   ],
   activeStatuses: [],
+  gatheringLabel: null,
+  gatheringProgress: 0,
+  zoneName: "Ashtrail Expanse",
+  questLabel: null,
+  minimap: {
+    width: 1_200,
+    height: 800,
+    floorColor: "#10263a",
+    edgeColor: "#64d8cb",
+    walkable: { x: 18, y: 18, width: 1_164, height: 764 },
+    markers: [
+      { id: "player", kind: "player", x: 600, y: 400 },
+      {
+        id: "enemy:ashtrail-gnasher-1",
+        kind: "enemy",
+        x: 820,
+        y: 390,
+        rank: "normal",
+      },
+      {
+        id: "enemy:ashtrail-brute",
+        kind: "enemy",
+        x: 920,
+        y: 520,
+        rank: "elite",
+      },
+      { id: "portal:ashtrail-to-hearthmere", kind: "portal", x: 80, y: 400 },
+    ],
+  },
 };
 
 const itemHudModel: InventoryHudReadModel = {
@@ -100,6 +142,8 @@ const itemHudModel: InventoryHudReadModel = {
             rarity: "rare" as const,
             slotKind: "main-hand" as const,
             typeLabel: "Melee weapon",
+            requiredLevel: 2,
+            origin: "loot" as const,
             modifiers: [
               {
                 id: "base:damage",
@@ -132,6 +176,8 @@ const itemHudModel: InventoryHudReadModel = {
                 rarity: "magic" as const,
                 slotKind: "ring" as const,
                 typeLabel: "Ring",
+                requiredLevel: 1,
+                origin: "loot" as const,
                 modifiers: [
                   {
                     id: "affix:hearty",
@@ -155,6 +201,8 @@ const itemHudModel: InventoryHudReadModel = {
         rarity: "magic",
         slotKind: "chest",
         typeLabel: "Body armor",
+        requiredLevel: 1,
+        origin: "loot",
         modifiers: [
           {
             id: "base:health",
@@ -249,6 +297,60 @@ const itemHudModel: InventoryHudReadModel = {
   outgoingAbilityDamagePercent: 112,
 };
 
+const characterHudModel: CharacterHudReadModel = {
+  revision: 1,
+  level: 2,
+  experienceCurrent: 20,
+  experienceToNextLevel: 60,
+  unspentAttributePoints: 3,
+  unspentPassivePoints: 1,
+  attributes: ATTRIBUTE_IDS.map((id, index) => ({
+    id,
+    label: ATTRIBUTE_LABELS[id],
+    summary: ATTRIBUTE_SUMMARIES[id],
+    allocated: index === 2 ? 1 : 0,
+  })),
+  passives: PASSIVE_CATALOG.map((passive) => ({
+    id: passive.id,
+    displayName: passive.displayName,
+    summary: passive.summary,
+    rank: 0,
+    maximumRank: passive.maximumRank,
+  })),
+  maximumHealth: 130,
+  maximumMana: 104,
+  outgoingAbilityDamagePercent: 112,
+  moveSpeedPercent: 100,
+  abilityChoices: itemHudModel.abilityChoices,
+  loadout: itemHudModel.loadout,
+  professions: [
+    {
+      id: "mining",
+      label: "Mining",
+      level: 1,
+      experienceCurrent: 0,
+      experienceToNextLevel: 20,
+    },
+    {
+      id: "smithing",
+      label: "Smithing",
+      level: 1,
+      experienceCurrent: 0,
+      experienceToNextLevel: 20,
+    },
+  ],
+  forgeOpen: false,
+  recipes: [],
+  vendorOpen: false,
+  vendorOffers: [],
+  quest: {
+    id: "quest:hollowdeep-culling",
+    displayName: "Hollowdeep Culling",
+    summary: "Slay the Hollowdeep Bruiser and return to the Roadwarden.",
+    stage: "inactive",
+  },
+};
+
 function mount(model: ShellReadModel, emit = vi.fn()) {
   const channel = createReadModelChannel(model);
   const bindings: ShellBindings = {
@@ -279,6 +381,18 @@ async function publishItemHud(model: InventoryHudReadModel): Promise<void> {
   await act(() => {
     window.dispatchEvent(
       new CustomEvent<InventoryHudReadModel>(ITEM_HUD_EVENT, {
+        detail: model,
+      }),
+    );
+  });
+}
+
+async function publishCharacterHud(
+  model: CharacterHudReadModel,
+): Promise<void> {
+  await act(() => {
+    window.dispatchEvent(
+      new CustomEvent<CharacterHudReadModel>(CHARACTER_HUD_EVENT, {
         detail: model,
       }),
     );
@@ -513,7 +627,7 @@ describe("technical UI shell component", () => {
       '[role="progressbar"][aria-label="Player mana"]',
     );
     const experienceMeter = container.querySelector(
-      '[role="progressbar"][aria-label="Reserved experience placeholder"]',
+      '[role="progressbar"][aria-label="Experience"]',
     );
     expect(
       container.querySelectorAll('[data-testid="combat-vitals-hud"]'),
@@ -532,8 +646,9 @@ describe("technical UI shell component", () => {
     expect(manaMeter?.getAttribute("aria-valuenow")).toBe("85");
     expect(manaMeter?.getAttribute("aria-valuetext")).toBe("85 of 100 mana");
     expect(experienceMeter?.getAttribute("aria-valuenow")).toBe("0");
+    expect(experienceMeter?.getAttribute("aria-valuemax")).toBe("40");
     expect(experienceMeter?.getAttribute("aria-valuetext")).toBe(
-      "0 of 100 reserved experience placeholder",
+      "Level 1, 0 of 40 experience",
     );
     expect(container.textContent).not.toMatch(/STAMINA|\bST\b/i);
     expect(container.querySelector('[aria-label*="Enemy"]')).toBeNull();
@@ -546,6 +661,17 @@ describe("technical UI shell component", () => {
     );
     expect(actionHud?.querySelectorAll(".combat-ability")).toHaveLength(4);
     expect(flaskHud?.querySelectorAll(".combat-flask-slot")).toHaveLength(4);
+    const minimap = container.querySelector('[data-testid="combat-minimap"]');
+    expect(minimap).not.toBeNull();
+    const bounds = minimap?.querySelector(
+      '[data-testid="combat-minimap-bounds"]',
+    );
+    const floor = minimap?.querySelector(".combat-minimap-floor");
+    expect(bounds).not.toBeNull();
+    expect(floor?.getAttribute("fill")).toBe("#10263a");
+    expect(bounds?.getAttribute("stroke")).toBe("#64d8cb");
+    expect(minimap?.querySelectorAll("[data-kind='enemy']")).toHaveLength(2);
+    expect(minimap?.querySelector("[data-rank='elite']")).not.toBeNull();
     expect(
       Array.from(
         flaskHud?.querySelectorAll(".combat-flask-slot kbd") ?? [],
@@ -809,8 +935,9 @@ describe("technical UI shell component", () => {
         "ring-1",
         "ring-2",
       ]);
-      expect(container.textContent).not.toContain("Character");
-      expect(container.textContent).not.toContain("Combat loadout");
+      expect(
+        container.querySelector('[data-testid="inventory-menu"]')?.textContent,
+      ).not.toContain("Combat loadout");
       expect(container.textContent).not.toContain("Maximum health");
       expect(container.textContent).not.toContain("Outgoing damage");
       expect(
@@ -828,7 +955,9 @@ describe("technical UI shell component", () => {
         "Tempered Worn Cleaver of Steadfast Grip",
       );
       expect(tooltip?.textContent).toContain("rare");
-      expect(tooltip?.textContent).toContain("Main hand · Melee weapon");
+      expect(tooltip?.textContent).toContain(
+        "Main hand · Melee weapon · Requires level 2",
+      );
       expect(tooltip?.textContent).toContain(
         "Base +5% outgoing ability damage",
       );
@@ -1105,6 +1234,222 @@ describe("technical UI shell component", () => {
       ]);
     } finally {
       window.removeEventListener(ITEM_COMMAND_EVENT, captureCommand);
+    }
+  });
+
+  it("opens Character with C, spends points, and assigns the combat loadout", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    const itemCommands = vi.fn<(command: ItemUiCommand) => void>();
+    const progressionCommands =
+      vi.fn<(command: ProgressionUiCommand) => void>();
+    const captureItem = (event: CustomEvent<ItemUiCommand>) => {
+      itemCommands(event.detail);
+    };
+    const captureProgression = (event: CustomEvent<ProgressionUiCommand>) => {
+      progressionCommands(event.detail);
+    };
+    window.addEventListener(ITEM_COMMAND_EVENT, captureItem);
+    window.addEventListener(PROGRESSION_COMMAND_EVENT, captureProgression);
+    document.body.append(container);
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+          />,
+          container,
+        );
+      });
+      await publishCharacterHud(characterHudModel);
+
+      const inventoryButton = container.querySelector(".inventory-menu-toggle");
+      const characterButton = container.querySelector(".character-menu-toggle");
+      expect(characterButton?.getAttribute("aria-keyshortcuts")).toBe("C");
+      expect(characterButton?.textContent).toContain("Character");
+      expect(inventoryButton).not.toBeNull();
+      expect(characterButton).not.toBeNull();
+      expect(
+        characterButton!.compareDocumentPosition(inventoryButton!) &
+          Node.DOCUMENT_POSITION_PRECEDING,
+      ).toBeTruthy();
+
+      await act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, code: "KeyC" }),
+        );
+      });
+      const dialog = container.querySelector('[data-testid="character-menu"]');
+      expect(dialog).not.toBeNull();
+      expect(dialog?.textContent).toContain("Level 2");
+      expect(dialog?.textContent).toContain("Attributes · 3 unspent");
+      expect(dialog?.textContent).toContain("Masteries · 1 unspent");
+      expect(dialog?.textContent).toContain("Combat loadout");
+      expect(dialog?.textContent).toContain("Restore Training");
+      expect(dialog?.textContent).toContain("Mining 1");
+      expect(dialog?.textContent).toContain("Smithing 1");
+      expect(dialog?.textContent).toContain("Hollowdeep Culling");
+
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="Increase Strength"]')
+          ?.click();
+      });
+      expect(progressionCommands).toHaveBeenCalledWith({
+        type: "progression.allocate-attribute",
+        attribute: "strength",
+      });
+
+      await act(() => {
+        Array.from(dialog?.querySelectorAll("button") ?? [])
+          .find((button) => button.textContent === "Train")
+          ?.click();
+      });
+      expect(progressionCommands).toHaveBeenCalledWith({
+        type: "progression.allocate-passive",
+        passiveId: PASSIVE_CATALOG[0]!.id,
+      });
+
+      await act(() => {
+        Array.from(dialog?.querySelectorAll("button") ?? [])
+          .find((button) => button.textContent === "Defiant Signal")
+          ?.click();
+      });
+      expect(itemCommands).toHaveBeenCalledWith({
+        type: "item.assign-ability",
+        loadoutSlot: "lmb",
+        abilityId: "ability:defiant-signal",
+      });
+
+      await act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+        );
+      });
+      expect(
+        container.querySelector('[data-testid="character-menu"]'),
+      ).toBeNull();
+      expect(
+        container.querySelector('[data-testid="inventory-menu"]'),
+      ).not.toBeNull();
+    } finally {
+      window.removeEventListener(ITEM_COMMAND_EVENT, captureItem);
+      window.removeEventListener(PROGRESSION_COMMAND_EVENT, captureProgression);
+    }
+  });
+
+  it("shows gathering feedback, material tooltips, and a forge craft menu", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    const professionCommands = vi.fn<(command: ProfessionUiCommand) => void>();
+    const captureProfession = (event: CustomEvent<ProfessionUiCommand>) => {
+      professionCommands(event.detail);
+    };
+    window.addEventListener(PROFESSION_COMMAND_EVENT, captureProfession);
+    document.body.append(container);
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+          />,
+          container,
+        );
+      });
+      await publishCombatHud({
+        ...combatHudModel,
+        gatheringLabel: "Veinshard Outcrop",
+        gatheringProgress: 0.5,
+      });
+      expect(
+        container.querySelector('[data-testid="combat-gathering"]')
+          ?.textContent,
+      ).toContain("Veinshard Outcrop");
+
+      await publishItemHud({
+        ...itemHudModel,
+        inventorySlots: itemHudModel.inventorySlots.map((slot) =>
+          slot.index === 3
+            ? {
+                index: 3,
+                item: {
+                  kind: "material",
+                  instanceId: "item-instance:veinshard",
+                  displayName: "Veinshard Ore",
+                  rarity: "common",
+                  typeLabel: "Material",
+                  quantity: 3,
+                  summary: "Common ore used for Tempering crafts",
+                },
+              }
+            : slot,
+        ),
+      });
+      await act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+        );
+      });
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Inventory slot 4, Veinshard Ore"]',
+          )
+          ?.click();
+      });
+      const tooltip = container.querySelector('[data-testid="item-tooltip"]');
+      expect(tooltip?.textContent).toContain("Veinshard Ore");
+      expect(tooltip?.textContent).toContain(
+        "Common ore used for Tempering crafts",
+      );
+      expect(tooltip?.textContent).toContain("Stack 3");
+
+      await act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, code: "Escape" }),
+        );
+      });
+      await publishCharacterHud({
+        ...characterHudModel,
+        forgeOpen: true,
+        recipes: [
+          {
+            id: "recipe:tempering-cleaver",
+            displayName: "Tempering Cleaver",
+            summary: "A forged main-hand with a stronger damage implicit",
+            requiredSmithingLevel: 1,
+            ingredients: [
+              {
+                materialId: "material:veinshard-ore",
+                displayName: "Veinshard Ore",
+                required: 3,
+                owned: 3,
+              },
+            ],
+            canCraft: true,
+            blockedReason: null,
+          },
+        ],
+      });
+      const craftMenu = container.querySelector('[data-testid="craft-menu"]');
+      expect(craftMenu).not.toBeNull();
+      expect(craftMenu?.textContent).toContain("Tempering Forge");
+      expect(craftMenu?.textContent).toContain("Tempering Cleaver");
+      await act(() => {
+        Array.from(craftMenu?.querySelectorAll("button") ?? [])
+          .find((button) => button.textContent === "Forge")
+          ?.click();
+      });
+      expect(professionCommands).toHaveBeenCalledWith({
+        type: "profession.craft",
+        recipeId: "recipe:tempering-cleaver",
+      });
+    } finally {
+      window.removeEventListener(PROFESSION_COMMAND_EVENT, captureProfession);
     }
   });
 });

@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   ABILITY_STONE_LABEL_COLOR,
   LOOT_LABEL_RARITY_COLORS,
+  MATERIAL_LABEL_COLOR,
   worldLootLabel,
 } from "../../src/adapters/phaser/loot-label";
 import {
   EQUIPMENT_BASE_CATALOG,
   FLASK_BASE_CATALOG,
   createAbilityStoneStack,
+  createMaterialStack,
+  VEINSHARD_ORE_ID,
   persistentInstanceId,
   type EquipmentItemInstance,
   type ItemRarity,
@@ -27,6 +30,8 @@ function equipment(rarity: ItemRarity): EquipmentItemInstance {
     instanceId: persistentInstanceId(`test:loot-label-${rarity}`),
     baseId: EQUIPMENT_BASE_CATALOG[0]!.id,
     rarity,
+    requiredLevel: 1,
+    origin: "loot",
     affixes: [],
   };
 }
@@ -42,6 +47,8 @@ describe("worldLootLabel", () => {
         instanceId: persistentInstanceId(`test:loot-label-base-${index}`),
         baseId: base.id,
         rarity: "rare",
+        requiredLevel: 2,
+        origin: "loot",
         affixes: [],
       });
       expect(label.text).toBe(base.displayName);
@@ -71,5 +78,19 @@ describe("worldLootLabel", () => {
       color: ABILITY_STONE_LABEL_COLOR,
     });
     expect(ABILITY_STONE_LABEL_COLOR).toBe("#c084fc");
+  });
+
+  it("labels materials by ore name", () => {
+    expect(
+      worldLootLabel(
+        createMaterialStack(
+          persistentInstanceId("test:loot-label-ore"),
+          VEINSHARD_ORE_ID,
+        ),
+      ),
+    ).toEqual({
+      text: "Veinshard Ore",
+      color: MATERIAL_LABEL_COLOR,
+    });
   });
 });

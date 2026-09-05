@@ -91,10 +91,12 @@ test("enemy loot can be picked, equipped, and used to create an ability", async 
   const expectedLabels = dropped.worldLoot.map(({ item }) =>
     item.kind === "ability-stone"
       ? { labelText: "Ability Stone", labelColor: ABILITY_STONE_LABEL_COLOR }
-      : {
-          labelText: equipmentBaseById(item.baseId)?.displayName ?? "",
-          labelColor: RARITY_LABEL_COLORS[item.rarity],
-        },
+      : item.kind === "material"
+        ? { labelText: "Ore", labelColor: "#d97706" }
+        : {
+            labelText: equipmentBaseById(item.baseId)?.displayName ?? "",
+            labelColor: RARITY_LABEL_COLORS[item.rarity],
+          },
   );
   expect(
     dropped.renderedLoot.map(({ labelText, labelColor }) => ({
@@ -302,5 +304,67 @@ test("inventory keeps default Basic Cleave and reserved flask slots", async ({
       abilityId: "ability:basic-cleave",
       accepted: true,
     });
+  expect(failures).toEqual([]);
+});
+
+test("C opens the character screen so attributes and loadout can be changed", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__RARPG_COMBAT_TEST__?.diagnostics() ?? null),
+    )
+    .not.toBeNull();
+
+  await page.keyboard.press("c");
+  const menu = page.getByTestId("character-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByText(/Level 1/)).toBeVisible();
+  await expect(menu.getByText("Combat loadout")).toBeVisible();
+  await expect(
+    menu.getByRole("button", { name: "Increase Strength" }),
+  ).toBeEnabled();
+
+  await menu.getByRole("button", { name: "Increase Strength" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.__RARPG_COMBAT_TEST__
+            ?.characterHud()
+            ?.attributes.find((attribute) => attribute.id === "strength")
+            ?.allocated ?? 0,
+      ),
+    )
+    .toBe(1);
+
+  await menu.getByRole("button", { name: "Train Iron Tempo" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.__RARPG_COMBAT_TEST__
+            ?.characterHud()
+            ?.passives.find((passive) => passive.displayName === "Iron Tempo")
+            ?.rank ?? 0,
+      ),
+    )
+    .toBe(1);
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.__RARPG_COMBAT_TEST__?.characterHud()
+            ?.outgoingAbilityDamagePercent ?? 0,
+      ),
+    )
+    .toBeGreaterThan(100);
+
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
   expect(failures).toEqual([]);
 });

@@ -3,8 +3,12 @@ import Phaser from "phaser";
 import type { DamageResult, LoadoutSlot } from "../../core";
 import type {
   CanvasViewportReadModel,
+  CharacterHudReadModel,
   InventoryHudReadModel,
   ItemUiCommand,
+  ProfessionUiCommand,
+  ProgressionUiCommand,
+  WorldUiCommand,
 } from "../../presentation/shell-contracts";
 import { applyCanvasViewport } from "../browser/canvas-viewport";
 import { assertWebGL2Context } from "../browser/webgl2";
@@ -26,6 +30,10 @@ import {
 
 const LOGICAL_WORLD_WIDTH = 960;
 const LOGICAL_WORLD_HEIGHT = 540;
+// Combat camera magnification on top of the fit-to-viewport zoom, so the
+// player sprite reads larger. The camera recenters on the player every
+// frame, so this only trades visible world area for character presence.
+const COMBAT_CAMERA_ZOOM = 1.3;
 let lastFixtureFailureDiagnostics: SyntheticPresentationDiagnostics | null =
   null;
 
@@ -114,7 +122,9 @@ class TechnicalWorldScene extends Phaser.Scene {
       : LOGICAL_WORLD_HEIGHT;
     const widthScale = this.scale.gameSize.width / logicalWidth;
     const heightScale = this.scale.gameSize.height / logicalHeight;
-    const zoom = Math.min(widthScale, heightScale);
+    const zoom =
+      Math.min(widthScale, heightScale) *
+      (this.#combatPrototype && !this.#fullFixture ? COMBAT_CAMERA_ZOOM : 1);
     this.cameras.main.setZoom(zoom);
     if (!this.#fullFixture) {
       this.cameras.main.setScroll(
@@ -201,6 +211,14 @@ class TechnicalWorldScene extends Phaser.Scene {
     this.#combat?.requestDodge();
   }
 
+  public requestCombatInteract(): void {
+    this.#combat?.requestInteract();
+  }
+
+  public travelCombat(zoneId: string): void {
+    this.#combat?.travelTo(zoneId);
+  }
+
   public requestCombatPrimaryAttack(): void {
     this.#combat?.requestPrimaryAttack();
   }
@@ -237,8 +255,24 @@ class TechnicalWorldScene extends Phaser.Scene {
     return this.#combat?.itemHud() ?? null;
   }
 
+  public combatCharacterHud(): CharacterHudReadModel | null {
+    return this.#combat?.characterHud() ?? null;
+  }
+
   public executeCombatItemCommand(command: ItemUiCommand): void {
     this.#combat?.executeItemCommand(command);
+  }
+
+  public executeCombatProgressionCommand(command: ProgressionUiCommand): void {
+    this.#combat?.executeProgressionCommand(command);
+  }
+
+  public executeCombatProfessionCommand(command: ProfessionUiCommand): void {
+    this.#combat?.executeProfessionCommand(command);
+  }
+
+  public executeCombatWorldCommand(command: WorldUiCommand): void {
+    this.#combat?.executeWorldCommand(command);
   }
 
   public applyCombatPlayerDamage(amount: number): DamageResult {
@@ -280,6 +314,8 @@ export interface PhaserBootResult {
     setAimDirection(x: number, y: number): void;
     setAutomationPaused(paused: boolean): void;
     requestDodge(): void;
+    requestInteract(): void;
+    travelTo(zoneId: string): void;
     requestPrimaryAttack(): void;
     setMovement(x: number, y: number): void;
     requestAbilitySlot(slot: LoadoutSlot, x?: number, y?: number): void;
@@ -288,7 +324,11 @@ export interface PhaserBootResult {
     requestDefiantSignal(): void;
     advancePaused(steps: number): void;
     itemHud(): InventoryHudReadModel | null;
+    characterHud(): CharacterHudReadModel | null;
     executeItemCommand(command: ItemUiCommand): void;
+    executeProgressionCommand(command: ProgressionUiCommand): void;
+    executeProfessionCommand(command: ProfessionUiCommand): void;
+    executeWorldCommand(command: WorldUiCommand): void;
     applyPlayerDamage(amount: number): DamageResult;
   };
   resize(viewport: CanvasViewportReadModel): void;
@@ -353,6 +393,12 @@ export function bootPhaser(
                 requestDodge: () => {
                   scene.requestCombatDodge();
                 },
+                requestInteract: () => {
+                  scene.requestCombatInteract();
+                },
+                travelTo: (zoneId) => {
+                  scene.travelCombat(zoneId);
+                },
                 requestPrimaryAttack: () => {
                   scene.requestCombatPrimaryAttack();
                 },
@@ -375,8 +421,18 @@ export function bootPhaser(
                   scene.advanceCombatPaused(steps);
                 },
                 itemHud: () => scene.combatItemHud(),
+                characterHud: () => scene.combatCharacterHud(),
                 executeItemCommand: (command) => {
                   scene.executeCombatItemCommand(command);
+                },
+                executeProgressionCommand: (command) => {
+                  scene.executeCombatProgressionCommand(command);
+                },
+                executeProfessionCommand: (command) => {
+                  scene.executeCombatProfessionCommand(command);
+                },
+                executeWorldCommand: (command) => {
+                  scene.executeCombatWorldCommand(command);
                 },
                 applyPlayerDamage: (amount) =>
                   scene.applyCombatPlayerDamage(amount),

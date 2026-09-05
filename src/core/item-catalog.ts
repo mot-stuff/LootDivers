@@ -325,6 +325,50 @@ export const ITEM_BASE_CATALOG: readonly EquipmentBaseDefinition[] = [
   ...FLASK_BASE_CATALOG,
 ];
 
+/** Forged-only bases. They are not added to the enemy drop catalog. */
+export const CRAFTED_BASE_CATALOG: readonly EquipmentBaseDefinition[] = [
+  {
+    id: contentId("item:tempering-cleaver"),
+    displayName: "Tempering Cleaver",
+    slot: "main-hand",
+    tags: [tag("equipment"), tag("weapon"), tag("melee")],
+    baseModifiers: [
+      {
+        statId: OUTGOING_DAMAGE_STAT_ID,
+        operation: "additive-basis-points",
+        value: 1200,
+      },
+    ],
+  },
+  {
+    id: contentId("item:tempering-vest"),
+    displayName: "Tempering Vest",
+    slot: "chest",
+    tags: [tag("equipment"), tag("armor")],
+    baseModifiers: [
+      { statId: MAXIMUM_HEALTH_STAT_ID, operation: "flat", value: 22 },
+    ],
+  },
+  {
+    id: contentId("item:deepvein-cleaver"),
+    displayName: "Deepvein Cleaver",
+    slot: "main-hand",
+    tags: [tag("equipment"), tag("weapon"), tag("melee")],
+    baseModifiers: [
+      {
+        statId: OUTGOING_DAMAGE_STAT_ID,
+        operation: "additive-basis-points",
+        value: 1800,
+      },
+    ],
+  },
+] as const;
+
+export const ALL_EQUIPMENT_BASES: readonly EquipmentBaseDefinition[] = [
+  ...ITEM_BASE_CATALOG,
+  ...CRAFTED_BASE_CATALOG,
+];
+
 export const AFFIX_CATALOG: readonly AffixDefinition[] = [
   {
     id: contentId("affix:tempered"),
@@ -576,7 +620,7 @@ export const IMPLEMENTED_ABILITY_CATALOG: readonly CombatAbilityId[] = [
 export function equipmentBaseById(
   id: ContentId,
 ): EquipmentBaseDefinition | undefined {
-  return ITEM_BASE_CATALOG.find((definition) => definition.id === id);
+  return ALL_EQUIPMENT_BASES.find((definition) => definition.id === id);
 }
 
 export function affixById(id: ContentId): AffixDefinition | undefined {

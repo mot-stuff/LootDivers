@@ -137,6 +137,13 @@ The current candidate attributes are Strength, Dexterity, Vitality, and
 Intelligence. Passive points may be awarded on level-up and improve acquired
 abilities; exact unlock and upgrade rules require Phase 4 design.
 
+**Status:** Complete. Independent Phase 4 QA passed on 2026-09-05. The
+accepted loop includes enemy-kill XP, uncapped levels, Strength / Dexterity /
+Vitality / Intelligence, eight three-rank masteries, free Restore Training,
+rarity-based item level requirements, a C-key character screen with the
+on-screen button to the right of Inventory, and combat loadout assignment on
+that screen. Progression is not persisted (DEC-014).
+
 ---
 
 ## Phase 5 — Profession Prototype
@@ -166,6 +173,13 @@ A compact top-right minimap is a candidate for this phase.
 
 Sound, VFX, combat feedback, UI polish, balance, performance, bug fixing, and
 onboarding.
+Import our character spritesheet, we will want to stop at this point and prompt us to do that, i have spritesheets for the first character.
+
+**Status:** Character import done ahead of schedule. The owner-provided
+barbarian spritesheets now render the player (idle, run, attack, dodge roll,
+death across eight facings; the character faces the movement direction and
+attacks orient to the cursor) per DEC-028 (2026-09-05). Enemy and world art,
+sound, VFX, and the rest of Phase 7 remain open.
 
 ---
 

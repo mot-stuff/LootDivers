@@ -34,8 +34,12 @@ import {
 import { App, type PersistenceFixtureActions } from "./presentation/App";
 import type {
   CanvasViewportReadModel,
+  CharacterHudReadModel,
   InventoryHudReadModel,
   ItemUiCommand,
+  ProfessionUiCommand,
+  ProgressionUiCommand,
+  WorldUiCommand,
   ShellBindings,
   ShellIntent,
   ShellReadModel,
@@ -76,6 +80,8 @@ declare global {
       setAimDirection: (x: number, y: number) => void;
       setAutomationPaused: (paused: boolean) => void;
       requestDodge: () => void;
+      requestInteract: () => void;
+      travelTo: (zoneId: string) => void;
       requestPrimaryAttack: () => void;
       setMovement: (x: number, y: number) => void;
       requestAbilitySlot: (slot: LoadoutSlot, x?: number, y?: number) => void;
@@ -84,7 +90,11 @@ declare global {
       requestDefiantSignal: () => void;
       advancePaused: (steps: number) => void;
       itemHud: () => InventoryHudReadModel | null;
+      characterHud: () => CharacterHudReadModel | null;
       executeItemCommand: (command: ItemUiCommand) => void;
+      executeProgressionCommand: (command: ProgressionUiCommand) => void;
+      executeProfessionCommand: (command: ProfessionUiCommand) => void;
+      executeWorldCommand: (command: WorldUiCommand) => void;
       applyPlayerDamage: (amount: number) => DamageResult;
     };
   }
@@ -284,6 +294,12 @@ if (!support.supported) {
           requestDodge: () => {
             renderer.combat.requestDodge();
           },
+          requestInteract: () => {
+            renderer.combat.requestInteract();
+          },
+          travelTo: (zoneId) => {
+            renderer.combat.travelTo(zoneId);
+          },
           requestPrimaryAttack: () => {
             renderer.combat.requestPrimaryAttack();
           },
@@ -306,8 +322,18 @@ if (!support.supported) {
             renderer.combat.advancePaused(steps);
           },
           itemHud: () => renderer.combat.itemHud(),
+          characterHud: () => renderer.combat.characterHud(),
           executeItemCommand: (command) => {
             renderer.combat.executeItemCommand(command);
+          },
+          executeProgressionCommand: (command) => {
+            renderer.combat.executeProgressionCommand(command);
+          },
+          executeProfessionCommand: (command) => {
+            renderer.combat.executeProfessionCommand(command);
+          },
+          executeWorldCommand: (command) => {
+            renderer.combat.executeWorldCommand(command);
           },
           applyPlayerDamage: (amount) =>
             renderer.combat.applyPlayerDamage(amount),

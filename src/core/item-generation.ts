@@ -10,6 +10,7 @@ import {
   equipmentBaseById,
   isAffixLegalForBase,
 } from "./item-catalog";
+import { materialById } from "./professions";
 import { type ContentId, type PersistentInstanceId } from "./ids";
 import { Mulberry32, type RandomSource } from "./random";
 
@@ -25,7 +26,25 @@ export interface EquipmentItemInstance {
   readonly instanceId: PersistentInstanceId;
   readonly baseId: ContentId;
   readonly rarity: ItemRarity;
+  readonly requiredLevel: number;
+  readonly origin: "loot" | "crafted";
   readonly affixes: readonly RolledAffix[];
+}
+
+/**
+ * Prototype item-level gates. Commons and Magic are usable immediately;
+ * Rares ask for the first level-up so stronger drops feel earned.
+ */
+export const REQUIRED_LEVEL_BY_RARITY: Readonly<
+  Record<GeneratableItemRarity, number>
+> = {
+  common: 1,
+  magic: 1,
+  rare: 2,
+};
+
+export function requiredLevelForRarity(rarity: ItemRarity): number {
+  return rarity === "unique" ? 1 : REQUIRED_LEVEL_BY_RARITY[rarity];
 }
 
 export interface AbilityStoneStack {
@@ -34,7 +53,17 @@ export interface AbilityStoneStack {
   readonly quantity: number;
 }
 
-export type ItemInstance = EquipmentItemInstance | AbilityStoneStack;
+export interface MaterialStack {
+  readonly kind: "material";
+  readonly instanceId: PersistentInstanceId;
+  readonly materialId: ContentId;
+  readonly quantity: number;
+}
+
+export type ItemInstance =
+  | EquipmentItemInstance
+  | AbilityStoneStack
+  | MaterialStack;
 
 export interface AffixCountRange {
   readonly minimum: number;
@@ -122,6 +151,7 @@ export interface GenerateEquipmentItemOptions {
   readonly instanceId: PersistentInstanceId;
   readonly baseId: ContentId;
   readonly rarity: ItemRarity;
+  readonly origin?: "loot" | "crafted";
 }
 
 /**
@@ -171,6 +201,8 @@ export function generateEquipmentItem(
     instanceId: options.instanceId,
     baseId: base.id,
     rarity: options.rarity,
+    requiredLevel: requiredLevelForRarity(options.rarity),
+    origin: options.origin ?? "loot",
     affixes,
   };
 }
@@ -183,6 +215,27 @@ export function createAbilityStoneStack(
     throw new RangeError("Ability Stone quantity must be from 1 through 9.");
   }
   return { kind: "ability-stone", instanceId, quantity };
+}
+
+export function createMaterialStack(
+  instanceId: PersistentInstanceId,
+  materialId: ContentId,
+  quantity = 1,
+): MaterialStack {
+  const material = materialById(materialId);
+  if (material === undefined) {
+    throw new RangeError(`Unknown material "${materialId}".`);
+  }
+  if (
+    !Number.isSafeInteger(quantity) ||
+    quantity < 1 ||
+    quantity > material.stackLimit
+  ) {
+    throw new RangeError(
+      `Material quantity must be from 1 through ${material.stackLimit}.`,
+    );
+  }
+  return { kind: "material", instanceId, materialId, quantity };
 }
 
 export function modifiersForEquipment(

@@ -1505,3 +1505,445 @@ wording.
 ### Relationship to Earlier Decisions
 
 DEC-019 through DEC-021 remain the governing Phase 3 item architecture.
+
+---
+
+# DEC-023
+
+### Status
+
+Accepted for the Phase 4 playable character-progression loop.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Keep XP, levels, attributes, masteries, and respec in the
+framework-independent core. Enemy kills grant a fixed 20 experience. The
+level curve is `40 + 20 × (level − 1)` with no hardcoded cap. A new
+character starts at level 1 with 2 attribute points and 1 mastery point;
+each later level awards the same amounts.
+
+The four attributes are Strength, Dexterity, Vitality, and Intelligence.
+They add outgoing ability damage, move speed, maximum health, and
+maximum mana. Eight three-rank original masteries add shared or
+ability-specific bonuses. Restore Training refunds every spent point for
+free. Generated Common and Magic items require level 1; Rares require
+level 2.
+
+The C key and a button to the right of Inventory open the character
+screen. Combat loadout assignment lives there. The compact XP meter
+shows real experience. Progression is not added to the IndexedDB save
+DTO.
+
+### Context
+
+Phase 3 proved loot and equipment. Phase 4 must prove that killing
+enemies improves the character through a readable spend-and-respec loop
+without building a giant tree or persisting a career.
+
+### Options Considered
+
+1. Automatic stat gains on level-up with no spend decisions.
+2. A large passive tree and item-level gating before the spend loop is
+   proven.
+3. A small core-owned progression object, a compact mastery catalog, and
+   a dedicated character screen that also hosts loadout assignment.
+
+### Chosen Approach
+
+Option 3. Core owns `CharacterProgression`. Combat composes equipment
+and progression bonuses. Preact observes read models and emits spend,
+respec, and assign-ability commands.
+
+### Why
+
+This keeps Phaser and Preact non-authoritative, stays inside the
+vertical-slice bound, and makes the C screen useful on the first launch.
+
+### Tradeoffs
+
+- XP comes only from enemy kills in this prototype.
+- Respec is free and unlimited.
+- Item requirements are rarity-based, not a full item-level system.
+- Progression is lost on reload (DEC-014 unchanged).
+
+### Systems Affected
+
+- Progression, combat stats, mana, movement speed, and equip validation
+- Item generation required-level field
+- Combat HUD XP meter and Preact character screen
+- Unit, component, and browser tests
+
+### Relationship to Earlier Decisions
+
+DEC-010 and DEC-013 continue to govern simulation and ability execution.
+DEC-019 through DEC-022 remain the item architecture. DEC-014 remains
+unchanged.
+
+---
+
+# DEC-024
+
+### Status
+
+Accepted for the Phase 5 playable Mining and Smithing loop.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Keep profession XP, materials, nodes, and recipes in the
+framework-independent core. Mining and Smithing use the curve
+`20 + 10 × (level − 1)` and stay independent of combat level.
+
+The current arena hosts two geometric ore nodes and one forge. F is a
+shared interact: loot pickup wins when a drop is in range, otherwise the
+nearest node or forge. Gathering is a short channel cancelled by
+movement, dodge, ability use, or incoming damage. Nodes have charges and
+respawn.
+
+Smithing recipes consume stacked ore and produce equipment from a
+crafted-only catalog. Those bases never enter the enemy drop pool.
+Crafted items are ordinary equipment instances with `origin: "crafted"`.
+The Character screen shows profession levels. Opening the forge shows a
+Preact recipe menu.
+
+Art stays geometric. Sprite import is deferred. Profession state is not
+added to the IndexedDB save DTO.
+
+### Context
+
+Phase 4 proved combat XP and spendable attributes. Phase 5 must prove
+that gathering and crafting feed the same equipment loop without waiting
+on sprites or building a town.
+
+### Options Considered
+
+1. Wait for character and node sprites before any profession work.
+2. Build a town-and-vendor crafting loop before Mining exists.
+3. A thin gather → smith → equip loop in the current arena with
+   geometric placeholders and a crafted-only item catalog.
+
+### Chosen Approach
+
+Option 3. Core owns `ProfessionProgression`, material stacks, nodes, and
+recipes. Combat composes interact, gather, and craft. Preact observes
+read models and emits craft or close-forge commands.
+
+### Why
+
+This keeps Phaser and Preact non-authoritative, stays inside the
+vertical-slice bound, and lets the profession loop be proven before art
+import or Phase 6 world content.
+
+### Tradeoffs
+
+- Only Mining and Smithing exist.
+- Two ores and three recipes.
+- No gold, no flask drinking, no persistence.
+- Nodes and the forge are shapes, not sprites.
+
+### Systems Affected
+
+- Profession XP, materials, inventory stacking
+- Combat interact, gathering, and forge state
+- Crafted-only equipment bases and item generation origin
+- Combat HUD gathering line, Character professions, and forge menu
+- Unit, component, and browser tests
+
+### Relationship to Earlier Decisions
+
+DEC-010 and DEC-013 continue to govern simulation and ability execution.
+DEC-019 through DEC-023 remain the item and progression architecture.
+DEC-014 remains unchanged.
+
+---
+
+# DEC-025
+
+### Status
+
+Accepted for the Phase 6 world-session gate.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Keep the first vertical-slice world as three core-owned geometric zones
+with a portal graph: Hearthmere (safe town), Ashtrail Expanse
+(wilderness), and Hollowdeep (dungeon). Character inventory, combat XP,
+and profession XP survive travel. `reset()` returns to Ashtrail so
+existing combat tests stay valid. The playable session starts in
+Hearthmere.
+
+Town content is a barter vendor (Veinshard for stock gear), a second
+forge, and one Roadwarden quest that completes when the Hollowdeep
+Bruiser dies. Zones stay shapes. DEC-012 Tiled combat integration, five
+normal enemy types, a boss, and a minimap remain later Phase 6 work.
+
+### Context
+
+Phase 5 proved gather and craft inside one arena. Phase 6 must prove
+travel and a town hub before authoring production Tiled maps or adding
+sprite art.
+
+### Options Considered
+
+1. Author three Tiled maps and move combat onto compiled zone bundles now.
+2. Wait for sprites before any town or dungeon exists.
+3. A geometric zone session that reuses the current combat simulation.
+
+### Chosen Approach
+
+Option 3. Core owns `ZONE_CATALOG` and quest/vendor contracts. Combat
+swaps the current zone profile, enemy, and interactables. Preact shows
+zone name, quest stage, and the vendor menu.
+
+### Why
+
+This keeps Phaser and Preact non-authoritative, preserves Phase 1–5
+combat tests, and lets the world loop be proven before Tiled combat
+integration.
+
+### Tradeoffs
+
+- Gameplay zones are not yet compiled Tiled bundles (DEC-012 still
+  governs the intended production path).
+- Only one elite exists; five normal types and a boss are not in this
+  gate. Later Phase 6 work is recorded in DEC-026.
+- Gold is still absent; the vendor barters ore.
+
+### Systems Affected
+
+- Combat arena zone travel, interactables, and quest state
+- Combat HUD zone/quest line and Preact vendor menu
+- Unit, component, and browser tests
+
+### Relationship to Earlier Decisions
+
+DEC-012 remains the intended authored-zone architecture. This decision
+is a geometric stand-in for the first playable world loop, not a
+replacement. DEC-014 remains unchanged. DEC-026 extends this gate with
+multi-enemy encounters, a boss, and a minimap.
+
+---
+
+# DEC-026
+
+### Status
+
+Accepted for the Phase 6 encounter and minimap increment.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+The combat arena simulates every living enemy in the current zone, not
+one shared prototype. `reset()` and `new CombatArenaSimulation()` still
+spawn only the Ashtrail prototype so Phase 1–5 combat tests stay valid.
+Traveling into a catalog zone loads that zone's encounter list.
+
+Ashtrail Expanse has a three-Gnasher white pack and one Ashtrail Brute
+elite. Hollowdeep keeps the Bruiser as the quest elite and adds
+Embercleft as a south-side boss. Enemies use an aggro radius so packs
+and the boss stay leashed until the player approaches.
+
+`diagnostics().enemy` remains the first encounter entry (or the reset
+prototype). `diagnostics().enemies`, `targets`, and `minimap` expose the
+full set. A compact top-right Preact minimap observes that read model.
+
+### Context
+
+DEC-025 shipped a three-zone session with one enemy at a time. The
+owner asked for the minimap, a boss, and a white pack plus elite in the
+first wilderness zone.
+
+### Options Considered
+
+1. Keep one live enemy and fake the pack in presentation only.
+2. Replace the arena with a new encounter manager.
+3. Grow the existing melee enemy and zone catalog into a multi-enemy
+   list with a compatibility primary.
+
+### Chosen Approach
+
+Option 3. Ranks (`normal`, `elite`, `boss`) and optional aggro live on
+`SimpleMeleeEnemyConfig`. Cleave and area effects hit every enemy in
+range. Projectiles still resolve the first sweep hit.
+
+### Why
+
+This is the smallest change that makes a pack, elite, and boss real in
+core, while preserving `diagnostics().enemy` for existing combat and
+quest tests.
+
+### Tradeoffs
+
+- Enemies still share one melee brain. Embercleft is a heavier melee
+  boss, not a multi-phase encounter.
+- Ashtrail whites are one type, not five distinct normals.
+- Gameplay zones remain geometric. DEC-012 still owns Tiled combat maps.
+
+### Systems Affected
+
+- Simple melee enemy ranks, experience, and aggro
+- Combat arena encounter list, damage, and minimap read model
+- Phaser enemy drawing and Preact top-right minimap
+- World session unit, component, and browser tests
+
+### Relationship to Earlier Decisions
+
+Extends DEC-025. Does not replace DEC-012. DEC-014 remains unchanged.
+DEC-027 closes Phase 6 with the owner-accepted geometric slice.
+
+---
+
+# DEC-027
+
+### Status
+
+Accepted. Completes Phase 6.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Phase 6 is complete with the geometric world session: town, wilderness,
+dungeon, vendor, one quest, a white pack, one elite, one boss, and a
+compact top-right minimap whose walkable-area border is visible. The
+minimap walkable rect is the arena clamp inset (player radius), filled
+with the current zone floor color and stroked with the zone edge color.
+
+Five distinct normal enemy types and Tiled compiled gameplay maps stay
+deferred. Those were original Phase 6 candidates; the owner accepted
+this slice and asked to close the phase after the walkable border.
+
+### Context
+
+DEC-025 and DEC-026 already shipped travel, encounters, and a minimap.
+The remaining visible gap was that the map floor had no readable border,
+so the walkable limit was unclear.
+
+### Options Considered
+
+1. Keep Phase 6 open until five unique normals and Tiled zones exist.
+2. Close Phase 6 on the current geometric loop after the walkable
+   border, and move leftover content to later phases.
+
+### Chosen Approach
+
+Option 2, by owner request.
+
+### Why
+
+The vertical-slice loop is playable: combat, loot, progression, gather,
+craft, travel, quest, vendor, pack, elite, and boss. Remaining content
+volume and DEC-012 authored maps do not need to block Phase 7 polish.
+
+### Tradeoffs
+
+- Ashtrail whites are one Gnasher type, not five distinct normals.
+- Zones are still core-owned shapes, not compiled Tiled bundles.
+
+### Systems Affected
+
+- Minimap walkable bounds and zone-colored floor/edge
+- Phase 6 roadmap status
+
+### Relationship to Earlier Decisions
+
+Closes the Phase 6 work started in DEC-025 and DEC-026. DEC-012 remains
+the intended production zone path. DEC-014 remains unchanged.
+
+---
+
+# DEC-028
+
+### Status
+
+Accepted.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+The player renders as the owner-authored barbarian spritesheets instead
+of the placeholder circle. The sheets live in
+`public/assets/characters/barbarian/` as 1920x1024 PNGs: a 15-column,
+8-row grid of 128x128 frames, one row per screen-space facing ordered
+clockwise (screen y down) from east (E, SE, S, SW, W, NW, N, NE).
+
+`BarbarianSpritePresentation` (Phaser adapter) loads five sheets on
+demand — Idle, Run, Attack1, Rolling, Die — and picks an animation from
+combat diagnostics: death, dodge roll, attack, then locomotion. The
+character faces the direction of movement, not the cursor; standing
+still keeps the last movement facing, and only attacks orient toward
+the aim (owner-corrected on 2026-09-05 from an earlier aim-locked
+facing with backpedal/strafe sheets, which were removed). The sprite
+anchors at the feet (y=90 of 128) on the ground-shadow center at 1.3x
+scale. Until textures finish loading the old circle-and-facing-line
+fallback draws, so boot diagnostics never regress.
+
+### Context
+
+The owner supplied barbarian spritesheets generated from their character
+creator and asked for the barbarian as the player character. The roadmap
+Phase 7 note explicitly reserved this import for owner-provided art.
+
+### Options Considered
+
+1. Face the aim direction at all times, using the backpedal and strafe
+   sheets for off-aim movement.
+2. Face the movement direction while moving, with attacks orienting to
+   the aim.
+3. Move sprite state into the core simulation as a first-class model.
+
+### Chosen Approach
+
+Option 2, presentation-only, per owner playtest feedback (option 1 was
+shipped first and corrected the same day). The core simulation is
+untouched; the sprite is a pure read of existing diagnostics
+(movement/aim/dodge/attack/death), and new presentation diagnostics
+(`playerSpriteReady`, `playerAnimation`, `playerDirectionRow`) make the
+selection testable end to end.
+
+### Why
+
+The owner wants the character to read as running where WASD points.
+Keeping selection in the adapter honors the simulation/presentation
+split from DEC-005.
+
+### Tradeoffs
+
+- Enemies, interactables, and zones remain geometric placeholders.
+- The frame-aligned shadow and attack-effect companion sheets render as
+  synced layers under/over the body (owner-requested 2026-09-05); the
+  flat ellipse shadow now only backs the pre-load fallback. Effect
+  sheets for the unused animations stay unimported.
+- No per-entity isometric depth sorting yet; the player always draws
+  above interactables, as the circle did.
+
+### Systems Affected
+
+- New `src/adapters/phaser/barbarian-sprite.ts`
+- Combat arena presentation player rendering and diagnostics
+- New `tests/e2e/player-sprite.spec.ts`
+
+### Relationship to Earlier Decisions
+
+Fulfills the character-art import reserved in the Phase 7 roadmap note.
+Presentation-only per DEC-005; DEC-012 (Tiled zones) and enemy visuals
+remain future work.
