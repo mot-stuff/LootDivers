@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Nightly full-matrix e2e (edge + webkit alongside chromium). Push/PR
+  # runs are chromium-only to keep the feedback loop short; the wider
+  # engines are exercised here and in local pre-merge runs (DEC-033).
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -18,6 +24,7 @@ concurrency:
 jobs:
   gates:
     name: Typecheck, lint, tests, build, e2e
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -44,10 +51,7 @@ jobs:
         run: npm test
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox webkit
-
-      - name: Install Microsoft Edge
-        run: npx playwright install msedge
+        run: npx playwright install --with-deps chromium
 
       - name: Component tests
         run: npm run test:component
@@ -55,14 +59,15 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Firefox is excluded here: GitHub-hosted runners have no GPU and
-      # headless Linux Firefox exposes no WebGL, so the game correctly
-      # reports "unsupported" and every spec fails. A handful of
-      # hardware-sensitive specs also skip themselves when CI=true. The
-      # authoritative pre-merge gate remains the local 4-browser matrix
-      # (chromium, edge, firefox, webkit). See DEC-033.
-      - name: End-to-end tests (chromium, edge, webkit)
-        run: node scripts/run-playwright.mjs --project=chromium --project=edge --project=webkit
+      # Chromium-only on push/PR to keep runs fast; edge + webkit run in
+      # the nightly e2e-matrix job below. Firefox stays excluded entirely:
+      # GitHub-hosted runners have no GPU and headless Linux Firefox
+      # exposes no WebGL, so the game correctly reports "unsupported". A
+      # handful of hardware-sensitive specs also skip themselves when
+      # CI=true. The authoritative pre-merge gate remains the local
+      # 4-browser matrix (chromium, edge, firefox, webkit). See DEC-033.
+      - name: End-to-end tests (chromium)
+        run: node scripts/run-playwright.mjs --project=chromium
 
       # The deploy job publishes these exact bytes (DEC-015: the deployed
       # artifact is the tested artifact; no rebuild).
@@ -73,8 +78,39 @@ jobs:
           path: dist
           if-no-files-found: error
 
+  # Wider-engine e2e (chromium + edge + webkit) on the nightly schedule or
+  # manual dispatch only — too slow for every push/PR (DEC-033 tiering).
+  e2e-matrix:
+    name: Nightly e2e matrix (chromium, edge, webkit)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.20.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Install Microsoft Edge
+        run: npx playwright install msedge
+
+      - name: Build
+        run: npm run build
+
+      - name: End-to-end tests (chromium, edge, webkit)
+        run: node scripts/run-playwright.mjs --project=chromium --project=edge --project=webkit
+
   server-gates:
     name: Server typecheck, lint, tests (TASK-707)
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:

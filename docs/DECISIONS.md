@@ -2510,6 +2510,16 @@ and the e2e suite minus eight skips on three browser engines. Firefox
 coverage and the skipped specs are validated only in the local gate, so
 task completion reports must keep running the full matrix locally.
 
+## Amendment (2026-09-05, owner request): tiered CI
+
+Push/PR runs became too slow (8–11 minutes) once the wave-2 features grew
+the e2e suite, so the gate is now tiered. Push/PR runs execute the e2e
+suite on **chromium only** and install only that browser; edge + webkit
+run in a separate `e2e-matrix` job on a nightly schedule (09:00 UTC) and
+on manual `workflow_dispatch`. Everything else (typecheck, lint, content
+checks, unit, component, build, server gates, deploys) is unchanged. The
+authoritative pre-merge gate remains the full local four-browser matrix.
+
 ---
 
 # DEC-034
