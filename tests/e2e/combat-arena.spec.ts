@@ -69,6 +69,7 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
   await expect
     .poll(async () => (await diagnostics(page))?.pausedForUi)
     .toBe(true);
+  await expect(page.locator(".combat-paused-hud")).toBeVisible();
   const pausedState = await diagnostics(page);
   await page.waitForTimeout(120);
   expect((await diagnostics(page))?.tick).toBe(pausedState?.tick);
@@ -98,7 +99,7 @@ for (const viewport of [
   { width: 1280, height: 720 },
   { width: 900, height: 900 },
 ]) {
-  test(`DOM dodge HUD stays bottom-right at ${viewport.width}x${viewport.height}`, async ({
+  test(`DOM stamina HUD stays compact at top-right at ${viewport.width}x${viewport.height}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -108,13 +109,11 @@ for (const viewport of [
       "ready",
     );
 
-    const box = await page.getByTestId("combat-dodge-hud").boundingBox();
+    const box = await page.getByTestId("combat-stamina-hud").boundingBox();
     expect(box).not.toBeNull();
+    expect(box?.y).toBeCloseTo(16, 0);
+    expect(box?.width).toBeLessThanOrEqual(224);
     expect(viewport.width - ((box?.x ?? 0) + (box?.width ?? 0))).toBeCloseTo(
-      16,
-      0,
-    );
-    expect(viewport.height - ((box?.y ?? 0) + (box?.height ?? 0))).toBeCloseTo(
       16,
       0,
     );

@@ -208,28 +208,35 @@ export function App({
 
       {showCombatPrototype && (
         <section
-          class="combat-dodge-hud"
-          aria-label="Dodge status"
-          data-testid="combat-dodge-hud"
+          class="combat-stamina-hud"
+          aria-label="Stamina"
+          data-testid="combat-stamina-hud"
         >
-          <div class="combat-dodge-label">
-            <span>{combatHud.paused ? "PAUSED" : "DODGE"}</span>
+          <div class="combat-stamina-label">
+            <span>STAMINA</span>
             <strong>
               {combatHud.dodgeReady
-                ? "READY"
-                : `${combatHud.cooldownSecondsRemaining.toFixed(1)}s`}
+                ? "FULL"
+                : `${Math.round(combatHud.cooldownProgress * 100)}%`}
             </strong>
           </div>
           <div
-            class="combat-dodge-meter"
+            class="combat-stamina-meter"
             role="progressbar"
-            aria-label="Dodge cooldown"
+            aria-label="Stamina available"
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(combatHud.cooldownProgress * 100)}
           >
             <span style={{ width: `${combatHud.cooldownProgress * 100}%` }} />
           </div>
+        </section>
+      )}
+
+      {showCombatPrototype && combatHud.paused && (
+        <section class="combat-paused-hud" role="status">
+          <strong>PAUSED</strong>
+          <span>Click the arena to resume</span>
         </section>
       )}
 
