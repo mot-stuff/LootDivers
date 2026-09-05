@@ -97,18 +97,20 @@ const itemHudModel: InventoryHudReadModel = {
             instanceId: "item-instance:cleaver",
             displayName: "Tempered Worn Cleaver of Steadfast Grip",
             rarity: "rare" as const,
-            slot: "main-hand" as const,
+            slotKind: "main-hand" as const,
             typeLabel: "Melee weapon",
             modifiers: [
               {
                 id: "base:damage",
                 source: "base" as const,
                 label: "+5% outgoing ability damage",
+                tier: null,
               },
               {
                 id: "affix:tempered",
                 source: "affix" as const,
                 label: "+7% outgoing ability damage",
+                tier: 2,
               },
             ],
           }
@@ -124,7 +126,7 @@ const itemHudModel: InventoryHudReadModel = {
           : null,
   })),
   equipmentSlots: [
-    { slot: "main-hand", label: "Main hand", item: null },
+    { slot: "helmet", label: "Helmet", item: null },
     {
       slot: "chest",
       label: "Chest",
@@ -133,23 +135,31 @@ const itemHudModel: InventoryHudReadModel = {
         instanceId: "item-instance:vest",
         displayName: "Reinforced Trailguard Vest",
         rarity: "magic",
-        slot: "chest",
+        slotKind: "chest",
         typeLabel: "Body armor",
         modifiers: [
           {
             id: "base:health",
             source: "base",
             label: "+10 maximum health",
+            tier: null,
           },
           {
             id: "affix:reinforced",
             source: "affix",
             label: "+14 maximum health",
+            tier: 2,
           },
         ],
       },
     },
     { slot: "amulet", label: "Amulet", item: null },
+    { slot: "belt", label: "Belt", item: null },
+    { slot: "boots", label: "Boots", item: null },
+    { slot: "main-hand", label: "Main hand", item: null },
+    { slot: "offhand", label: "Offhand", item: null },
+    { slot: "ring-1", label: "Ring 1", item: null },
+    { slot: "ring-2", label: "Ring 2", item: null },
   ],
   abilityChoices: [
     {
@@ -666,7 +676,7 @@ describe("technical UI shell component", () => {
       ).toHaveLength(12);
       expect(
         container.querySelectorAll(".equipment-list .equipment-slot"),
-      ).toHaveLength(3);
+      ).toHaveLength(9);
       expect(container.textContent).toContain("Maximum health124");
       expect(container.textContent).toContain("Outgoing damage112%");
 

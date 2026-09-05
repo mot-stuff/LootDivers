@@ -1,6 +1,9 @@
 import {
   AFFIX_CATALOG,
-  type EquipmentBaseDefinition,
+  AFFIX_TIER_COUNT,
+  type AffixDefinition,
+  type EquipmentSlotKind,
+  type GeneratableItemRarity,
   type ItemRarity,
   type ItemStatModifier,
   affixById,
@@ -12,6 +15,8 @@ import { Mulberry32, type RandomSource } from "./random";
 
 export interface RolledAffix {
   readonly affixId: ContentId;
+  /** Tier 1 is the best (highest value range); tier 5 is the lowest. */
+  readonly tier: number;
   readonly modifier: ItemStatModifier;
 }
 
@@ -31,33 +36,68 @@ export interface AbilityStoneStack {
 
 export type ItemInstance = EquipmentItemInstance | AbilityStoneStack;
 
-const AFFIX_COUNT_BY_RARITY: Readonly<Record<ItemRarity, number>> = {
-  common: 0,
-  magic: 1,
-  rare: 2,
+export interface AffixCountRange {
+  readonly minimum: number;
+  readonly maximum: number;
+}
+
+/**
+ * Inclusive affix-count ranges per generatable rarity. Unique is reserved in
+ * the rarity model and intentionally has no generation rule.
+ */
+export const AFFIX_COUNTS_BY_RARITY: Readonly<
+  Record<GeneratableItemRarity, AffixCountRange>
+> = {
+  common: { minimum: 0, maximum: 0 },
+  magic: { minimum: 1, maximum: 2 },
+  rare: { minimum: 3, maximum: 4 },
 };
 
-function rollAffixValue(
-  random: RandomSource,
-  minimum: number,
-  maximum: number,
-): number {
-  return minimum + random.nextInteger(maximum - minimum + 1);
+/**
+ * Relative roll weights for tiers 1 through 5. Lower tiers are more common:
+ * tier N has weight N, so tier 1 rolls at 1/15 and tier 5 at 5/15.
+ */
+export const AFFIX_TIER_WEIGHTS: readonly number[] = [1, 2, 3, 4, 5] as const;
+
+function isGeneratableRarity(
+  rarity: ItemRarity,
+): rarity is GeneratableItemRarity {
+  return rarity !== "unique";
+}
+
+function rollAffixTier(random: RandomSource): number {
+  const totalWeight = AFFIX_TIER_WEIGHTS.reduce(
+    (total, weight) => total + weight,
+    0,
+  );
+  const roll = random.nextInteger(totalWeight);
+  let cumulative = 0;
+  for (let tier = 1; tier <= AFFIX_TIER_COUNT; tier += 1) {
+    cumulative += AFFIX_TIER_WEIGHTS[tier - 1] ?? 0;
+    if (roll < cumulative) return tier;
+  }
+  return AFFIX_TIER_COUNT;
 }
 
 function rollAffix(
   random: RandomSource,
-  definition: (typeof AFFIX_CATALOG)[number],
+  definition: AffixDefinition,
 ): RolledAffix {
-  const value = rollAffixValue(
-    random,
-    definition.modifier.minimumValue,
-    definition.modifier.maximumValue,
-  );
+  const tier = rollAffixTier(random);
+  const range = definition.tiers[tier - 1];
+  if (range === undefined) {
+    throw new RangeError(
+      `Affix "${definition.id}" is missing tier ${tier} data.`,
+    );
+  }
+  const value =
+    range.minimumValue +
+    random.nextInteger(range.maximumValue - range.minimumValue + 1);
 
   if (definition.modifier.operation === "flat") {
     return {
       affixId: definition.id,
+      tier,
       modifier: {
         statId: definition.modifier.statId,
         operation: "flat",
@@ -68,6 +108,7 @@ function rollAffix(
 
   return {
     affixId: definition.id,
+    tier,
     modifier: {
       statId: definition.modifier.statId,
       operation: "additive-basis-points",
@@ -83,6 +124,11 @@ export interface GenerateEquipmentItemOptions {
   readonly rarity: ItemRarity;
 }
 
+/**
+ * Deterministic per seed. Draw order: affix count (only when the rarity's
+ * range spans more than one value), then per affix a candidate index, a tier,
+ * and a value within that tier's range.
+ */
 export function generateEquipmentItem(
   options: GenerateEquipmentItemOptions,
 ): EquipmentItemInstance {
@@ -90,12 +136,22 @@ export function generateEquipmentItem(
   if (base === undefined) {
     throw new RangeError(`Unknown equipment base "${options.baseId}".`);
   }
+  if (!isGeneratableRarity(options.rarity)) {
+    throw new RangeError(
+      `Rarity "${options.rarity}" is reserved and cannot be generated.`,
+    );
+  }
 
   const random = new Mulberry32(options.seed);
   const candidates = AFFIX_CATALOG.filter((affix) =>
     isAffixLegalForBase(affix, base),
   );
-  const count = AFFIX_COUNT_BY_RARITY[options.rarity];
+  const countRange = AFFIX_COUNTS_BY_RARITY[options.rarity];
+  const count =
+    countRange.minimum +
+    (countRange.maximum > countRange.minimum
+      ? random.nextInteger(countRange.maximum - countRange.minimum + 1)
+      : 0);
   if (candidates.length < count) {
     throw new RangeError(
       `Equipment base "${base.id}" does not have ${count} legal affixes.`,
@@ -136,7 +192,16 @@ export function modifiersForEquipment(
   if (base === undefined) {
     throw new RangeError(`Unknown equipment base "${item.baseId}".`);
   }
-  if (item.affixes.length !== AFFIX_COUNT_BY_RARITY[item.rarity]) {
+  if (!isGeneratableRarity(item.rarity)) {
+    throw new RangeError(
+      `Rarity "${item.rarity}" is reserved and has no legal instances.`,
+    );
+  }
+  const countRange = AFFIX_COUNTS_BY_RARITY[item.rarity];
+  if (
+    item.affixes.length < countRange.minimum ||
+    item.affixes.length > countRange.maximum
+  ) {
     throw new RangeError(`Invalid affix count for ${item.rarity} item.`);
   }
   const affixIds = new Set(item.affixes.map(({ affixId }) => affixId));
@@ -145,13 +210,20 @@ export function modifiersForEquipment(
   }
   for (const rolled of item.affixes) {
     const definition = affixById(rolled.affixId);
+    const tierRange =
+      Number.isSafeInteger(rolled.tier) &&
+      rolled.tier >= 1 &&
+      rolled.tier <= AFFIX_TIER_COUNT
+        ? definition?.tiers[rolled.tier - 1]
+        : undefined;
     if (
       definition === undefined ||
+      tierRange === undefined ||
       !isAffixLegalForBase(definition, base) ||
       definition.modifier.statId !== rolled.modifier.statId ||
       definition.modifier.operation !== rolled.modifier.operation ||
-      rolled.modifier.value < definition.modifier.minimumValue ||
-      rolled.modifier.value > definition.modifier.maximumValue
+      rolled.modifier.value < tierRange.minimumValue ||
+      rolled.modifier.value > tierRange.maximumValue
     ) {
       throw new RangeError(`Invalid affix "${rolled.affixId}" on item.`);
     }
@@ -162,9 +234,9 @@ export function modifiersForEquipment(
   ];
 }
 
-export function equipmentSlotOf(
+export function equipmentSlotKindOf(
   item: EquipmentItemInstance,
-): EquipmentBaseDefinition["slot"] {
+): EquipmentSlotKind {
   const base = equipmentBaseById(item.baseId);
   if (base === undefined) {
     throw new RangeError(`Unknown equipment base "${item.baseId}".`);

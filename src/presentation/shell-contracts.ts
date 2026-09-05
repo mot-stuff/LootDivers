@@ -61,14 +61,34 @@ export interface CombatHudReadModel {
   readonly activeStatuses: readonly CombatStatusHudReadModel[];
 }
 
-export type ItemEquipmentSlot = "main-hand" | "chest" | "amulet";
-export type ItemRarityHud = "common" | "magic" | "rare";
+export type ItemEquipmentSlot =
+  | "helmet"
+  | "chest"
+  | "amulet"
+  | "belt"
+  | "boots"
+  | "main-hand"
+  | "offhand"
+  | "ring-1"
+  | "ring-2";
+export type ItemEquipmentSlotKind =
+  | "helmet"
+  | "chest"
+  | "amulet"
+  | "belt"
+  | "boots"
+  | "main-hand"
+  | "offhand"
+  | "ring";
+export type ItemRarityHud = "common" | "magic" | "rare" | "unique";
 export type ItemLoadoutSlot = "lmb" | "q" | "e" | "f";
 
 export interface ItemModifierHudReadModel {
   readonly id: string;
   readonly source: "base" | "affix";
   readonly label: string;
+  /** Affix tier 1 (best) through 5; null for base modifiers. */
+  readonly tier: number | null;
 }
 
 export interface EquipmentItemHudReadModel {
@@ -76,7 +96,7 @@ export interface EquipmentItemHudReadModel {
   readonly instanceId: string;
   readonly displayName: string;
   readonly rarity: ItemRarityHud;
-  readonly slot: ItemEquipmentSlot;
+  readonly slotKind: ItemEquipmentSlotKind;
   readonly typeLabel: string;
   readonly modifiers: readonly ItemModifierHudReadModel[];
 }
@@ -138,6 +158,8 @@ export type ItemUiCommand =
   | {
       readonly type: "item.equip";
       readonly inventoryIndex: number;
+      /** When omitted, the core derives the slot from the item's base. */
+      readonly targetEquipmentSlot?: ItemEquipmentSlot;
     }
   | {
       readonly type: "item.unequip";

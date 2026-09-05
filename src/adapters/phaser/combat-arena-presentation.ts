@@ -19,8 +19,10 @@ import {
   type CombatArenaEvent,
   type CombatAbilityId,
   type DamageResult,
+  EQUIPMENT_SLOTS,
   type EquipmentItemInstance,
   type EquipmentSlot,
+  type EquipmentSlotKind,
   type ItemInstance,
   type ItemStatModifier,
   type LoadoutSlot,
@@ -78,9 +80,26 @@ const ABILITY_NAMES: Readonly<Record<string, string>> = {
 };
 
 const EQUIPMENT_SLOT_LABELS: Readonly<Record<EquipmentSlot, string>> = {
-  "main-hand": "Main hand",
+  helmet: "Helmet",
   chest: "Chest",
   amulet: "Amulet",
+  belt: "Belt",
+  boots: "Boots",
+  "main-hand": "Main hand",
+  offhand: "Offhand",
+  "ring-1": "Ring 1",
+  "ring-2": "Ring 2",
+};
+
+const EQUIPMENT_TYPE_LABELS: Readonly<Record<EquipmentSlotKind, string>> = {
+  helmet: "Helmet",
+  chest: "Body armor",
+  amulet: "Amulet",
+  belt: "Belt",
+  boots: "Boots",
+  "main-hand": "Melee weapon",
+  offhand: "Offhand",
+  ring: "Ring",
 };
 
 const STATUS_LABELS = {
@@ -332,7 +351,10 @@ export class CombatArenaPresentation {
 
   public executeItemCommand(command: ItemUiCommand): void {
     if (command.type === "item.equip") {
-      this.#simulation.equipCharacterItem(command.inventoryIndex);
+      this.#simulation.equipCharacterItem(
+        command.inventoryIndex,
+        command.targetEquipmentSlot,
+      );
     } else if (command.type === "item.unequip") {
       this.#simulation.unequipCharacterItem(command.equipmentSlot);
     } else if (
@@ -759,16 +781,14 @@ export class CombatArenaPresentation {
         index,
         item: item === null ? null : this.itemHudModel(item),
       })),
-      equipmentSlots: (["main-hand", "chest", "amulet"] as const).map(
-        (slot) => ({
-          slot,
-          label: EQUIPMENT_SLOT_LABELS[slot],
-          item:
-            loadout.equipment[slot] === null
-              ? null
-              : this.equipmentHudModel(loadout.equipment[slot]),
-        }),
-      ),
+      equipmentSlots: EQUIPMENT_SLOTS.map((slot) => ({
+        slot,
+        label: EQUIPMENT_SLOT_LABELS[slot],
+        item:
+          loadout.equipment[slot] === null
+            ? null
+            : this.equipmentHudModel(loadout.equipment[slot]),
+      })),
       abilityChoices: IMPLEMENTED_ABILITY_CATALOG.map((id) => ({
         id,
         displayName: this.abilityName(id),
@@ -823,11 +843,13 @@ export class CombatArenaPresentation {
         id: `${base.id}:base-${index}`,
         source: "base" as const,
         label: this.modifierLabel(modifier),
+        tier: null,
       })),
       ...item.affixes.map((affix) => ({
         id: affix.affixId,
         source: "affix" as const,
         label: this.modifierLabel(affix.modifier),
+        tier: affix.tier,
       })),
     ];
     return {
@@ -838,13 +860,8 @@ export class CombatArenaPresentation {
           ? base.displayName
           : `${affixNames.join(" ")} ${base.displayName}`,
       rarity: item.rarity,
-      slot: base.slot,
-      typeLabel:
-        base.slot === "main-hand"
-          ? "Melee weapon"
-          : base.slot === "chest"
-            ? "Body armor"
-            : "Amulet",
+      slotKind: base.slot,
+      typeLabel: EQUIPMENT_TYPE_LABELS[base.slot],
       modifiers,
     };
   }

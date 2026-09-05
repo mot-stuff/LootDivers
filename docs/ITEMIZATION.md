@@ -13,10 +13,11 @@ Loot should create interesting decisions rather than only larger numbers.
 Phase 3 proves a focused loot loop rather than the final item model:
 
 - a 12-slot inventory;
-- Main Hand, Chest, and Amulet equipment slots;
+- nine equipment slots: Helmet, Chest, Amulet, Belt, Boots, Main Hand,
+  Offhand, Ring 1, and Ring 2;
 - non-stackable equipment and Ability Stone stacks of up to nine;
-- Common equipment with no affixes, Magic equipment with one affix, and Rare
-  equipment with two distinct legal affixes;
+- Common equipment with no affixes, Magic equipment with one or two affixes,
+  and Rare equipment with three or four distinct legal affixes;
 - one deterministic equipment drop per enemy kill and one guaranteed Ability
   Stone on the first kill of a run;
 - automatic pickup within a short radius, with drops retained when inventory is
@@ -24,11 +25,37 @@ Phase 3 proves a focused loot loop rather than the final item model:
 - equipment modifiers for maximum health and outgoing ability damage; and
 - readable inventory, equipment, affix, stat, and Ability Stone UI.
 
-The three prototype bases are Worn Cleaver, Trailguard Vest, and Wayfinder
-Amulet. The six prototype affixes are Tempered, Steadfast Grip, Reinforced,
-Battlewoven, Hearty, and Focused. Slot and tag restrictions prevent illegal
-rolls. This is intentionally enough content to test choices without creating a
+Base items declare a slot kind rather than a concrete character slot. Every
+kind maps to one slot except rings: a ring-kind item may occupy Ring 1 or
+Ring 2. Equipping without an explicit target derives the slot from the base;
+rings prefer the first empty ring slot and otherwise swap into Ring 1. An
+explicit target slot is rejected if it does not accept the item's kind.
+
+The eight prototype bases give every slot at least one obtainable item:
+Worn Cleaver (main hand), Trailguard Vest (chest), Wayfinder Amulet (amulet),
+Lookout Casque (helmet), Cinchweave Belt (belt), Drifter Treads (boots),
+Splintered Buckler (offhand), and Plain Loopband (ring).
+
+Every affix rolls a tier from 1 through 5. Tier 1 is the best: each affix
+declares five non-overlapping value ranges where tier 1 holds the highest
+values. Tier N rolls with relative weight N (tier 1 at 1/15, tier 5 at 5/15),
+so strong tiers are rare. Generation rolls the affix count, then per affix a
+candidate, a tier, and a value inside that tier's range; the whole item is
+deterministic per seed, and validation rejects tiers outside 1–5 or values
+outside the rolled tier's range.
+
+The eight prototype affixes are Tempered and Steadfast Grip (main hand),
+Reinforced and Battlewoven (armor slots: helmet, chest, belt, boots, offhand),
+Hearty and Focused (jewelry: amulet and rings), and the generic Vigorous and
+Keen (any equipment, deliberately weaker ranges). Slot-kind and tag
+restrictions prevent illegal rolls, and every base has exactly four legal
+affixes, so the Rare maximum is always satisfiable with distinct affixes. This
+is intentionally enough content to test choices without creating a
 production-scale catalog.
+
+Unique rarity exists in the item model (reserved for later phases) but is
+never generated: generation rejects unique requests and enemy loot weights
+cover Common, Magic, and Rare only.
 
 Base and affix catalogs are immutable typed TypeScript data consumed by generic
 generation and validation rules. Moving them into the canonical compiled JSON

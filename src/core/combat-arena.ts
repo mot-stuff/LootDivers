@@ -419,8 +419,14 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     return this.#characterItems.addItem(item);
   }
 
-  public equipCharacterItem(inventoryIndex: number): EquipResult {
-    const result = this.#characterItems.equipFromInventory(inventoryIndex);
+  public equipCharacterItem(
+    inventoryIndex: number,
+    targetSlot?: EquipmentSlot,
+  ): EquipResult {
+    const result = this.#characterItems.equipFromInventory(
+      inventoryIndex,
+      targetSlot,
+    );
     if (result.accepted) this.synchronizeEquipmentHealth();
     return result;
   }

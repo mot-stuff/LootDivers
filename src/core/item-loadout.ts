@@ -6,11 +6,14 @@ import {
   type CombatAbilityId,
 } from "./combat-abilities";
 import {
+  EQUIPMENT_SLOTS,
   IMPLEMENTED_ABILITY_CATALOG,
+  slotAcceptsKind,
+  slotsForKind,
   type EquipmentSlot,
 } from "./item-catalog";
 import {
-  equipmentSlotOf,
+  equipmentSlotKindOf,
   modifiersForEquipment,
   type EquipmentItemInstance,
   type ItemInstance,
@@ -35,7 +38,7 @@ export const DEFAULT_BASE_CHARACTER_STATS: BaseCharacterStats = {
   outgoingAbilityDamageBasisPoints: 10_000,
 };
 
-export type EquipFailure = "not-equipment" | "empty-slot";
+export type EquipFailure = "not-equipment" | "empty-slot" | "incompatible-slot";
 
 export interface EquipResult {
   readonly accepted: boolean;
@@ -58,15 +61,12 @@ export interface StoneConsumptionResult {
   readonly reason?: StoneConsumptionFailure;
 }
 
-const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = [
-  "main-hand",
-  "chest",
-  "amulet",
-];
 const LOADOUT_SLOTS: readonly LoadoutSlot[] = ["lmb", "q", "e", "f"];
 
 function emptyEquipment(): Record<EquipmentSlot, EquipmentItemInstance | null> {
-  return { "main-hand": null, chest: null, amulet: null };
+  const equipment = {} as Record<EquipmentSlot, EquipmentItemInstance | null>;
+  for (const slot of EQUIPMENT_SLOTS) equipment[slot] = null;
+  return equipment;
 }
 
 function initialLoadout(): Record<LoadoutSlot, CombatAbilityId | null> {
@@ -157,14 +157,37 @@ export class CharacterItemLoadout {
     return this.#inventory.add(item);
   }
 
-  public equipFromInventory(inventoryIndex: number): EquipResult {
+  /**
+   * Equips the item at the given inventory index. When `targetSlot` is
+   * omitted, the slot is derived from the item's base: kinds with one
+   * concrete slot use it, and rings prefer the first empty ring slot,
+   * falling back to ring-1 (swapping its occupant). A provided `targetSlot`
+   * must accept the item's slot kind or the command is rejected.
+   */
+  public equipFromInventory(
+    inventoryIndex: number,
+    targetSlot?: EquipmentSlot,
+  ): EquipResult {
     const item = this.#inventory.itemAt(inventoryIndex);
     if (item === null) return { accepted: false, reason: "empty-slot" };
     if (item.kind !== "equipment") {
       return { accepted: false, reason: "not-equipment" };
     }
 
-    const slot = equipmentSlotOf(item);
+    const kind = equipmentSlotKindOf(item);
+    let slot: EquipmentSlot;
+    if (targetSlot !== undefined) {
+      if (!slotAcceptsKind(targetSlot, kind)) {
+        return { accepted: false, reason: "incompatible-slot" };
+      }
+      slot = targetSlot;
+    } else {
+      const candidates = slotsForKind(kind);
+      slot =
+        candidates.find((candidate) => this.#equipment[candidate] === null) ??
+        candidates[0]!;
+    }
+
     const previous = this.#equipment[slot];
     this.#inventory.take(inventoryIndex);
     this.#equipment[slot] = item;

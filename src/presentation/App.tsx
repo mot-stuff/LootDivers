@@ -10,6 +10,7 @@ import type {
   CombatHudReadModel,
   InventoryHudReadModel,
   ItemEquipmentSlot,
+  ItemEquipmentSlotKind,
   ItemHudReadModel,
   ItemUiCommand,
   ShellBindings,
@@ -43,9 +44,15 @@ const EMPTY_ITEM_HUD: InventoryHudReadModel = {
     item: null,
   })),
   equipmentSlots: [
-    { slot: "main-hand", label: "Main hand", item: null },
+    { slot: "helmet", label: "Helmet", item: null },
     { slot: "chest", label: "Chest", item: null },
     { slot: "amulet", label: "Amulet", item: null },
+    { slot: "belt", label: "Belt", item: null },
+    { slot: "boots", label: "Boots", item: null },
+    { slot: "main-hand", label: "Main hand", item: null },
+    { slot: "offhand", label: "Offhand", item: null },
+    { slot: "ring-1", label: "Ring 1", item: null },
+    { slot: "ring-2", label: "Ring 2", item: null },
   ],
   abilityChoices: [],
   loadout: [
@@ -113,12 +120,19 @@ function selectedItem(
   );
 }
 
-function itemSlotLabel(slot: ItemEquipmentSlot): string {
-  return slot === "main-hand"
-    ? "Main hand"
-    : slot === "chest"
-      ? "Chest"
-      : "Amulet";
+const ITEM_SLOT_KIND_LABELS: Readonly<Record<ItemEquipmentSlotKind, string>> = {
+  helmet: "Helmet",
+  chest: "Chest",
+  amulet: "Amulet",
+  belt: "Belt",
+  boots: "Boots",
+  "main-hand": "Main hand",
+  offhand: "Offhand",
+  ring: "Ring",
+};
+
+function itemSlotLabel(slotKind: ItemEquipmentSlotKind): string {
+  return ITEM_SLOT_KIND_LABELS[slotKind];
 }
 
 function ItemTooltip({ item }: { readonly item: ItemHudReadModel | null }) {
@@ -140,7 +154,7 @@ function ItemTooltip({ item }: { readonly item: ItemHudReadModel | null }) {
       <h3>{item.displayName}</h3>
       <p>
         {item.kind === "equipment"
-          ? `${itemSlotLabel(item.slot)} · ${item.typeLabel}`
+          ? `${itemSlotLabel(item.slotKind)} · ${item.typeLabel}`
           : `${item.typeLabel} · Stack ${item.quantity}`}
       </p>
       {item.kind === "equipment" && (
