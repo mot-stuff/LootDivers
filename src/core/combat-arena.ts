@@ -39,6 +39,17 @@ import {
   type SimpleMeleeEnemyConfig,
   type SimpleMeleeEnemyDiagnostics,
 } from "./simple-melee-enemy";
+import {
+  CharacterItemLoadout,
+  type EquipmentStats,
+  type EquipResult,
+  type LoadoutAssignmentResult,
+  type LoadoutSlot,
+  type StoneConsumptionResult,
+} from "./item-loadout";
+import type { EquipmentSlot } from "./item-catalog";
+import type { EquipmentItemInstance, ItemInstance } from "./item-generation";
+import type { InventoryAddResult } from "./inventory";
 
 export type AttackPhase = "idle" | "startup" | "active" | "recovery";
 
@@ -140,6 +151,24 @@ export interface CombatArenaEventReader {
   drainEvents(): readonly CombatArenaEvent[];
 }
 
+export interface CharacterItemLoadoutReadModel {
+  readonly inventory: readonly (ItemInstance | null)[];
+  readonly equipment: Readonly<
+    Record<EquipmentSlot, EquipmentItemInstance | null>
+  >;
+  readonly ownedAbilities: readonly CombatAbilityId[];
+  readonly assignments: Readonly<Record<LoadoutSlot, CombatAbilityId | null>>;
+  readonly stats: EquipmentStats;
+}
+
+export type CombatSlotRequestResult =
+  | AbilityRequestResult
+  | {
+      readonly accepted: false;
+      readonly reason: "slot-empty";
+      readonly history: readonly [];
+    };
+
 export interface CombatArenaDiagnostics {
   readonly tick: number;
   readonly x: number;
@@ -223,6 +252,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   readonly #playerId: RuntimeEntityId;
   readonly #playerHealth: HealthPool;
   readonly #enemy: SimpleMeleeEnemy;
+  readonly #characterItems = new CharacterItemLoadout();
   readonly #events: CombatArenaEvent[] = [];
   readonly #attackHitTargets = new Set<string>();
   readonly #statuses = new RefreshingStatusStore();
@@ -292,7 +322,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.validateConfig(config);
     this.#dodgeDurationTicks = secondsToTicks(config.dodgeDurationSeconds);
     this.#dodgeCooldownTicks = secondsToTicks(config.dodgeCooldownSeconds);
-    this.#playerHealth = new HealthPool(config.playerMaxHealth);
+    this.#playerHealth = new HealthPool(this.characterStats().maximumHealth);
     this.#enemy = new SimpleMeleeEnemy(config.enemy);
     this.#playerId = this.#lifecycle.create(
       { x: config.width / 2, y: config.height / 2, elevation: 0 },
@@ -333,8 +363,65 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
   public requestPrimaryAttack(): void {
     if (this.#dodgeTicksRemaining === 0) {
-      this.beginAttack();
+      this.requestAbilitySlot("lmb");
     }
+  }
+
+  public requestAbilitySlot(
+    slot: LoadoutSlot,
+    target?: AbilityTarget,
+  ): CombatSlotRequestResult {
+    const abilityId = this.#characterItems.loadout()[slot];
+    if (abilityId === null) {
+      return { accepted: false, reason: "slot-empty", history: [] };
+    }
+    return this.requestAbility(
+      abilityId,
+      this.resolveSlotTarget(abilityId, target),
+    );
+  }
+
+  public addCharacterItem(item: ItemInstance): InventoryAddResult {
+    return this.#characterItems.addItem(item);
+  }
+
+  public equipCharacterItem(inventoryIndex: number): EquipResult {
+    const result = this.#characterItems.equipFromInventory(inventoryIndex);
+    if (result.accepted) this.synchronizeEquipmentHealth();
+    return result;
+  }
+
+  public unequipCharacterItem(slot: EquipmentSlot): InventoryAddResult {
+    const result = this.#characterItems.unequip(slot);
+    if (result.accepted) this.synchronizeEquipmentHealth();
+    return result;
+  }
+
+  public consumeCharacterAbilityStone(
+    inventoryIndex: number,
+    selectedAbilityId: CombatAbilityId,
+  ): StoneConsumptionResult {
+    return this.#characterItems.consumeAbilityStone(
+      inventoryIndex,
+      selectedAbilityId,
+    );
+  }
+
+  public assignAbilitySlot(
+    slot: LoadoutSlot,
+    abilityId: CombatAbilityId | null,
+  ): LoadoutAssignmentResult {
+    return this.#characterItems.assignAbility(slot, abilityId);
+  }
+
+  public characterItemLoadout(): CharacterItemLoadoutReadModel {
+    return {
+      inventory: this.#characterItems.inventorySlots(),
+      equipment: this.#characterItems.equipment(),
+      ownedAbilities: this.#characterItems.ownedAbilities(),
+      assignments: this.#characterItems.loadout(),
+      stats: this.characterStats(),
+    };
   }
 
   public abilityActivation(
@@ -706,14 +793,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     };
   }
 
-  private beginAttack(): void {
-    this.requestAbility(BASIC_CLEAVE_ID, {
-      kind: "direction",
-      x: this.#facingX,
-      y: this.#facingY,
-    });
-  }
-
   private advanceAbilityExecutions(): void {
     for (const executionId of [...this.#activeExecutions.keys()]) {
       const next = this.#abilityEngine.advance(executionId, this.#tick);
@@ -863,8 +942,16 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         clear: (handle) => this.#cooldownEnds.delete(handle.abilityId),
       },
       stats: {
-        read: (_entityId, statId) =>
-          this.#statuses.multiplier("player", statId),
+        read: (_entityId, statId) => {
+          const temporaryMultiplier = this.#statuses.multiplier(
+            "player",
+            statId,
+          );
+          return statId === OUTGOING_DAMAGE_STAT_ID
+            ? this.characterStats().outgoingAbilityDamageMultiplier *
+                temporaryMultiplier
+            : temporaryMultiplier;
+        },
       },
       targets: {
         validate: (request, definition) => {
@@ -1196,6 +1283,65 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       x: this.#lifecycle.transforms.x[index] ?? 0,
       y: this.#lifecycle.transforms.y[index] ?? 0,
     };
+  }
+
+  private characterStats(): EquipmentStats {
+    return this.#characterItems.stats({
+      maximumHealth: this.config.playerMaxHealth,
+      outgoingAbilityDamageBasisPoints: 10_000,
+    });
+  }
+
+  private synchronizeEquipmentHealth(): void {
+    this.#playerHealth.updateMaximum(this.characterStats().maximumHealth);
+  }
+
+  private resolveSlotTarget(
+    abilityId: CombatAbilityId,
+    target: AbilityTarget | undefined,
+  ): AbilityTarget {
+    const definition = this.definitionById(abilityId);
+    if (definition?.targeting.mode === "self") {
+      return { kind: "self" };
+    }
+
+    const player = this.playerPosition();
+    if (definition?.targeting.mode === "point") {
+      if (target?.kind === "point") return target;
+      const direction =
+        target?.kind === "direction"
+          ? this.normalizedDirection(target.x, target.y)
+          : { x: this.#facingX, y: this.#facingY };
+      return {
+        kind: "point",
+        x: player.x + direction.x * definition.targeting.range,
+        y: player.y + direction.y * definition.targeting.range,
+      };
+    }
+
+    if (definition?.targeting.mode === "direction") {
+      if (target?.kind === "direction") return target;
+      if (target?.kind === "point") {
+        return {
+          kind: "direction",
+          x: target.x - player.x,
+          y: target.y - player.y,
+        };
+      }
+      return { kind: "direction", x: this.#facingX, y: this.#facingY };
+    }
+
+    return target ?? { kind: "self" };
+  }
+
+  private normalizedDirection(
+    x: number,
+    y: number,
+  ): { readonly x: number; readonly y: number } {
+    const length = Math.hypot(x, y);
+    return length === 0
+      ? { x: this.#facingX, y: this.#facingY }
+      : { x: x / length, y: y / length };
   }
 
   private validateConfig(config: CombatArenaConfig): void {

@@ -38,6 +38,21 @@ export class HealthPool implements Damageable {
     return { ...this.#health };
   }
 
+  public updateMaximum(maxHealth: number): HealthReadModel {
+    if (!Number.isFinite(maxHealth) || maxHealth <= 0) {
+      throw new RangeError("Maximum health must be finite and positive.");
+    }
+
+    const missingHealth = this.#health.max - this.#health.current;
+    this.#health.max = maxHealth;
+    this.#health.current = Math.min(
+      maxHealth,
+      Math.max(0, maxHealth - missingHealth),
+    );
+    this.#health.dead = this.#health.current === 0;
+    return this.health;
+  }
+
   public applyDamage(
     request: DamageRequest,
     invulnerable = false,

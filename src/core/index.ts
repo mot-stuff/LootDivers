@@ -37,7 +37,9 @@ export {
   type CombatAbilityActivationReadModel,
   type CombatAreaFeedbackReadModel,
   type CombatProjectileReadModel,
+  type CombatSlotRequestResult,
   type CombatTargetReadModel,
+  type CharacterItemLoadoutReadModel,
 } from "./combat-arena";
 export {
   HealthPool,

@@ -6,9 +6,13 @@ import {
   CombatArenaSimulation,
   DEFAULT_COMBAT_ARENA_CONFIG,
   DEFIANT_SIGNAL_ID,
+  EQUIPMENT_BASE_CATALOG,
   FIXED_STEP_SECONDS,
   WINTER_PULSE_ID,
+  createAbilityStoneStack,
   definitionById,
+  generateEquipmentItem,
+  persistentInstanceId,
 } from "../../src/core";
 
 function step(simulation: CombatArenaSimulation, count: number): void {
@@ -18,6 +22,33 @@ function step(simulation: CombatArenaSimulation, count: number): void {
       deltaSeconds: FIXED_STEP_SECONDS,
     });
   }
+}
+
+function unlockPhaseTwoAbilities(simulation: CombatArenaSimulation): void {
+  simulation.addCharacterItem(
+    createAbilityStoneStack(persistentInstanceId("item:arena-stones"), 3),
+  );
+  for (const abilityId of [
+    CINDER_DART_ID,
+    WINTER_PULSE_ID,
+    DEFIANT_SIGNAL_ID,
+  ]) {
+    expect(simulation.consumeCharacterAbilityStone(0, abilityId)).toMatchObject(
+      { accepted: true },
+    );
+  }
+}
+
+function equipCommonWeapon(simulation: CombatArenaSimulation): void {
+  simulation.addCharacterItem(
+    generateEquipmentItem({
+      seed: 1,
+      instanceId: persistentInstanceId("item:arena-weapon"),
+      baseId: EQUIPMENT_BASE_CATALOG[0]!.id,
+      rarity: "common",
+    }),
+  );
+  expect(simulation.equipCharacterItem(0)).toEqual({ accepted: true });
 }
 
 describe("CombatArenaSimulation", () => {
@@ -357,5 +388,190 @@ describe("CombatArenaSimulation", () => {
         stage: "startup",
       },
     });
+  });
+
+  it("executes assigned slots with direction, point, and self targets", () => {
+    const simulation = new CombatArenaSimulation();
+    unlockPhaseTwoAbilities(simulation);
+    expect(simulation.assignAbilitySlot("q", CINDER_DART_ID)).toEqual({
+      accepted: true,
+    });
+    expect(simulation.assignAbilitySlot("e", WINTER_PULSE_ID)).toEqual({
+      accepted: true,
+    });
+    expect(simulation.assignAbilitySlot("f", DEFIANT_SIGNAL_ID)).toEqual({
+      accepted: true,
+    });
+
+    expect(
+      simulation.requestAbilitySlot("q", {
+        kind: "point",
+        x: 700,
+        y: 400,
+      }),
+    ).toMatchObject({ accepted: true });
+    expect(simulation.diagnostics().currentExecution?.target).toEqual({
+      kind: "direction",
+      x: 100,
+      y: 0,
+    });
+
+    simulation.reset();
+    expect(
+      simulation.requestAbilitySlot("e", { kind: "direction", x: 1, y: 0 }),
+    ).toMatchObject({ accepted: true });
+    expect(simulation.diagnostics().currentExecution?.target).toEqual({
+      kind: "point",
+      x: 960,
+      y: 400,
+    });
+
+    simulation.reset();
+    expect(
+      simulation.requestAbilitySlot("f", {
+        kind: "point",
+        x: 700,
+        y: 400,
+      }),
+    ).toMatchObject({ accepted: true });
+    expect(simulation.diagnostics().currentExecution?.target).toEqual({
+      kind: "self",
+    });
+  });
+
+  it("keeps Basic Cleave assigned and routes primary attacks through LMB", () => {
+    const simulation = new CombatArenaSimulation();
+    unlockPhaseTwoAbilities(simulation);
+
+    expect(simulation.assignAbilitySlot("lmb", CINDER_DART_ID)).toEqual({
+      accepted: false,
+      reason: "basic-cleave-required",
+    });
+    expect(simulation.assignAbilitySlot("q", BASIC_CLEAVE_ID)).toEqual({
+      accepted: true,
+    });
+    expect(simulation.assignAbilitySlot("lmb", CINDER_DART_ID)).toEqual({
+      accepted: true,
+    });
+
+    simulation.requestPrimaryAttack();
+    expect(simulation.diagnostics().currentExecution).toMatchObject({
+      abilityId: CINDER_DART_ID,
+      target: { kind: "direction", x: 1, y: 0 },
+    });
+    expect(simulation.characterItemLoadout().assignments).toMatchObject({
+      lmb: CINDER_DART_ID,
+      q: BASIC_CLEAVE_ID,
+    });
+  });
+
+  it("applies equipment damage to every damage ability", () => {
+    const base = DEFAULT_COMBAT_ARENA_CONFIG;
+    const cases = [
+      {
+        abilityId: BASIC_CLEAVE_ID,
+        target: undefined,
+        startupTicks: 5,
+        expectedDamage: 26,
+        enemyX: 690,
+      },
+      {
+        abilityId: CINDER_DART_ID,
+        target: undefined,
+        startupTicks: 22,
+        expectedDamage: 31,
+        enemyX: 750,
+      },
+      {
+        abilityId: WINTER_PULSE_ID,
+        target: { kind: "point" as const, x: 750, y: 400 },
+        startupTicks: 12,
+        expectedDamage: 21,
+        enemyX: 750,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const simulation = new CombatArenaSimulation({
+        ...base,
+        enemy: {
+          ...base.enemy,
+          spawnX: testCase.enemyX,
+          spawnY: 400,
+          maxHealth: 100,
+        },
+      });
+      equipCommonWeapon(simulation);
+      expect(
+        simulation.requestAbility(testCase.abilityId, testCase.target).accepted,
+      ).toBe(true);
+      step(simulation, testCase.startupTicks);
+      expect(simulation.diagnostics().enemy.health).toBe(
+        100 - testCase.expectedDamage,
+      );
+    }
+  });
+
+  it("preserves missing health across equipment changes and resets to equipped max", () => {
+    const simulation = new CombatArenaSimulation();
+    const chest = generateEquipmentItem({
+      seed: 2,
+      instanceId: persistentInstanceId("item:arena-chest"),
+      baseId: EQUIPMENT_BASE_CATALOG[1]!.id,
+      rarity: "common",
+    });
+    simulation.addCharacterItem(chest);
+    simulation.applyPlayerDamage({ amount: 30, sourceId: "enemy" });
+
+    expect(simulation.equipCharacterItem(0)).toEqual({ accepted: true });
+    expect(simulation.diagnostics()).toMatchObject({
+      playerHealth: 80,
+      playerMaxHealth: 110,
+    });
+    expect(simulation.characterItemLoadout()).toMatchObject({
+      equipment: { chest },
+      stats: { maximumHealth: 110 },
+    });
+
+    simulation.reset();
+    expect(simulation.diagnostics()).toMatchObject({
+      playerHealth: 110,
+      playerMaxHealth: 110,
+    });
+    expect(simulation.unequipCharacterItem("chest")).toEqual({
+      accepted: true,
+    });
+    expect(simulation.diagnostics()).toMatchObject({
+      playerHealth: 100,
+      playerMaxHealth: 100,
+    });
+  });
+
+  it("multiplies equipment damage with the temporary Focused modifier", () => {
+    const simulation = new CombatArenaSimulation({
+      ...DEFAULT_COMBAT_ARENA_CONFIG,
+      enemy: {
+        ...DEFAULT_COMBAT_ARENA_CONFIG.enemy,
+        spawnX: 750,
+        spawnY: 400,
+      },
+    });
+    equipCommonWeapon(simulation);
+
+    expect(simulation.requestAbility(DEFIANT_SIGNAL_ID).accepted).toBe(true);
+    step(simulation, 15);
+    expect(simulation.requestAbility(CINDER_DART_ID).accepted).toBe(true);
+    step(simulation, 22);
+
+    expect(simulation.diagnostics().enemy.health).toBe(13);
+    expect(
+      simulation
+        .drainEvents()
+        .filter(
+          (event) =>
+            event.type === "damage-applied" &&
+            event.targetId === DEFAULT_COMBAT_ARENA_CONFIG.enemy.id,
+        ),
+    ).toContainEqual(expect.objectContaining({ amount: 37 }));
   });
 });
