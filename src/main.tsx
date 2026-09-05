@@ -91,6 +91,7 @@ const fullFixture = fixtureParameters.has("fullFixture");
 const persistenceAutomation = fixtureParameters.has("persistenceTest");
 const combatPrototype =
   !worldAutomation && !fullFixture && !persistenceAutomation;
+document.body.classList.toggle("combat-mode", combatPrototype);
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,
   cssHeight: 0,

@@ -65,7 +65,7 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
     .poll(async () => (await diagnostics(page))?.dodgeReady)
     .toBe(false);
 
-  await page.getByRole("button", { name: "Send diagnostic intent" }).focus();
+  await page.getByRole("link", { name: "Skip canvas" }).focus();
   await expect
     .poll(async () => (await diagnostics(page))?.pausedForUi)
     .toBe(true);
@@ -76,6 +76,22 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
   await page.keyboard.press("w");
   expect((await diagnostics(page))?.tick).toBe(pausedState?.tick);
   expect(failures).toEqual([]);
+});
+
+test("combat canvas fills the browser viewport", async ({ page }) => {
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+
+  const viewport = page.viewportSize();
+  const box = await page
+    .getByLabel("RARPG Phaser diagnostic canvas")
+    .boundingBox();
+  expect(viewport).not.toBeNull();
+  expect(box).not.toBeNull();
+  expect(box?.x).toBeCloseTo(0, 0);
+  expect(box?.y).toBeCloseTo(0, 0);
+  expect(box?.width).toBeCloseTo(viewport?.width ?? 0, 0);
+  expect(box?.height).toBeCloseTo(viewport?.height ?? 0, 0);
 });
 
 for (const scenario of [
@@ -162,12 +178,12 @@ test("movement remains bounded by semantic arena diagnostics", async ({
   await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
   await page.keyboard.down("a");
   await expect
-    .poll(async () => (await diagnostics(page))?.x, { timeout: 3_000 })
+    .poll(async () => (await diagnostics(page))?.x, { timeout: 5_000 })
     .toBe(18);
   await page.keyboard.up("a");
 
   const state = await diagnostics(page);
   expect(state?.x).toBe(18);
-  expect(state?.y).toBe(180);
+  expect(state?.y).toBe(400);
   expect(failures).toEqual([]);
 });

@@ -50,6 +50,7 @@ export class CombatArenaPresentation {
       .setDepth(PRESENTATION_DEPTH + 2);
     this.#feedbackGraphics = scene.add
       .graphics()
+      .setScrollFactor(0)
       .setDepth(PRESENTATION_DEPTH + 3);
     this.#statusText = scene.add
       .text(24, 446, "", {
@@ -58,6 +59,7 @@ export class CombatArenaPresentation {
         fontSize: "16px",
         lineSpacing: 7,
       })
+      .setScrollFactor(0)
       .setDepth(PRESENTATION_DEPTH + 4);
     this.drawArena();
     this.render(0);
@@ -86,6 +88,7 @@ export class CombatArenaPresentation {
     }
     const player = this.#simulation.diagnostics();
     const playerPoint = this.project(player.x, player.y);
+    this.scene.cameras.main.centerOn(playerPoint.x, playerPoint.y);
     const aimOriginY = playerPoint.y - 8;
     const pointerPoint = this.scene.cameras.main.getWorldPoint(
       this.#lastPointerX,
@@ -172,6 +175,7 @@ export class CombatArenaPresentation {
     const x = Phaser.Math.Linear(state.previousX, state.x, alpha);
     const y = Phaser.Math.Linear(state.previousY, state.y, alpha);
     const point = this.project(x, y);
+    this.scene.cameras.main.centerOn(point.x, point.y);
     const facingScreenX = (state.facingX - state.facingY) * ISO_X_SCALE;
     const facingScreenY = (state.facingX + state.facingY) * ISO_Y_SCALE;
     const facingLength = Math.hypot(facingScreenX, facingScreenY) || 1;

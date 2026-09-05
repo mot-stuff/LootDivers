@@ -51,7 +51,11 @@ export function App({
   });
 
   return (
-    <main class="technical-shell">
+    <main
+      class={
+        showCombatPrototype ? "technical-shell combat-shell" : "technical-shell"
+      }
+    >
       <a class="skip-link" href="#shell-controls">
         Skip canvas
       </a>

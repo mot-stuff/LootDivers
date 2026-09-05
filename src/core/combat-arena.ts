@@ -31,8 +31,8 @@ export interface CombatArenaDiagnostics {
 }
 
 export const DEFAULT_COMBAT_ARENA_CONFIG: CombatArenaConfig = {
-  width: 640,
-  height: 360,
+  width: 1_200,
+  height: 800,
   playerRadius: 18,
   moveSpeed: 190,
   dodgeSpeed: 510,
