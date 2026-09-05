@@ -33,6 +33,7 @@ import {
   type FlaskSlot,
   type ItemInstance,
   type LoadoutSlot,
+  type GoldPileDrop,
   type WorldLootDrop,
 } from "../../core";
 import {
@@ -176,6 +177,14 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
     readonly labelCanvasX: number;
     readonly labelCanvasY: number;
   }[];
+  /** Gold piles currently rendered with their amount labels (TASK-712). */
+  readonly renderedGoldPiles: readonly {
+    readonly pileId: string;
+    readonly amount: number;
+    readonly canvasX: number;
+    readonly canvasY: number;
+    readonly labelText: string;
+  }[];
 }
 
 export class CombatArenaPresentation {
@@ -215,6 +224,8 @@ export class CombatArenaPresentation {
   #renderedStatusCount = 0;
   #renderedLoot: CombatPresentationDiagnostics["renderedLoot"] = [];
   readonly #lootLabels = new Map<string, Phaser.GameObjects.Text>();
+  readonly #goldLabels = new Map<string, Phaser.GameObjects.Text>();
+  #renderedGoldPiles: CombatPresentationDiagnostics["renderedGoldPiles"] = [];
   readonly #itemCommand = (event: CustomEvent<ItemUiCommand>): void => {
     this.executeItemCommand(event.detail);
   };
@@ -355,6 +366,7 @@ export class CombatArenaPresentation {
       renderedAreaCount: this.#renderedAreaCount,
       renderedStatusCount: this.#renderedStatusCount,
       renderedLoot: this.#renderedLoot,
+      renderedGoldPiles: this.#renderedGoldPiles,
     };
   }
 
@@ -579,6 +591,10 @@ export class CombatArenaPresentation {
       label.destroy();
     }
     this.#lootLabels.clear();
+    for (const label of this.#goldLabels.values()) {
+      label.destroy();
+    }
+    this.#goldLabels.clear();
   }
 
   private drawArena(): void {
@@ -629,6 +645,7 @@ export class CombatArenaPresentation {
     this.drawAttack(state, point);
     this.drawAbilityFeedback(state);
     this.drawWorldLoot(state.worldLoot);
+    this.drawGoldPiles(state.goldPiles);
     this.drawInteractables(state);
     this.drawEnemy(state, alpha);
 
@@ -1045,6 +1062,80 @@ export class CombatArenaPresentation {
     this.#renderedLoot = rendered;
   }
 
+  /**
+   * Gold piles (TASK-712, DEC-039): rendered as a small coin cluster with
+   * the integer amount as a label, deliberately distinct from the diamond
+   * F-pickup item markers — gold auto-collects on walk-over, so its label
+   * sits below the marker (never clickable, never stacked with item names).
+   */
+  private drawGoldPiles(piles: readonly GoldPileDrop[]): void {
+    const rendered: Array<
+      CombatPresentationDiagnostics["renderedGoldPiles"][number]
+    > = [];
+    const livePileIds = new Set<string>();
+    for (const pile of piles) {
+      const point = this.project(pile.x, pile.y);
+      this.#combatGraphics.fillStyle(0x06101c, 0.55);
+      this.#combatGraphics.fillEllipse(point.x, point.y + 3, 22, 10);
+      // Three overlapping coins read as a pile at arena zoom.
+      this.#combatGraphics.fillStyle(0xfacc15, 0.95);
+      this.#combatGraphics.fillEllipse(point.x - 5, point.y, 9, 6);
+      this.#combatGraphics.fillEllipse(point.x + 5, point.y, 9, 6);
+      this.#combatGraphics.fillEllipse(point.x, point.y - 4, 9, 6);
+      this.#combatGraphics.lineStyle(1, 0x92700c, 1);
+      this.#combatGraphics.strokeEllipse(point.x, point.y - 4, 9, 6);
+      livePileIds.add(pile.pileId);
+      const labelText = String(pile.amount);
+      const label = this.ensureGoldLabel(pile.pileId, labelText);
+      label.setPosition(point.x, point.y + 8);
+      const canvasPoint = this.scene.cameras.main.matrixCombined.transformPoint(
+        point.x,
+        point.y,
+      );
+      rendered.push({
+        pileId: pile.pileId,
+        amount: pile.amount,
+        canvasX: canvasPoint.x,
+        canvasY: canvasPoint.y,
+        labelText,
+      });
+    }
+    for (const [pileId, label] of this.#goldLabels) {
+      if (!livePileIds.has(pileId)) {
+        label.destroy();
+        this.#goldLabels.delete(pileId);
+      }
+    }
+    this.#renderedGoldPiles = rendered;
+  }
+
+  private ensureGoldLabel(
+    pileId: string,
+    labelText: string,
+  ): Phaser.GameObjects.Text {
+    const existing = this.#goldLabels.get(pileId);
+    if (existing !== undefined) {
+      if (existing.text !== labelText) {
+        existing.setText(labelText);
+      }
+      return existing;
+    }
+    const created = this.scene.add
+      .text(0, 0, labelText, {
+        fontFamily: "monospace",
+        fontSize: "11px",
+        color: "#facc15",
+        backgroundColor: "rgba(6, 16, 28, 0.8)",
+        padding: { x: 4, y: 1 },
+        stroke: "#06101c",
+        strokeThickness: 2,
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(PRESENTATION_DEPTH + 3);
+    this.#goldLabels.set(pileId, created);
+    return created;
+  }
+
   private ensureLootLabel(
     dropId: string,
     labelText: string,
@@ -1226,6 +1317,7 @@ export class CombatArenaPresentation {
     );
     return {
       revision,
+      gold: this.#simulation.gold(),
       inventorySlots: loadout.inventory.map((item, index) => ({
         index,
         item: item === null ? null : this.itemHudModel(item),

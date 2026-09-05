@@ -117,6 +117,7 @@ const MINIMAP_MARKER_CLASS: Readonly<
 
 const EMPTY_ITEM_HUD: InventoryHudReadModel = {
   revision: 0,
+  gold: 0,
   inventorySlots: Array.from({ length: INVENTORY_SLOT_COUNT }, (_, index) => ({
     index,
     item: null,
@@ -518,6 +519,15 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
           data-drop-inventory
         >
           <h3 id="inventory-slots-title">Inventory</h3>
+          {/* Gold counter (TASK-712, DEC-039): coin glyph + locale-formatted
+              integer per the TASK-713 memo §2.5. No decimals ever. */}
+          <p class="inventory-gold" data-testid="inventory-gold">
+            <span class="inventory-gold-coin" aria-hidden="true" />
+            <span class="inventory-gold-label">Gold</span>
+            <span class="inventory-gold-amount" data-testid="gold-amount">
+              {model.gold.toLocaleString("en-US")}
+            </span>
+          </p>
           <div class="inventory-grid-scroll">
             <ol
               class="inventory-grid"

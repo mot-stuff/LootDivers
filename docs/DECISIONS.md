@@ -2795,3 +2795,78 @@ Date: 2026-09-05 (TASK-710)
   death envelope equals the respawn envelope, checksum included).
 - A future death penalty only touches `respawn()` and the capture
   semantics; zone data and the overlay contract stay stable.
+
+---
+
+# DEC-039
+
+## Gold: deterministic rank-scaled drops, walk-over collection, blob-resident wallet
+
+Date: 2026-09-05 (TASK-712; numbers bound by the TASK-713 memo §2.
+DEC-038, the flask-consumption entry, lands with TASK-711 — entry
+numbers are planning-time IDs kept in numeric order, so recording order
+can differ from merge order, as with DEC-035/036/037.)
+
+## Decision
+
+1. **Every player kill drops exactly one gold pile** at the enemy's
+   death position, rolled uniformly per `EnemyRank` from the binding
+   TASK-713 §2.1 table (`GOLD_DROP_RANGES` in `src/core/enemy-loot.ts`):
+   normal 3–7, elite 10–14, boss 30–50. Item rarity never modulates gold
+   — the item roll and the gold roll stay orthogonal (memo §2.2).
+2. **Gold rolls draw from a dedicated RNG stream** seeded
+   `goldSeed = (seed ^ 0x9e3779b9) >>> 0` (memo §2.4), so the
+   `DeterministicEnemyLootGenerator` item sequence is byte-identical to a
+   gold-less run and every pre-TASK-712 seeded item expectation holds.
+   Each kill consumes exactly one raw uint32 draw (fixed-count modulo
+   rather than rejection sampling; bias ≤ 21/2³², immaterial), which
+   makes the stream position a pure function of the already-persisted
+   `killSequence`. `fromSnapshot` fast-forwards the stream with the new
+   O(1) `Mulberry32.atDraw`, so restored runs continue the identical
+   gold sequence with **no save-schema change** — `CharacterSave` v1 and
+   its `gold` field (DEC-034 amendment, TASK-705B) carry everything.
+3. **Collection is walk-over only.** Each fixed step, piles within
+   `loot.goldCollectRadius` (default 40 world units — deliberately under
+   the 48–64 `meleeRange` band so melee-kill piles stay visible, and
+   under the 72-unit F-key `pickupRadius`) auto-collect into the
+   TASK-705B wallet via `grantGold`, which clamps at `GOLD_MAX_TOTAL`;
+   overflow is lost gold, never a stuck pile. Dead players collect
+   nothing; there is no F-key path for gold. Uncollected piles are
+   transient zone state: they despawn on travel and respawn (memo §4.4)
+   and are never persisted.
+4. **Presentation:** a coin-cluster marker with the integer amount as a
+   gold-colored label below it, visually distinct from the diamond
+   F-pickup markers with their name labels above (DEC-029-consistent).
+   The inventory panel shows one gold line — coin glyph plus
+   locale-formatted integer (memo §2.5) — fed by a `gold` field on
+   `InventoryHudReadModel`; no dedicated HUD counter in v1.
+5. **Death interaction:** zero gold penalty per DEC-037; gold rides the
+   death-committed save unchanged. The memo's §3 respawn-fee
+   recommendation stays a post-v1 owner decision.
+
+## Alternatives Considered
+
+- Rolling gold from the existing item stream: rejected; it would shift
+  every seeded item sequence, violating the memo's §2.4 mandate.
+- Persisting the gold RNG state in the save (v2 migration): rejected;
+  deriving the position from `killSequence` gives identical determinism
+  with zero schema churn days after v1 shipped.
+- F-key pickup like items: rejected; the packet and memo specify
+  walk-over auto-collection — gold is a reward stream, not an inventory
+  decision.
+- A server-side gold ledger: deferred per DEC-032; gold lives in the
+  verbatim blob until the economy needs server arbitration.
+
+## Consequences
+
+- Gold-per-hour tracks the memo's §2.3 anchor (≈ 1,000–1,400/h at slice
+  pacing), giving future sinks (vendor prices, respec fees) a priced
+  baseline.
+- Existing seeded loot tests stayed green untouched, proving the item
+  stream never moved.
+- A future death fee or vendor spend only needs a `spendGold`
+  counterpart to `grantGold`; drops, collection, and persistence stay
+  stable.
+- The gold e2e spec carries no DEC-033 CI skip: all combat is
+  paused-stepped through the automation hooks and save settlement is
+  polled, so it runs on every CI browser.

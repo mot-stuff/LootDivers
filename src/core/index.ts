@@ -262,10 +262,13 @@ export {
 export {
   DEFAULT_ENEMY_LOOT_WEIGHTS,
   DeterministicEnemyLootGenerator,
+  GOLD_DROP_RANGES,
+  goldSeedFromRunSeed,
   type EnemyLootGeneratorConfig,
   type EnemyLootGeneratorSnapshot,
   type EnemyLootWeights,
   type GeneratedEnemyLoot,
+  type GoldPileDrop,
   type WorldLootDrop,
 } from "./enemy-loot";
 export {

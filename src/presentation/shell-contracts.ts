@@ -219,6 +219,12 @@ export interface LoadoutAssignmentHudReadModel {
 
 export interface InventoryHudReadModel {
   readonly revision: number;
+  /**
+   * Carried gold total (TASK-712, DEC-039): non-negative integer, clamped
+   * at the memo cap by the core wallet. The inventory panel renders it as
+   * a locale-formatted counter.
+   */
+  readonly gold: number;
   readonly inventorySlots: readonly InventorySlotHudReadModel[];
   readonly equipmentSlots: readonly EquipmentSlotHudReadModel[];
   readonly flaskSlots: readonly EquipmentSlotHudReadModel[];

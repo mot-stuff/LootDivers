@@ -103,6 +103,7 @@ import {
   DEFAULT_ENEMY_LOOT_WEIGHTS,
   DeterministicEnemyLootGenerator,
   type EnemyLootWeights,
+  type GoldPileDrop,
   type WorldLootDrop,
 } from "./enemy-loot";
 
@@ -120,6 +121,13 @@ export interface CombatArenaConfig {
   readonly loot: {
     readonly seed: number;
     readonly pickupRadius: number;
+    /**
+     * Distance from the player within which gold piles auto-collect on
+     * walk-over (TASK-712, DEC-039) — deliberately tighter than the F-key
+     * `pickupRadius` so piles from melee kills (enemies die at
+     * `meleeRange` ≥ 48) stay visible until the player steps onto them.
+     */
+    readonly goldCollectRadius: number;
     readonly rarityWeights: EnemyLootWeights;
   };
   readonly abilityDefinitions: readonly CombatAbilityDefinition[];
@@ -208,6 +216,19 @@ export type CombatArenaEvent =
       readonly tick: number;
       readonly dropId: string;
       readonly item: ItemInstance;
+    }
+  | {
+      readonly type: "gold-dropped";
+      readonly tick: number;
+      readonly pile: GoldPileDrop;
+    }
+  | {
+      readonly type: "gold-collected";
+      readonly tick: number;
+      readonly pileId: string;
+      readonly amount: number;
+      /** Wallet total after the (clamped) grant. */
+      readonly total: number;
     };
 
 export interface CombatProjectileReadModel {
@@ -434,6 +455,10 @@ export interface CombatArenaDiagnostics {
   readonly targets: readonly CombatTargetReadModel[];
   readonly minimap: MinimapReadModel;
   readonly worldLoot: readonly WorldLootDrop[];
+  /** Uncollected gold piles awaiting walk-over (TASK-712). */
+  readonly goldPiles: readonly GoldPileDrop[];
+  /** Carried gold total (TASK-705B wallet, fed by TASK-712 drops). */
+  readonly gold: number;
   readonly enemyKillCount: number;
   readonly lootDropCount: number;
   readonly eventCount: number;
@@ -463,6 +488,7 @@ export const DEFAULT_COMBAT_ARENA_CONFIG: CombatArenaConfig = {
   loot: {
     seed: 0x10_07_5eed,
     pickupRadius: 72,
+    goldCollectRadius: 40,
     rarityWeights: DEFAULT_ENEMY_LOOT_WEIGHTS,
   },
   abilityDefinitions: COMBAT_ABILITY_DEFINITIONS,
@@ -515,6 +541,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   #nextMaterialSerial = 1;
   #lootGenerator: DeterministicEnemyLootGenerator;
   readonly #worldLoot: WorldLootDrop[] = [];
+  readonly #goldPiles: GoldPileDrop[] = [];
+  #nextGoldPileId = 1;
   readonly #events: CombatArenaEvent[] = [];
   readonly #attackHitTargets = new Set<string>();
   readonly #statuses = new RefreshingStatusStore();
@@ -1196,6 +1224,9 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     if (this.#cooldownTicksRemaining > 0) {
       this.#cooldownTicksRemaining -= 1;
     }
+    // After movement and combat resolution so piles dropped this tick are
+    // collectible immediately when the player already stands on them.
+    this.collectGoldPiles();
   }
 
   public reset(): void {
@@ -1410,6 +1441,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
           })),
       minimap: this.minimapReadModel(enemies),
       worldLoot: [...this.#worldLoot],
+      goldPiles: [...this.#goldPiles],
+      gold: this.#gold,
       enemyKillCount: this.#lootGenerator.killsGenerated(),
       lootDropCount: this.#nextLootDropId - 1,
       eventCount: this.#events.length,
@@ -1853,7 +1886,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       this.#tutorial.notify("attack");
     }
 
-    const generated = this.#lootGenerator.generateForKill();
+    const generated = this.#lootGenerator.generateForKill(target.rank);
     for (const item of generated.items) {
       const drop: WorldLootDrop = {
         dropId: `loot:drop-${this.#nextLootDropId++}`,
@@ -1863,6 +1896,44 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       };
       this.#worldLoot.push(drop);
       this.#events.push({ type: "loot-dropped", tick: this.#tick, drop });
+    }
+    // Every kill drops exactly one gold pile (TASK-712, memo §2.1); it
+    // auto-collects on walk-over instead of the F-key path.
+    const pile: GoldPileDrop = {
+      pileId: `gold:pile-${this.#nextGoldPileId++}`,
+      amount: generated.gold,
+      x: target.x,
+      y: target.y,
+    };
+    this.#goldPiles.push(pile);
+    this.#events.push({ type: "gold-dropped", tick: this.#tick, pile });
+  }
+
+  /**
+   * Auto-collects every gold pile within `loot.goldCollectRadius` of the
+   * living player (TASK-712, DEC-039). Runs each fixed step after movement;
+   * there is deliberately no F-key path for gold and no way for a grant to
+   * fail — `grantGold` clamps at `GOLD_MAX_TOTAL`, so overflow is lost gold,
+   * never a stuck pile loop.
+   */
+  private collectGoldPiles(): void {
+    if (this.#goldPiles.length === 0 || this.#playerHealth.health.dead) {
+      return;
+    }
+    const player = this.playerPosition();
+    for (let index = this.#goldPiles.length - 1; index >= 0; index -= 1) {
+      const pile = this.#goldPiles[index]!;
+      const distance = Math.hypot(pile.x - player.x, pile.y - player.y);
+      if (distance > this.config.loot.goldCollectRadius) continue;
+      this.#goldPiles.splice(index, 1);
+      const total = this.grantGold(pile.amount);
+      this.#events.push({
+        type: "gold-collected",
+        tick: this.#tick,
+        pileId: pile.pileId,
+        amount: pile.amount,
+        total,
+      });
     }
   }
 
@@ -2273,6 +2344,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#forgeOpen = false;
     this.#vendorOpen = false;
     this.#worldLoot.length = 0;
+    // Uncollected gold despawns with zone state (memo §4 invariant 4).
+    this.#goldPiles.length = 0;
     this.#projectiles.length = 0;
     this.#areaFeedback.length = 0;
     this.#pendingCleave = undefined;

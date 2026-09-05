@@ -9,7 +9,13 @@ import {
   DeterministicEnemyLootGenerator,
   ENEMY_KILL_EXPERIENCE,
   EQUIPMENT_BASE_CATALOG,
+  GOLD_DROP_RANGES,
+  GOLD_MAX_TOTAL,
+  goldSeedFromRunSeed,
+  HEARTHMERE_ID,
   ITEM_BASE_CATALOG,
+  Mulberry32,
+  parseCharacterSave,
   VITALITY_MAXIMUM_HEALTH,
   contentId,
   experienceToNextLevel,
@@ -951,5 +957,200 @@ describe("Phase 4 progression in the combat arena", () => {
     expect(simulation.diagnostics().enemy.health).toBe(
       100 - Math.floor(before * 1.12),
     );
+  });
+});
+
+describe("gold drops (TASK-712, TASK-713 memo §2)", () => {
+  const goldGenerator = (seed: number) =>
+    new DeterministicEnemyLootGenerator({
+      seed,
+      rarityWeights: DEFAULT_COMBAT_ARENA_CONFIG.loot.rarityWeights,
+    });
+
+  it("rolls integer amounts inside each rank's inclusive memo range", () => {
+    for (const rank of ["normal", "elite", "boss"] as const) {
+      const range = GOLD_DROP_RANGES[rank];
+      const seen = new Set<number>();
+      for (let seed = 0; seed < 40; seed += 1) {
+        const generator = goldGenerator(seed);
+        for (let kill = 0; kill < 40; kill += 1) {
+          const { gold } = generator.generateForKill(rank);
+          expect(Number.isSafeInteger(gold)).toBe(true);
+          expect(gold).toBeGreaterThanOrEqual(range.min);
+          expect(gold).toBeLessThanOrEqual(range.max);
+          seen.add(gold);
+        }
+      }
+      // 1,600 uniform rolls hit every value of a 5–21 wide range, so both
+      // documented bounds are reachable, not just interior values.
+      expect(seen.has(range.min)).toBe(true);
+      expect(seen.has(range.max)).toBe(true);
+      expect(seen.size).toBe(range.max - range.min + 1);
+    }
+    // Binding memo table (§2.1): rank ranges are exactly these numbers.
+    expect(GOLD_DROP_RANGES).toEqual({
+      normal: { min: 3, max: 7 },
+      elite: { min: 10, max: 14 },
+      boss: { min: 30, max: 50 },
+    });
+  });
+
+  it("keeps the item sequence byte-identical regardless of gold rolls", () => {
+    // Same seed, different rank mixes: gold amounts differ per rank while
+    // the item stream never shifts (memo §2.4 — gold draws from its own
+    // Mulberry32, seeded (seed ^ 0x9e3779b9) >>> 0).
+    const normalOnly = goldGenerator(77);
+    const mixedRanks = goldGenerator(77);
+    const ranks = ["boss", "elite", "normal", "boss", "elite"] as const;
+    const baseline = ranks.map(() => normalOnly.generateForKill("normal"));
+    const mixed = ranks.map((rank) => mixedRanks.generateForKill(rank));
+
+    expect(mixed.map(({ items }) => items)).toEqual(
+      baseline.map(({ items }) => items),
+    );
+    for (const [index, { gold }] of mixed.entries()) {
+      const range = GOLD_DROP_RANGES[ranks[index]!];
+      expect(gold).toBeGreaterThanOrEqual(range.min);
+      expect(gold).toBeLessThanOrEqual(range.max);
+    }
+    // The gold stream really is the derived seed's stream: reproducing it
+    // directly yields the same uint32 draws the amounts came from.
+    const reference = new Mulberry32(goldSeedFromRunSeed(77));
+    for (const [index, { gold }] of mixed.entries()) {
+      const range = GOLD_DROP_RANGES[ranks[index]!];
+      const span = range.max - range.min + 1;
+      expect(gold).toBe(range.min + (reference.nextUint32() % span));
+    }
+  });
+
+  it("continues the same gold sequence after snapshot restore", () => {
+    const original = goldGenerator(1_337);
+    for (let kill = 0; kill < 5; kill += 1) {
+      original.generateForKill("elite");
+    }
+    const snapshot = original.snapshot();
+    const uninterrupted = ["normal", "boss", "elite"].map(
+      (rank) => original.generateForKill(rank as "normal").gold,
+    );
+
+    const restored = DeterministicEnemyLootGenerator.fromSnapshot(
+      snapshot,
+      DEFAULT_COMBAT_ARENA_CONFIG.loot.rarityWeights,
+    );
+    const resumed = ["normal", "boss", "elite"].map(
+      (rank) => restored.generateForKill(rank as "normal").gold,
+    );
+    expect(resumed).toEqual(uninterrupted);
+  });
+
+  it("drops one pile per kill and auto-collects it on walk-over", () => {
+    const simulation = lootArena();
+    expect(simulation.gold()).toBe(0);
+    killArenaEnemy(simulation);
+    simulation.drainEvents();
+    step(simulation, 1);
+
+    // The enemy died ~90 world units away — outside the 40-unit walk-over
+    // radius — so the pile visibly persists instead of self-collecting.
+    let state = simulation.diagnostics();
+    expect(state.goldPiles).toHaveLength(1);
+    const pile = state.goldPiles[0]!;
+    expect(pile.amount).toBeGreaterThanOrEqual(GOLD_DROP_RANGES.normal.min);
+    expect(pile.amount).toBeLessThanOrEqual(GOLD_DROP_RANGES.normal.max);
+    expect(state.gold).toBe(0);
+
+    // Walking onto the pile collects it with no F-key interaction.
+    simulation.setMovement(1, 0);
+    step(simulation, 30);
+    simulation.setMovement(0, 0);
+    state = simulation.diagnostics();
+    expect(state.goldPiles).toHaveLength(0);
+    expect(state.gold).toBe(pile.amount);
+    expect(simulation.gold()).toBe(pile.amount);
+    const collected = simulation
+      .drainEvents()
+      .filter((event) => event.type === "gold-collected");
+    expect(collected).toEqual([
+      expect.objectContaining({
+        pileId: pile.pileId,
+        amount: pile.amount,
+        total: pile.amount,
+      }),
+    ]);
+  });
+
+  it("clamps walk-over grants at GOLD_MAX_TOTAL instead of failing", () => {
+    const simulation = lootArena();
+    expect(simulation.grantGold(GOLD_MAX_TOTAL - 1)).toBe(GOLD_MAX_TOTAL - 1);
+    killArenaEnemy(simulation);
+    simulation.setMovement(1, 0);
+    step(simulation, 30);
+    simulation.setMovement(0, 0);
+
+    // Pile amounts are ≥ 3, so the wallet caps; overflow is lost gold and
+    // the pile never sticks around as uncollectable.
+    expect(simulation.diagnostics().goldPiles).toHaveLength(0);
+    expect(simulation.gold()).toBe(GOLD_MAX_TOTAL);
+  });
+
+  it("never collects while dead and keeps gold through death (DEC-037)", () => {
+    const simulation = lootArena();
+    killArenaEnemy(simulation);
+    step(simulation, 1);
+    expect(simulation.diagnostics().goldPiles).toHaveLength(1);
+
+    simulation.applyPlayerDamage({ amount: 9_999, sourceId: "test" });
+    expect(simulation.diagnostics().playerDead).toBe(true);
+    simulation.setMovement(1, 0);
+    step(simulation, 30);
+    simulation.setMovement(0, 0);
+    // Dead players neither move nor vacuum piles.
+    expect(simulation.diagnostics().goldPiles).toHaveLength(1);
+    expect(simulation.gold()).toBe(0);
+
+    // Zero death penalty: banked gold survives the respawn; the uncollected
+    // pile despawns with the zone like any other transient drop.
+    const banked = simulation.grantGold(500);
+    expect(simulation.respawn()).toEqual(
+      expect.objectContaining({ accepted: true }),
+    );
+    expect(simulation.gold()).toBe(banked);
+    expect(simulation.diagnostics().goldPiles).toHaveLength(0);
+  });
+
+  it("despawns uncollected piles on zone travel but keeps the wallet", () => {
+    const simulation = lootArena();
+    killArenaEnemy(simulation);
+    step(simulation, 1);
+    expect(simulation.diagnostics().goldPiles).toHaveLength(1);
+    expect(simulation.travelTo(HEARTHMERE_ID)).toEqual(
+      expect.objectContaining({ accepted: true }),
+    );
+    expect(simulation.diagnostics().goldPiles).toHaveLength(0);
+    expect(simulation.diagnostics().zoneId).toBe(HEARTHMERE_ID);
+  });
+
+  it("round-trips earned gold through the character save", () => {
+    const simulation = lootArena();
+    killArenaEnemy(simulation);
+    simulation.setMovement(1, 0);
+    step(simulation, 30);
+    simulation.setMovement(0, 0);
+    const earned = simulation.gold();
+    expect(earned).toBeGreaterThan(0);
+
+    const save = simulation.captureCharacterSave();
+    expect(save.gold).toBe(earned);
+
+    const restored = lootArena();
+    restored.restoreCharacterSave(
+      parseCharacterSave(JSON.parse(JSON.stringify(save)) as unknown),
+    );
+    expect(restored.gold()).toBe(earned);
+    // Capture equality includes the loot generator snapshot, whose kill
+    // counter positions the gold stream — so post-restore rolls continue
+    // the uninterrupted sequence (proven directly in the snapshot test
+    // above).
+    expect(restored.captureCharacterSave()).toEqual(save);
   });
 });
