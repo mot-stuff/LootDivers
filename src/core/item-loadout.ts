@@ -1,4 +1,10 @@
-import { BASIC_CLEAVE_ID, type CombatAbilityId } from "./combat-abilities";
+import {
+  BASIC_CLEAVE_ID,
+  CINDER_DART_ID,
+  DEFIANT_SIGNAL_ID,
+  WINTER_PULSE_ID,
+  type CombatAbilityId,
+} from "./combat-abilities";
 import {
   IMPLEMENTED_ABILITY_CATALOG,
   type EquipmentSlot,
@@ -64,7 +70,12 @@ function emptyEquipment(): Record<EquipmentSlot, EquipmentItemInstance | null> {
 }
 
 function initialLoadout(): Record<LoadoutSlot, CombatAbilityId | null> {
-  return { lmb: BASIC_CLEAVE_ID, q: null, e: null, f: null };
+  return {
+    lmb: BASIC_CLEAVE_ID,
+    q: CINDER_DART_ID,
+    e: WINTER_PULSE_ID,
+    f: DEFIANT_SIGNAL_ID,
+  };
 }
 
 export function aggregateEquipmentStats(

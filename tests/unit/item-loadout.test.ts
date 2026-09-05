@@ -4,10 +4,12 @@ import {
   AFFIX_CATALOG,
   BASIC_CLEAVE_ID,
   CINDER_DART_ID,
+  DEFIANT_SIGNAL_ID,
   EQUIPMENT_BASE_CATALOG,
   INVENTORY_SLOT_COUNT,
   CharacterItemLoadout,
   Inventory,
+  WINTER_PULSE_ID,
   affixById,
   applyOutgoingAbilityDamage,
   createAbilityStoneStack,
@@ -156,7 +158,25 @@ describe("Phase 3 inventory and equipment", () => {
 });
 
 describe("Phase 3 Ability Stone and loadout ownership", () => {
-  it("offers implemented choices, consumes one stone, and preserves Basic Cleave", () => {
+  it("borrows Phase 2 defaults without treating them as owned abilities", () => {
+    const character = new CharacterItemLoadout();
+
+    expect(character.loadout()).toEqual({
+      lmb: BASIC_CLEAVE_ID,
+      q: CINDER_DART_ID,
+      e: WINTER_PULSE_ID,
+      f: DEFIANT_SIGNAL_ID,
+    });
+    expect(character.ownedAbilities()).toEqual([BASIC_CLEAVE_ID]);
+
+    expect(character.assignAbility("e", null)).toEqual({ accepted: true });
+    expect(character.assignAbility("e", WINTER_PULSE_ID)).toEqual({
+      accepted: false,
+      reason: "ability-not-owned",
+    });
+  });
+
+  it("offers three choices, consumes one stone, and preserves Basic Cleave", () => {
     const character = new CharacterItemLoadout();
     character.addItem(
       createAbilityStoneStack(
@@ -165,8 +185,11 @@ describe("Phase 3 Ability Stone and loadout ownership", () => {
       ),
     );
 
-    expect(character.abilityStoneChoices(0)).toContain(CINDER_DART_ID);
-    expect(character.abilityStoneChoices(0)).not.toContain(BASIC_CLEAVE_ID);
+    expect(character.abilityStoneChoices(0)).toEqual([
+      CINDER_DART_ID,
+      WINTER_PULSE_ID,
+      DEFIANT_SIGNAL_ID,
+    ]);
     expect(character.consumeAbilityStone(0, CINDER_DART_ID)).toEqual({
       accepted: true,
     });
@@ -175,6 +198,9 @@ describe("Phase 3 Ability Stone and loadout ownership", () => {
       BASIC_CLEAVE_ID,
       CINDER_DART_ID,
     ]);
+    expect(character.assignAbility("e", CINDER_DART_ID)).toEqual({
+      accepted: true,
+    });
 
     expect(character.assignAbility("lmb", CINDER_DART_ID)).toEqual({
       accepted: false,

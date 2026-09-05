@@ -558,15 +558,14 @@ describe("CombatArenaSimulation", () => {
 
   it("executes assigned slots with direction, point, and self targets", () => {
     const simulation = new CombatArenaSimulation();
-    unlockPhaseTwoAbilities(simulation);
-    expect(simulation.assignAbilitySlot("q", CINDER_DART_ID)).toEqual({
-      accepted: true,
-    });
-    expect(simulation.assignAbilitySlot("e", WINTER_PULSE_ID)).toEqual({
-      accepted: true,
-    });
-    expect(simulation.assignAbilitySlot("f", DEFIANT_SIGNAL_ID)).toEqual({
-      accepted: true,
+    expect(simulation.characterItemLoadout()).toMatchObject({
+      ownedAbilities: [BASIC_CLEAVE_ID],
+      assignments: {
+        lmb: BASIC_CLEAVE_ID,
+        q: CINDER_DART_ID,
+        e: WINTER_PULSE_ID,
+        f: DEFIANT_SIGNAL_ID,
+      },
     });
 
     expect(
