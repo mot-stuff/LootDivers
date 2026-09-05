@@ -6,8 +6,10 @@ import {
   CombatArenaSimulation,
   DEFAULT_COMBAT_ARENA_CONFIG,
   DEFIANT_SIGNAL_ID,
+  DeterministicEnemyLootGenerator,
   EQUIPMENT_BASE_CATALOG,
   FIXED_STEP_SECONDS,
+  INVENTORY_SLOT_COUNT,
   WINTER_PULSE_ID,
   createAbilityStoneStack,
   definitionById,
@@ -51,7 +53,171 @@ function equipCommonWeapon(simulation: CombatArenaSimulation): void {
   expect(simulation.equipCharacterItem(0)).toEqual({ accepted: true });
 }
 
+function lootArena(seed = 123, pickupRadius = 20): CombatArenaSimulation {
+  return new CombatArenaSimulation({
+    ...DEFAULT_COMBAT_ARENA_CONFIG,
+    loot: {
+      ...DEFAULT_COMBAT_ARENA_CONFIG.loot,
+      seed,
+      pickupRadius,
+    },
+    enemy: {
+      ...DEFAULT_COMBAT_ARENA_CONFIG.enemy,
+      spawnX: DEFAULT_COMBAT_ARENA_CONFIG.width / 2 + 90,
+      spawnY: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
+      maxHealth: 1,
+    },
+  });
+}
+
+function killArenaEnemy(simulation: CombatArenaSimulation): void {
+  expect(simulation.requestAbility(BASIC_CLEAVE_ID).accepted).toBe(true);
+  step(
+    simulation,
+    (definitionById(BASIC_CLEAVE_ID)?.timing.startupTicks ?? 0) + 1,
+  );
+  expect(simulation.diagnostics().enemy.dead).toBe(true);
+}
+
 describe("CombatArenaSimulation", () => {
+  it("generates a stable weighted sequence containing every supported rarity", () => {
+    const generate = (seed: number, kills: number) => {
+      const generator = new DeterministicEnemyLootGenerator({
+        seed,
+        rarityWeights: DEFAULT_COMBAT_ARENA_CONFIG.loot.rarityWeights,
+      });
+      return Array.from({ length: kills }, () => generator.generateForKill());
+    };
+
+    expect(generate(77, 8)).toEqual(generate(77, 8));
+    expect(generate(77, 8)).not.toEqual(generate(78, 8));
+
+    const equipment = Array.from({ length: 20 }, (_, seed) =>
+      generate(seed, 20),
+    );
+    const equipmentItems = equipment
+      .flat()
+      .flatMap(({ items }) => items)
+      .filter((item) => item.kind === "equipment");
+    const rarities = new Set(equipmentItems.map((item) => item.rarity));
+    expect(rarities).toEqual(new Set(["common", "magic", "rare"]));
+    expect(new Set(equipmentItems.map((item) => item.baseId))).toEqual(
+      new Set(EQUIPMENT_BASE_CATALOG.map(({ id }) => id)),
+    );
+  });
+
+  it("drops one equipment item per death and one stone on only the first kill", () => {
+    const simulation = lootArena();
+    killArenaEnemy(simulation);
+
+    const firstDrops = simulation.diagnostics().worldLoot;
+    expect(
+      firstDrops.filter(({ item }) => item.kind === "equipment"),
+    ).toHaveLength(1);
+    expect(
+      firstDrops.filter(({ item }) => item.kind === "ability-stone"),
+    ).toHaveLength(1);
+    expect(new Set(firstDrops.map(({ dropId }) => dropId)).size).toBe(2);
+    expect(new Set(firstDrops.map(({ item }) => item.instanceId)).size).toBe(2);
+
+    step(simulation, 60);
+    expect(simulation.requestAbility(BASIC_CLEAVE_ID).accepted).toBe(true);
+    step(
+      simulation,
+      (definitionById(BASIC_CLEAVE_ID)?.timing.startupTicks ?? 0) + 1,
+    );
+    expect(simulation.diagnostics().worldLoot).toHaveLength(2);
+
+    simulation.reset();
+    killArenaEnemy(simulation);
+    const repeatedDrops = simulation.diagnostics().worldLoot;
+    expect(
+      repeatedDrops.filter(({ item }) => item.kind === "equipment"),
+    ).toHaveLength(2);
+    expect(
+      repeatedDrops.filter(({ item }) => item.kind === "ability-stone"),
+    ).toHaveLength(1);
+    expect(new Set(repeatedDrops.map(({ dropId }) => dropId)).size).toBe(3);
+    expect(new Set(repeatedDrops.map(({ item }) => item.instanceId)).size).toBe(
+      3,
+    );
+    expect(simulation.diagnostics()).toMatchObject({
+      enemyKillCount: 2,
+      lootDropCount: 3,
+    });
+  });
+
+  it("automatically picks nearby drops after movement", () => {
+    const simulation = lootArena();
+    killArenaEnemy(simulation);
+    const dropped = simulation
+      .drainEvents()
+      .filter((event) => event.type === "loot-dropped");
+    expect(dropped).toHaveLength(2);
+
+    simulation.setMovement(1, 0);
+    step(simulation, 30);
+
+    expect(simulation.diagnostics().worldLoot).toEqual([]);
+    expect(
+      simulation.characterItemLoadout().inventory.filter(Boolean),
+    ).toHaveLength(2);
+    expect(
+      simulation.drainEvents().filter((event) => event.type === "loot-picked"),
+    ).toHaveLength(2);
+  });
+
+  it("retains nearby world loot when inventory is full", () => {
+    const simulation = lootArena(123, 200);
+    for (let index = 0; index < INVENTORY_SLOT_COUNT; index += 1) {
+      expect(
+        simulation.addCharacterItem(
+          generateEquipmentItem({
+            seed: index,
+            instanceId: persistentInstanceId(`item:full-${index}`),
+            baseId: EQUIPMENT_BASE_CATALOG[0]!.id,
+            rarity: "common",
+          }),
+        ),
+      ).toEqual({ accepted: true });
+    }
+
+    killArenaEnemy(simulation);
+    expect(simulation.diagnostics().worldLoot).toHaveLength(2);
+    expect(
+      simulation.drainEvents().filter((event) => event.type === "loot-picked"),
+    ).toHaveLength(0);
+  });
+
+  it("retains unpicked loot and character loadout across combat reset", () => {
+    const simulation = lootArena();
+    equipCommonWeapon(simulation);
+    unlockPhaseTwoAbilities(simulation);
+    expect(simulation.assignAbilitySlot("q", CINDER_DART_ID)).toEqual({
+      accepted: true,
+    });
+    const retainedInventoryItem = generateEquipmentItem({
+      seed: 88,
+      instanceId: persistentInstanceId("item:retained-across-reset"),
+      baseId: EQUIPMENT_BASE_CATALOG[1]!.id,
+      rarity: "common",
+    });
+    expect(simulation.addCharacterItem(retainedInventoryItem)).toEqual({
+      accepted: true,
+    });
+    killArenaEnemy(simulation);
+    const beforeReset = simulation.diagnostics().worldLoot;
+
+    simulation.reset();
+
+    expect(simulation.diagnostics().worldLoot).toEqual(beforeReset);
+    const loadout = simulation.characterItemLoadout();
+    expect(loadout.equipment["main-hand"]?.kind).toBe("equipment");
+    expect(loadout.inventory).toContainEqual(retainedInventoryItem);
+    expect(loadout.ownedAbilities).toContain(CINDER_DART_ID);
+    expect(loadout.assignments.q).toBe(CINDER_DART_ID);
+  });
+
   it("normalizes diagonal movement to the cardinal movement speed", () => {
     const cardinal = new CombatArenaSimulation();
     const diagonal = new CombatArenaSimulation();

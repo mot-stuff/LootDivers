@@ -50,6 +50,12 @@ import {
 import type { EquipmentSlot } from "./item-catalog";
 import type { EquipmentItemInstance, ItemInstance } from "./item-generation";
 import type { InventoryAddResult } from "./inventory";
+import {
+  DEFAULT_ENEMY_LOOT_WEIGHTS,
+  DeterministicEnemyLootGenerator,
+  type EnemyLootWeights,
+  type WorldLootDrop,
+} from "./enemy-loot";
 
 export type AttackPhase = "idle" | "startup" | "active" | "recovery";
 
@@ -62,6 +68,11 @@ export interface CombatArenaConfig {
   readonly dodgeSpeed: number;
   readonly dodgeDurationSeconds: number;
   readonly dodgeCooldownSeconds: number;
+  readonly loot: {
+    readonly seed: number;
+    readonly pickupRadius: number;
+    readonly rarityWeights: EnemyLootWeights;
+  };
   readonly abilityDefinitions: readonly CombatAbilityDefinition[];
   readonly enemy: SimpleMeleeEnemyConfig;
 }
@@ -109,6 +120,17 @@ export type CombatArenaEvent =
       readonly abilityId: CombatAbilityId;
       readonly x: number;
       readonly y: number;
+    }
+  | {
+      readonly type: "loot-dropped";
+      readonly tick: number;
+      readonly drop: WorldLootDrop;
+    }
+  | {
+      readonly type: "loot-picked";
+      readonly tick: number;
+      readonly dropId: string;
+      readonly item: ItemInstance;
     };
 
 export interface CombatProjectileReadModel {
@@ -214,6 +236,9 @@ export interface CombatArenaDiagnostics {
   } | null;
   readonly enemy: SimpleMeleeEnemyDiagnostics;
   readonly targets: readonly CombatTargetReadModel[];
+  readonly worldLoot: readonly WorldLootDrop[];
+  readonly enemyKillCount: number;
+  readonly lootDropCount: number;
   readonly eventCount: number;
 }
 
@@ -226,6 +251,11 @@ export const DEFAULT_COMBAT_ARENA_CONFIG: CombatArenaConfig = {
   dodgeSpeed: 650,
   dodgeDurationSeconds: 0.18,
   dodgeCooldownSeconds: 0.8,
+  loot: {
+    seed: 0x10_07_5eed,
+    pickupRadius: 36,
+    rarityWeights: DEFAULT_ENEMY_LOOT_WEIGHTS,
+  },
   abilityDefinitions: COMBAT_ABILITY_DEFINITIONS,
   enemy: {
     id: "enemy:melee-prototype",
@@ -253,6 +283,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   readonly #playerHealth: HealthPool;
   readonly #enemy: SimpleMeleeEnemy;
   readonly #characterItems = new CharacterItemLoadout();
+  readonly #lootGenerator: DeterministicEnemyLootGenerator;
+  readonly #worldLoot: WorldLootDrop[] = [];
   readonly #events: CombatArenaEvent[] = [];
   readonly #attackHitTargets = new Set<string>();
   readonly #statuses = new RefreshingStatusStore();
@@ -286,6 +318,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   #nextCooldownToken = 1;
   #nextProjectileId = 1;
   #nextFeedbackId = 1;
+  #nextLootDropId = 1;
   #lastAbilityResult: CombatArenaDiagnostics["lastAbilityResult"] = null;
   #pendingCleave:
     | {
@@ -324,6 +357,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#dodgeCooldownTicks = secondsToTicks(config.dodgeCooldownSeconds);
     this.#playerHealth = new HealthPool(this.characterStats().maximumHealth);
     this.#enemy = new SimpleMeleeEnemy(config.enemy);
+    this.#lootGenerator = new DeterministicEnemyLootGenerator(config.loot);
     this.#playerId = this.#lifecycle.create(
       { x: config.width / 2, y: config.height / 2, elevation: 0 },
       PresentationKind.Actor,
@@ -652,6 +686,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         ),
       },
     );
+    this.pickUpNearbyLoot();
     if (this.#dodgeTicksRemaining > 0) {
       this.#dodgeTicksRemaining -= 1;
     }
@@ -789,6 +824,9 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
           dead: enemy.dead,
         },
       ],
+      worldLoot: [...this.#worldLoot],
+      enemyKillCount: this.#lootGenerator.killsGenerated(),
+      lootDropCount: this.#nextLootDropId - 1,
       eventCount: this.#events.length,
     };
   }
@@ -873,12 +911,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       });
     }
     if (result.died) {
-      this.#statuses.clearTarget(target.id);
-      this.#events.push({
-        type: "entity-died",
-        tick: this.#tick,
-        entityId: target.id,
-      });
+      this.handleEnemyDeath(target);
     }
   }
 
@@ -1193,11 +1226,50 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       });
     }
     if (result.died) {
-      this.#statuses.clearTarget(target.id);
+      this.handleEnemyDeath(target);
+    }
+  }
+
+  private handleEnemyDeath(target: SimpleMeleeEnemyDiagnostics): void {
+    this.#statuses.clearTarget(target.id);
+    this.#events.push({
+      type: "entity-died",
+      tick: this.#tick,
+      entityId: target.id,
+    });
+
+    const generated = this.#lootGenerator.generateForKill();
+    for (const item of generated.items) {
+      const drop: WorldLootDrop = {
+        dropId: `loot:drop-${this.#nextLootDropId++}`,
+        item,
+        x: target.x,
+        y: target.y,
+      };
+      this.#worldLoot.push(drop);
+      this.#events.push({ type: "loot-dropped", tick: this.#tick, drop });
+    }
+  }
+
+  private pickUpNearbyLoot(): void {
+    const player = this.playerPosition();
+    for (let index = this.#worldLoot.length - 1; index >= 0; index -= 1) {
+      const drop = this.#worldLoot[index];
+      if (
+        drop === undefined ||
+        Math.hypot(drop.x - player.x, drop.y - player.y) >
+          this.config.loot.pickupRadius
+      ) {
+        continue;
+      }
+      const result = this.#characterItems.addItem(drop.item);
+      if (!result.accepted) continue;
+      this.#worldLoot.splice(index, 1);
       this.#events.push({
-        type: "entity-died",
+        type: "loot-picked",
         tick: this.#tick,
-        entityId: target.id,
+        dropId: drop.dropId,
+        item: drop.item,
       });
     }
   }
@@ -1354,6 +1426,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       config.dodgeSpeed,
       config.dodgeDurationSeconds,
       config.dodgeCooldownSeconds,
+      config.loot.pickupRadius,
     ];
     if (positiveValues.some((value) => !Number.isFinite(value) || value <= 0)) {
       throw new RangeError(

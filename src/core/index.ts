@@ -101,6 +101,14 @@ export {
   type InventoryAddResult,
 } from "./inventory";
 export {
+  DEFAULT_ENEMY_LOOT_WEIGHTS,
+  DeterministicEnemyLootGenerator,
+  type EnemyLootGeneratorConfig,
+  type EnemyLootWeights,
+  type GeneratedEnemyLoot,
+  type WorldLootDrop,
+} from "./enemy-loot";
+export {
   SimpleMeleeEnemy,
   type MeleeEnemyState,
   type MeleeEnemyTarget,
