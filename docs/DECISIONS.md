@@ -1310,3 +1310,120 @@ DEC-010 and DEC-013 continue to govern simulation and ability execution.
 DEC-011 remains the long-term canonical content direction; the typed Phase 3
 catalog is a documented vertical-slice exception. DEC-014 remains unchanged,
 and no Phase 3 item state is claimed to persist.
+
+---
+
+# DEC-020
+
+### Status
+
+Accepted for the Phase 3 owner-requested itemization and loot UX follow-up.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Expand the Phase 3 item model to nine equipment slots with tiered affixes and
+replace automatic loot pickup with player-directed pickup, while keeping all
+authoritative state in the framework-independent core.
+
+Specifically:
+
+- Base items declare a slot kind (helmet, chest, amulet, belt, boots,
+  main-hand, offhand, ring); the character owns nine concrete slots where the
+  ring kind may occupy Ring 1 or Ring 2. Equip commands accept an optional
+  explicit target slot, validated for kind compatibility.
+- Every rolled affix carries a tier from 1 (best) through 5 (lowest). Each
+  affix defines five non-overlapping value ranges; tier N rolls with relative
+  weight N, so strong tiers are rare. Common items roll no affixes, Magic one
+  or two, Rare three or four distinct legal affixes. Validation rejects
+  out-of-range tiers and values.
+- Unique rarity exists in the rarity model with an orange presentation color
+  but is never generated; enemy loot weights cover Common, Magic, and Rare.
+- Walking over loot no longer collects it. F picks up the nearest world drop
+  within the pickup radius (raised from 36 to 72); `pickUpDropById` exists in
+  the core for a future click-to-pick-up path. Inventory rejection leaves the
+  drop in the world untouched.
+- Ability slot keys are LMB, Q, E, and R. F is the loot pickup key. The
+  keyboard R-reset testing binding is removed; arena reset remains available
+  to automation only.
+- Phaser renders a compact floating name label above each world drop using the
+  base display name, colored white/blue/yellow/orange by rarity, with a dark
+  backing and vertical stacking for co-located drops.
+- Preact presents an original paper-doll character panel (body column of
+  helmet/chest/belt/boots flanked by weapon and offhand, amulet at the neck,
+  rings near the hands), pointer-based drag-and-drop equipping and
+  unequipping with compatibility highlighting, an accessible click/keyboard
+  path including explicit Ring 1/Ring 2 targeting, and T1–T5 markers on affix
+  tooltip lines. The I key toggles the menu open and closed outside
+  text-entry contexts; Esc still closes.
+
+### Context
+
+The owner reviewed the accepted Phase 3 loop and requested specific
+itemization depth (slot coverage, affix tiers) and loot UX changes (manual
+pickup, ground name labels, drag-and-drop, direct inventory toggle) before
+Phase 4. The three-slot model and auto-pickup were explicit prototype
+simplifications; this follow-up replaces them at prototype scale.
+
+### Options Considered
+
+1. Defer slot expansion and tiers to a later itemization phase and patch only
+   the UX complaints.
+2. Introduce the full production item schema (item level, implicits,
+   prefix/suffix split, canonical JSON catalogs) alongside the new slots.
+3. Extend the existing typed catalogs and core loadout minimally: slot kinds,
+   per-affix tier ranges, targeted equip commands, manual pickup commands, and
+   presentation-only labels/drag UI.
+
+### Chosen Approach
+
+Option 3. The typed TypeScript catalogs gain slot kinds, five new bases (one
+per new kind: Lookout Casque, Cinchweave Belt, Drifter Treads, Splintered
+Buckler, Plain Loopband) and two generic tag-gated affixes (Vigorous, Keen) so
+every base has exactly four legal affixes; generation remains seeded and
+deterministic. Pickup becomes an explicit core command consumed by the Phaser
+input adapter (F key). Loot labels are derived per frame from the core world
+loot read model. The Preact menu keeps command/read-model boundaries and adds
+only transient UI state (selection, drag, open/closed).
+
+### Why
+
+This satisfies every owner requirement while preserving DEC-019's
+architecture: no authority moves into Phaser or Preact, generation stays
+deterministic and unit-testable, and the catalog grows only enough to make
+each slot obtainable. Tier data lives on the affix definitions, so later
+item-level gating can restrict tiers without reshaping instances.
+
+### Tradeoffs
+
+- Catalogs remain typed TypeScript rather than canonical JSON (unchanged
+  vertical-slice exception).
+- Ground labels always render while a drop exists; no hover-only or
+  toggle-label mode yet.
+- Click-to-pick-up was deliberately skipped: a label click would double-fire
+  the LMB ability through the gameplay pointer handler. `pickUpDropById`
+  remains available for a cleaner future integration.
+- Rare display names concatenate up to four affix names and are long; ground
+  labels avoid this by showing base names, but tooltip naming may need a
+  dedicated scheme later.
+- Item, equipment, and ability ownership state is still not persisted
+  (DEC-014 unchanged); a reload loses Phase 3 state.
+
+### Systems Affected
+
+- Item catalogs, generation, validation, loadout, and equipment stats
+- Combat arena simulation (pickup commands), combat input adapter (R/F keys)
+- Phaser world loot presentation (name labels) and diagnostics
+- Preact inventory/equipment UI, tooltips, and menu input
+- Unit, component, and Chromium end-to-end tests
+- docs/ITEMIZATION.md and docs/COMBAT.md
+
+### Relationship to Earlier Decisions
+
+DEC-019 remains the governing Phase 3 item architecture; this decision extends
+its scope without moving authority. DEC-010/DEC-013 simulation and ability
+rules are unchanged. DEC-011 canonical content and DEC-014 persistence
+directions are unchanged.

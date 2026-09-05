@@ -112,14 +112,20 @@ Features include item definitions, inventory, equipment, rarity, affixes, loot
 drops, stat integration, readable tooltips, and Ability Stone slotting.
 
 **Status:** Complete. Independent Phase 3 QA passed on 2026-09-04 at `fbf65b4`.
-The accepted loop includes three equipment slots, a 12-slot inventory,
-common/magic/rare generation, deterministic enemy drops and pickup,
-equipment-derived health/damage, readable tooltips, Ability Stone creation, and
-configurable LMB/Q/E/F assignments. Gold and flask mechanics remain deferred.
+The accepted loop includes equipment slots, a 12-slot inventory,
+common/magic/rare generation, deterministic enemy drops, equipment-derived
+health/damage, readable tooltips, Ability Stone creation, and configurable
+ability assignments. Gold and flask mechanics remain deferred.
+
+An owner-requested follow-up (DEC-020) expanded the loop to nine equipment
+slots with a paper-doll drag-and-drop panel, affix tiers 1–5, reserved Unique
+rarity, rarity-colored ground loot name labels, manual F-key pickup, an I-key
+inventory toggle, and LMB/Q/E/R ability keys.
 
 ---
 
 ## Phase 4 — Character Progression
+We can press C to open the character screen. The button for it would be on the right of the inventory button
 
 Features include XP, levels, attributes, a small passive/mastery system, level
 requirements, and a respec prototype.
