@@ -103,6 +103,7 @@ const combatHudModel: CombatHudReadModel = {
   activeStatuses: [],
   gatheringLabel: null,
   gatheringProgress: 0,
+  zoneId: "zone:ashtrail-expanse",
   zoneName: "Ashtrail Expanse",
   questLabel: null,
   tutorial: null,
@@ -1577,6 +1578,90 @@ describe("technical UI shell component", () => {
       expect(container.querySelector('[data-testid="main-menu"]')).toBeNull();
     } finally {
       window.removeEventListener(WORLD_COMMAND_EVENT, captureWorld);
+      // The shared afterEach never unmounts child-container roots, so the
+      // menu App's window listeners and focus effects must be torn down here.
+      render(null, container);
+    }
+  });
+
+  it("enables Continue when a save exists and dismisses only on restore success", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    let restoreSucceeds = false;
+    const onContinue = vi.fn(() => restoreSucceeds);
+    const onGameplayStarted = vi.fn();
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+            showMainMenu
+            characterSave={{ available: true, recovered: false }}
+            onContinue={onContinue}
+            onGameplayStarted={onGameplayStarted}
+          />,
+          container,
+        );
+      });
+
+      const continueButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="main-menu-continue"]',
+      );
+      expect(continueButton?.disabled).toBe(false);
+      expect(
+        container.querySelector('[data-testid="main-menu-continue-note"]')
+          ?.textContent,
+      ).toBe("Resume your saved hero");
+
+      // A failed restore keeps the menu up and never starts gameplay.
+      await act(() => continueButton?.click());
+      expect(onContinue).toHaveBeenCalledTimes(1);
+      expect(onGameplayStarted).not.toHaveBeenCalled();
+      expect(
+        container.querySelector('[data-testid="main-menu"]'),
+      ).not.toBeNull();
+
+      restoreSucceeds = true;
+      await act(() => continueButton?.click());
+      expect(onGameplayStarted).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('[data-testid="main-menu"]')).toBeNull();
+    } finally {
+      // The shared afterEach never unmounts child-container roots, so the
+      // menu App's window listeners and focus effects must be torn down here.
+      render(null, container);
+    }
+  });
+
+  it("surfaces backup recovery in the Continue note", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+            showMainMenu
+            characterSave={{ available: true, recovered: true }}
+          />,
+          container,
+        );
+      });
+
+      expect(
+        container.querySelector<HTMLButtonElement>(
+          '[data-testid="main-menu-continue"]',
+        )?.disabled,
+      ).toBe(false);
+      expect(
+        container.querySelector('[data-testid="main-menu-continue-note"]')
+          ?.textContent,
+      ).toBe("Recovered from backup save");
+    } finally {
       // The shared afterEach never unmounts child-container roots, so the
       // menu App's window listeners and focus effects must be torn down here.
       render(null, container);

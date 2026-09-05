@@ -83,6 +83,22 @@ export class Inventory {
     this.#slots[index] = item;
   }
 
+  /**
+   * Replaces every slot from a saved layout, preserving slot positions
+   * (TASK-705 restore). Duplicate instance IDs are rejected via `putAt`.
+   */
+  public restoreSlots(slots: readonly (ItemInstance | null)[]): void {
+    if (slots.length !== INVENTORY_SLOT_COUNT) {
+      throw new RangeError(
+        `Inventory restore requires exactly ${INVENTORY_SLOT_COUNT} slots.`,
+      );
+    }
+    this.#slots.fill(null);
+    slots.forEach((item, index) => {
+      if (item !== null) this.putAt(index, item);
+    });
+  }
+
   public consumeAbilityStone(index: number): boolean {
     this.#requireIndex(index);
     const item = this.#slots[index];

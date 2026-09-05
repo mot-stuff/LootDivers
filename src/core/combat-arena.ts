@@ -69,6 +69,12 @@ import {
   type ProfessionReadModel,
   type WorldInteractableKind,
 } from "./professions";
+import {
+  GOLD_MAX_TOTAL,
+  STARTING_GOLD,
+  parseCharacterSave,
+  type CharacterSave,
+} from "./character-save";
 import { TutorialTracker, type TutorialReadModel } from "./tutorial";
 import {
   ASHTRAIL_ENEMY,
@@ -473,6 +479,12 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   readonly #progression = new CharacterProgression();
   readonly #professions = new ProfessionProgression();
   readonly #tutorial = new TutorialTracker();
+  /**
+   * Carried gold (TASK-705B). Persistent wallet state like progression
+   * and items: it survives `reset()` and rides the character save. No
+   * drops or spending exist yet (TASK-712).
+   */
+  #gold = STARTING_GOLD;
   #zoneId: ZoneId = ASHTRAIL_EXPANSE_ID;
   #questStage: QuestStage = "inactive";
   #vendorOpen = false;
@@ -489,7 +501,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   #forgeOpen = false;
   #nextCraftSerial = 1;
   #nextMaterialSerial = 1;
-  readonly #lootGenerator: DeterministicEnemyLootGenerator;
+  #lootGenerator: DeterministicEnemyLootGenerator;
   readonly #worldLoot: WorldLootDrop[] = [];
   readonly #events: CombatArenaEvent[] = [];
   readonly #attackHitTargets = new Set<string>();
@@ -848,6 +860,24 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     return this.#progression.grantExperience(amount);
   }
 
+  public gold(): number {
+    return this.#gold;
+  }
+
+  /**
+   * Adds gold to the character's wallet, clamping the total at
+   * `GOLD_MAX_TOTAL` (TASK-713 memo §4: collection clamps, parsing
+   * rejects). Returns the new total. TASK-712's walk-over collection is
+   * the intended caller; until then tests use it directly.
+   */
+  public grantGold(amount: number): number {
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      throw new RangeError("Gold grants must be nonnegative safe integers.");
+    }
+    this.#gold = Math.min(GOLD_MAX_TOTAL, this.#gold + amount);
+    return this.#gold;
+  }
+
   public allocateAttribute(attribute: AttributeId): ProgressionSpendResult {
     const result = this.#progression.allocateAttribute(attribute);
     if (result.accepted) this.synchronizeCharacterResources();
@@ -1186,6 +1216,63 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
   public drainEvents(): readonly CombatArenaEvent[] {
     return this.#events.splice(0);
+  }
+
+  /**
+   * Captures the complete persistent character as the TASK-705 save DTO
+   * (DEC-034). Safe at any time; transient combat state (position, vitals,
+   * enemies, ground loot, cooldowns, statuses) is intentionally excluded —
+   * `restoreCharacterSave` reconstructs it through normal zone entry.
+   */
+  public captureCharacterSave(): CharacterSave {
+    return {
+      zoneId: this.#zoneId,
+      questStage: this.#questStage,
+      tutorialBankedSteps: this.#tutorial.bankedSteps(),
+      gold: this.#gold,
+      progression: this.#progression.snapshot(),
+      professions: this.#professions.snapshot(),
+      items: this.#characterItems.snapshot(),
+      generators: {
+        craftSerial: this.#nextCraftSerial,
+        vendorSerial: this.#nextVendorSerial,
+        materialSerial: this.#nextMaterialSerial,
+        loot: this.#lootGenerator.snapshot(),
+      },
+    };
+  }
+
+  /**
+   * Rebuilds the simulation from a save DTO: transient state is reset,
+   * persistent state (progression, professions, items, quest, banked
+   * tutorial steps, instance-ID generators) is replaced, vitals refill to
+   * their recomputed maximums, and the session re-enters the saved zone at
+   * its spawn point (respawning that zone's encounter, mirroring DEC-030
+   * re-entry semantics). The value is re-validated via `parseCharacterSave`;
+   * invalid saves throw `RangeError` and leave no partial restore observable
+   * to callers that treat the throw as a failed load.
+   */
+  public restoreCharacterSave(save: CharacterSave): void {
+    const parsed = parseCharacterSave(save);
+    this.reset();
+    this.#progression.restore(parsed.progression);
+    this.#professions.restore(parsed.professions);
+    this.#characterItems.restore(parsed.items);
+    this.#tutorial.restore(parsed.tutorialBankedSteps);
+    this.#questStage = parsed.questStage;
+    this.#gold = parsed.gold;
+    this.#nextCraftSerial = parsed.generators.craftSerial;
+    this.#nextVendorSerial = parsed.generators.vendorSerial;
+    this.#nextMaterialSerial = parsed.generators.materialSerial;
+    this.#lootGenerator = DeterministicEnemyLootGenerator.fromSnapshot(
+      parsed.generators.loot,
+      this.config.loot.rarityWeights,
+    );
+    this.synchronizeCharacterResources();
+    this.#playerHealth.reset();
+    this.#manaMaximumSubunits = this.manaMaximumSubunits();
+    this.#manaSubunits = this.#manaMaximumSubunits;
+    this.travelTo(parsed.zoneId);
   }
 
   public diagnostics(): CombatArenaDiagnostics {

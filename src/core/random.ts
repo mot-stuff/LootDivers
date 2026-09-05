@@ -97,4 +97,13 @@ export class Mulberry32 implements StatefulRandomSource {
       state: this.state,
     };
   }
+
+  /**
+   * Rewinds this generator to a previously saved state (TASK-705 restore).
+   * The algorithm tag is enforced by the type (untrusted values go through
+   * `Mulberry32.fromState`).
+   */
+  restoreState(snapshot: RandomState): void {
+    this.state = requireUint32(snapshot.state, "Random state");
+  }
 }

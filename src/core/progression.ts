@@ -227,6 +227,23 @@ export interface ProgressionSpendResult {
   readonly reason?: ProgressionSpendFailure;
 }
 
+/**
+ * Serializable progression state for the character save DTO (TASK-705).
+ * `passiveRanks` lists only passives with at least one rank, in catalog
+ * order, so canonical JSON stays stable across sessions.
+ */
+export interface CharacterProgressionSnapshot {
+  readonly level: number;
+  readonly experience: number;
+  readonly unspentAttributePoints: number;
+  readonly unspentPassivePoints: number;
+  readonly attributes: Readonly<Record<AttributeId, number>>;
+  readonly passiveRanks: readonly {
+    readonly id: ContentId;
+    readonly rank: number;
+  }[];
+}
+
 export interface ExperienceGrantResult {
   readonly accepted: true;
   readonly amount: number;
@@ -381,6 +398,40 @@ export class CharacterProgression {
       abilityDamageBasisPoints,
       statusDurationBasisPoints,
     };
+  }
+
+  public snapshot(): CharacterProgressionSnapshot {
+    return {
+      level: this.#level,
+      experience: this.#experience,
+      unspentAttributePoints: this.#unspentAttributePoints,
+      unspentPassivePoints: this.#unspentPassivePoints,
+      attributes: { ...this.#attributes },
+      passiveRanks: PASSIVE_CATALOG.filter(
+        (definition) => (this.#passiveRanks.get(definition.id) ?? 0) > 0,
+      ).map((definition) => ({
+        id: definition.id,
+        rank: this.#passiveRanks.get(definition.id) ?? 0,
+      })),
+    };
+  }
+
+  /**
+   * Replaces all progression state from a snapshot. Callers validate the
+   * snapshot first (see `parseCharacterSave`).
+   */
+  public restore(snapshot: CharacterProgressionSnapshot): void {
+    this.#level = snapshot.level;
+    this.#experience = snapshot.experience;
+    this.#unspentAttributePoints = snapshot.unspentAttributePoints;
+    this.#unspentPassivePoints = snapshot.unspentPassivePoints;
+    for (const id of ATTRIBUTE_IDS) {
+      this.#attributes[id] = snapshot.attributes[id];
+    }
+    this.#passiveRanks.clear();
+    for (const entry of snapshot.passiveRanks) {
+      this.#passiveRanks.set(entry.id, entry.rank);
+    }
   }
 
   public readModel(): CharacterProgressionReadModel {

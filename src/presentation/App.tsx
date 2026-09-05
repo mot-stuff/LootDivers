@@ -50,6 +50,17 @@ export interface PersistenceFixtureActions {
   importJson(serializedEnvelope: string): Promise<void>;
 }
 
+/**
+ * Boot-time Continue state for the main menu (TASK-705). `available` flips
+ * once the character save loads from IndexedDB; `recovered` marks a save
+ * that survived only through its backup generation (DEC-014) so the menu
+ * can say so.
+ */
+export interface MainMenuCharacterSaveModel {
+  readonly available: boolean;
+  readonly recovered: boolean;
+}
+
 export interface AppProps {
   readonly bindings: ShellBindings;
   readonly persistenceStatus?: PersistenceStatus;
@@ -62,6 +73,19 @@ export interface AppProps {
    * non-combat fixture modes never enable it.
    */
   readonly showMainMenu?: boolean;
+  /** Continue-button state; omitted or unavailable renders it disabled. */
+  readonly characterSave?: MainMenuCharacterSaveModel;
+  /**
+   * Restores the saved character into the simulation. Returns true on
+   * success; false keeps the menu open (the save failed to restore).
+   */
+  readonly onContinue?: () => boolean;
+  /**
+   * Signals that the player entered gameplay (New Game or Continue), which
+   * arms the shell's save triggers so an untouched menu can never
+   * overwrite an existing save on tab close.
+   */
+  readonly onGameplayStarted?: () => void;
 }
 
 interface CombatVitalsProps {
@@ -952,16 +976,28 @@ function buildLabel(): string | null {
 interface MainMenuProps {
   readonly phase: ShellPhase;
   readonly onNewGame: () => void;
+  readonly characterSave: MainMenuCharacterSaveModel;
+  readonly onContinue: () => void;
 }
 
 /**
  * TASK-703 boot-time main menu: a full-screen overlay above the paused
- * simulation. "New Game" travels to the tutorial zone; "Continue" reserves
- * the TASK-705 local-save flow and stays disabled until that ships.
+ * simulation. "New Game" travels to the tutorial zone; "Continue" (TASK-705)
+ * restores the local character save and enables once a valid save exists.
  */
-function MainMenu({ phase, onNewGame }: MainMenuProps) {
+function MainMenu({
+  phase,
+  onNewGame,
+  characterSave,
+  onContinue,
+}: MainMenuProps) {
   const ready = phase.kind === "ready";
   const build = buildLabel();
+  const continueNote = characterSave.available
+    ? characterSave.recovered
+      ? "Recovered from backup save"
+      : "Resume your saved hero"
+    : "No saved hero yet";
   return (
     <section
       class="main-menu"
@@ -992,13 +1028,18 @@ function MainMenu({ phase, onNewGame }: MainMenuProps) {
             type="button"
             class="main-menu-button main-menu-continue"
             data-testid="main-menu-continue"
-            disabled
+            disabled={!ready || !characterSave.available}
             aria-describedby="main-menu-continue-note"
+            onClick={onContinue}
           >
             Continue
           </button>
-          <p id="main-menu-continue-note" class="main-menu-note">
-            No saved hero yet
+          <p
+            id="main-menu-continue-note"
+            class="main-menu-note"
+            data-testid="main-menu-continue-note"
+          >
+            {continueNote}
           </p>
         </nav>
         <p class="main-menu-build" data-testid="main-menu-build">
@@ -1419,6 +1460,9 @@ export function App({
   showPersistence,
   showCombatPrototype,
   showMainMenu,
+  characterSave,
+  onContinue,
+  onGameplayStarted,
 }: AppProps) {
   const [model, setModel] = useState<ShellReadModel>(() =>
     bindings.models.getSnapshot(),
@@ -1486,6 +1530,7 @@ export function App({
     activeStatuses: [],
     gatheringLabel: null,
     gatheringProgress: 0,
+    zoneId: "zone:hearthmere",
     zoneName: "Hearthmere",
     questLabel: null,
     tutorial: null,
@@ -1619,7 +1664,21 @@ export function App({
   function startNewGame(): void {
     // A page load is already a fresh simulation; travel through the existing
     // world-command path and hand input to the canvas so the runner resumes.
+    // Arming the save triggers first means this very travel writes the
+    // fresh character over any previous save slot (TASK-705 overwrite
+    // semantics: New Game replaces the single slot at its first save point).
+    onGameplayStarted?.();
     emitWorldCommand({ type: "world.travel", zoneId: WAKESHORE_LANDING_ID });
+    setMainMenuOpen(false);
+    document
+      .querySelector<HTMLCanvasElement>("#game-canvas")
+      ?.focus({ preventScroll: true });
+  }
+
+  function continueGame(): void {
+    // Restore first; only a successful restore dismisses the menu.
+    if (onContinue?.() !== true) return;
+    onGameplayStarted?.();
     setMainMenuOpen(false);
     document
       .querySelector<HTMLCanvasElement>("#game-canvas")
@@ -1916,7 +1975,14 @@ export function App({
       )}
 
       {showCombatPrototype && mainMenuOpen && model.phase.kind !== "error" && (
-        <MainMenu phase={model.phase} onNewGame={startNewGame} />
+        <MainMenu
+          phase={model.phase}
+          onNewGame={startNewGame}
+          characterSave={
+            characterSave ?? { available: false, recovered: false }
+          }
+          onContinue={continueGame}
+        />
       )}
 
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>

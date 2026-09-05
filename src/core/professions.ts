@@ -197,6 +197,11 @@ export interface ProfessionReadModel {
   readonly experienceToNextLevel: number;
 }
 
+/** Serializable profession state for the character save DTO (TASK-705). */
+export type ProfessionProgressionSnapshot = Readonly<
+  Record<ProfessionId, { readonly level: number; readonly experience: number }>
+>;
+
 export interface ProfessionGrantResult {
   readonly accepted: true;
   readonly amount: number;
@@ -251,6 +256,30 @@ export class ProfessionProgression {
       level: this.#levels[id],
       experience: this.#experience[id],
     };
+  }
+
+  public snapshot(): ProfessionProgressionSnapshot {
+    return {
+      mining: {
+        level: this.#levels.mining,
+        experience: this.#experience.mining,
+      },
+      smithing: {
+        level: this.#levels.smithing,
+        experience: this.#experience.smithing,
+      },
+    };
+  }
+
+  /**
+   * Replaces both professions' state from a snapshot. Callers validate the
+   * snapshot first (see `parseCharacterSave`).
+   */
+  public restore(snapshot: ProfessionProgressionSnapshot): void {
+    for (const id of PROFESSION_IDS) {
+      this.#levels[id] = snapshot[id].level;
+      this.#experience[id] = snapshot[id].experience;
+    }
   }
 
   public readModel(): readonly ProfessionReadModel[] {

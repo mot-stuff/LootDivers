@@ -330,6 +330,25 @@ function validateV2(value: Record<string, unknown>): SaveEnvelopeV2 {
   };
 }
 
+/**
+ * Shared primitive field validators for sibling envelope formats
+ * (TASK-705: the character save codec builds its shell validation from
+ * these instead of forking them). Each throws `PersistenceError("corrupt")`
+ * with a field path on failure.
+ */
+export const envelopeFieldValidators = {
+  objectAt,
+  exactKeysAt,
+  stringAt,
+  integerAt,
+  finiteNumberAt,
+  isoDateAt,
+  stableIdAt,
+  compatibilityAt,
+  checksumAt,
+  migrationRecordAt,
+} as const;
+
 export function validateEnvelopeStructure(
   value: unknown,
 ): SupportedSaveEnvelope {

@@ -1,12 +1,11 @@
 import {
   PersistenceError,
-  createSaveEnvelope,
-  decodeSaveEnvelope,
   parseSaveJson,
-  serializeSaveEnvelope,
   type ChecksumProvider,
+  type EnvelopeMetadataFields,
   type FixtureSaveState,
   type SaveClock,
+  type SaveEnvelopeCodec,
   type SaveEnvelopeV2,
   type SaveLoadResult,
   type SaveRepository,
@@ -30,7 +29,10 @@ interface PointerRecord {
   readonly nextGeneration: number;
 }
 
-interface LoadedGeneration extends SaveLoadResult {
+interface LoadedGeneration<
+  TState,
+  TEnvelope extends EnvelopeMetadataFields,
+> extends SaveLoadResult<TState, TEnvelope> {
   readonly generation: number;
 }
 
@@ -57,13 +59,22 @@ export class PersistenceFaultInjector {
   }
 }
 
-export interface IndexedDbSaveRepositoryOptions {
+export interface IndexedDbSaveRepositoryOptions<
+  TState = FixtureSaveState,
+  TEnvelope extends EnvelopeMetadataFields = SaveEnvelopeV2,
+> {
   readonly databaseName: string;
   readonly saveId: string;
   readonly build: string;
   readonly contentSchemaVersion: number;
   readonly checksumProvider: ChecksumProvider;
   readonly clock: SaveClock;
+  /**
+   * Format-specific envelope codec (TASK-705): the fixture and character
+   * save formats share this repository's generation/backup/readback
+   * machinery and differ only in this seam.
+   */
+  readonly codec: SaveEnvelopeCodec<TState, TEnvelope>;
   readonly faultInjector?: PersistenceFaultInjector;
 }
 
@@ -163,11 +174,14 @@ function pruneGenerations(
   });
 }
 
-export class IndexedDbSaveRepository implements SaveRepository {
-  private readonly options: IndexedDbSaveRepositoryOptions;
+export class IndexedDbSaveRepository<
+  TState = FixtureSaveState,
+  TEnvelope extends EnvelopeMetadataFields = SaveEnvelopeV2,
+> implements SaveRepository<TState, TEnvelope> {
+  private readonly options: IndexedDbSaveRepositoryOptions<TState, TEnvelope>;
   private debugHeldDatabase: IDBDatabase | undefined;
 
-  constructor(options: IndexedDbSaveRepositoryOptions) {
+  constructor(options: IndexedDbSaveRepositoryOptions<TState, TEnvelope>) {
     this.options = options;
   }
 
@@ -276,7 +290,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
     generation: number,
     source: "active" | "backup",
     recoveredFromInvalidGeneration: boolean,
-  ): Promise<LoadedGeneration> {
+  ): Promise<LoadedGeneration<TState, TEnvelope>> {
     const record = await this.readGeneration(database, generation);
 
     if (record === undefined) {
@@ -286,7 +300,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
       );
     }
 
-    const decoded = await decodeSaveEnvelope(
+    const decoded = await this.options.codec.decode(
       record.envelope,
       this.options.checksumProvider,
       this.options.clock,
@@ -296,11 +310,13 @@ export class IndexedDbSaveRepository implements SaveRepository {
       source,
       recoveredFromInvalidGeneration,
       envelope: decoded.envelope,
-      state: decoded.envelope.payload.fixture,
+      state: decoded.state,
     };
   }
 
-  private async loadInternal(database: IDBDatabase): Promise<LoadedGeneration> {
+  private async loadInternal(
+    database: IDBDatabase,
+  ): Promise<LoadedGeneration<TState, TEnvelope>> {
     const pointers = await this.readPointers(database);
     const candidates = [
       { generation: pointers.activeGeneration, source: "active" as const },
@@ -342,10 +358,10 @@ export class IndexedDbSaveRepository implements SaveRepository {
       );
     }
 
-    throw new PersistenceError("not-found", "No local fixture save exists.");
+    throw new PersistenceError("not-found", "No local save exists.");
   }
 
-  async load(): Promise<SaveLoadResult> {
+  async load(): Promise<SaveLoadResult<TState, TEnvelope>> {
     let database: IDBDatabase | undefined;
 
     try {
@@ -366,7 +382,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
 
   private async stageGeneration(
     database: IDBDatabase,
-    envelope: SaveEnvelopeV2,
+    envelope: TEnvelope,
   ): Promise<number> {
     if (this.options.faultInjector?.consume("quota") === true) {
       throw new DOMException("Synthetic quota failure.", "QuotaExceededError");
@@ -440,9 +456,9 @@ export class IndexedDbSaveRepository implements SaveRepository {
 
   private async persistEnvelope(
     database: IDBDatabase,
-    envelope: SaveEnvelopeV2,
+    envelope: TEnvelope,
     previousValidGeneration: number | null,
-  ): Promise<SaveEnvelopeV2> {
+  ): Promise<TEnvelope> {
     const generation = await this.stageGeneration(database, envelope);
 
     // A completed write is not trusted until it is read back, structurally
@@ -452,18 +468,16 @@ export class IndexedDbSaveRepository implements SaveRepository {
     return envelope;
   }
 
-  async save(state: FixtureSaveState): Promise<SaveEnvelopeV2> {
+  async save(state: TState): Promise<TEnvelope> {
     return this.serializeMutation(() => this.saveExclusive(state));
   }
 
-  private async saveExclusive(
-    state: FixtureSaveState,
-  ): Promise<SaveEnvelopeV2> {
+  private async saveExclusive(state: TState): Promise<TEnvelope> {
     let database: IDBDatabase | undefined;
 
     try {
       database = await this.open();
-      let previous: LoadedGeneration | undefined;
+      let previous: LoadedGeneration<TState, TEnvelope> | undefined;
 
       try {
         previous = await this.loadInternal(database);
@@ -477,7 +491,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
       }
 
       const now = this.options.clock.nowIso();
-      const envelope = await createSaveEnvelope(
+      const envelope = await this.options.codec.create(
         state,
         {
           saveId: this.options.saveId,
@@ -496,7 +510,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
         previous?.generation ?? null,
       );
     } catch (error) {
-      throw mapStorageError(error, "saving the local fixture");
+      throw mapStorageError(error, "saving the local save");
     } finally {
       database?.close();
     }
@@ -504,10 +518,10 @@ export class IndexedDbSaveRepository implements SaveRepository {
 
   async exportJson(): Promise<string> {
     const loaded = await this.load();
-    return serializeSaveEnvelope(loaded.envelope);
+    return this.options.codec.serialize(loaded.envelope);
   }
 
-  async importJson(serializedEnvelope: string): Promise<SaveEnvelopeV2> {
+  async importJson(serializedEnvelope: string): Promise<TEnvelope> {
     return this.serializeMutation(() =>
       this.importExclusive(serializedEnvelope),
     );
@@ -515,11 +529,11 @@ export class IndexedDbSaveRepository implements SaveRepository {
 
   private async importExclusive(
     serializedEnvelope: string,
-  ): Promise<SaveEnvelopeV2> {
+  ): Promise<TEnvelope> {
     let decoded;
 
     try {
-      decoded = await decodeSaveEnvelope(
+      decoded = await this.options.codec.decode(
         parseSaveJson(serializedEnvelope),
         this.options.checksumProvider,
         this.options.clock,
@@ -527,7 +541,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
     } catch (error) {
       throw new PersistenceError(
         "invalid-import",
-        "Imported save failed format, fixture-state, migration, or checksum validation. The current save was not changed.",
+        "Imported save failed format, state, migration, or checksum validation. The current save was not changed.",
         { cause: error },
       );
     }
@@ -536,7 +550,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
 
     try {
       database = await this.open();
-      let previous: LoadedGeneration | undefined;
+      let previous: LoadedGeneration<TState, TEnvelope> | undefined;
 
       try {
         previous = await this.loadInternal(database);
@@ -550,8 +564,8 @@ export class IndexedDbSaveRepository implements SaveRepository {
       }
 
       const now = this.options.clock.nowIso();
-      const importedEnvelope = await createSaveEnvelope(
-        decoded.envelope.payload.fixture,
+      const importedEnvelope = await this.options.codec.create(
+        decoded.state,
         {
           saveId: this.options.saveId,
           revision: (previous?.envelope.revision ?? 0) + 1,
@@ -569,7 +583,7 @@ export class IndexedDbSaveRepository implements SaveRepository {
         previous?.generation ?? null,
       );
     } catch (error) {
-      throw mapStorageError(error, "importing the local fixture");
+      throw mapStorageError(error, "importing the local save");
     } finally {
       database?.close();
     }

@@ -60,6 +60,13 @@ export {
   type WorldInteractableReadModel,
 } from "./combat-arena";
 export {
+  GOLD_MAX_TOTAL,
+  STARTING_GOLD,
+  parseCharacterSave,
+  type CharacterSave,
+  type CharacterSaveGenerators,
+} from "./character-save";
+export {
   HealthPool,
   type Damageable,
   type DamageIgnoreReason,
@@ -123,9 +130,11 @@ export {
 export {
   CharacterItemLoadout,
   DEFAULT_BASE_CHARACTER_STATS,
+  LOADOUT_SLOTS,
   aggregateEquipmentStats,
   applyOutgoingAbilityDamage,
   type BaseCharacterStats,
+  type CharacterItemsSnapshot,
   type EquipmentStats,
   type EquipFailure,
   type EquipResult,
@@ -165,6 +174,7 @@ export {
   type AttributeId,
   type AttributeReadModel,
   type CharacterProgressionReadModel,
+  type CharacterProgressionSnapshot,
   type ExperienceGrantResult,
   type PassiveDefinition,
   type PassiveReadModel,
@@ -201,6 +211,7 @@ export {
   type OreNodeDefinition,
   type ProfessionGrantResult,
   type ProfessionId,
+  type ProfessionProgressionSnapshot,
   type ProfessionReadModel,
   type WorldInteractableKind,
 } from "./professions";
@@ -251,6 +262,7 @@ export {
   DEFAULT_ENEMY_LOOT_WEIGHTS,
   DeterministicEnemyLootGenerator,
   type EnemyLootGeneratorConfig,
+  type EnemyLootGeneratorSnapshot,
   type EnemyLootWeights,
   type GeneratedEnemyLoot,
   type WorldLootDrop,

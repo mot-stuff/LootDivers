@@ -109,18 +109,68 @@ export class PersistenceError extends Error {
   }
 }
 
-export interface SaveLoadResult {
-  readonly state: FixtureSaveState;
-  readonly envelope: SaveEnvelopeV2;
+/**
+ * Envelope metadata every save format shares (TASK-705 generalization).
+ * `SaveEnvelopeV2` (fixture) and `CharacterSaveEnvelope` both satisfy it;
+ * the generation/backup repository only ever touches these fields plus the
+ * codec-owned payload.
+ */
+export interface EnvelopeMetadataFields {
+  readonly saveId: string;
+  readonly revision: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly compatibility: SaveCompatibility;
+  readonly migrationProvenance: readonly MigrationRecord[];
+  readonly checksum: SaveChecksum;
+}
+
+export interface DecodedEnvelope<TState, TEnvelope> {
+  readonly envelope: TEnvelope;
+  readonly state: TState;
+  readonly migratedFromVersion: number | null;
+}
+
+/**
+ * Format-specific create/decode/serialize seam injected into the repository
+ * so the DEC-014 generation, checksum, and readback machinery is shared by
+ * every envelope format instead of forked per payload.
+ */
+export interface SaveEnvelopeCodec<
+  TState,
+  TEnvelope extends EnvelopeMetadataFields,
+> {
+  create(
+    state: TState,
+    metadata: SaveMetadata,
+    checksumProvider: ChecksumProvider,
+  ): Promise<TEnvelope>;
+  decode(
+    value: unknown,
+    checksumProvider: ChecksumProvider,
+    clock: SaveClock,
+  ): Promise<DecodedEnvelope<TState, TEnvelope>>;
+  serialize(envelope: TEnvelope): string;
+}
+
+export interface SaveLoadResult<
+  TState = FixtureSaveState,
+  TEnvelope extends EnvelopeMetadataFields = SaveEnvelopeV2,
+> {
+  readonly state: TState;
+  readonly envelope: TEnvelope;
   readonly source: "active" | "backup";
   readonly recoveredFromInvalidGeneration: boolean;
 }
 
-export interface SaveRepository {
-  save(state: FixtureSaveState): Promise<SaveEnvelopeV2>;
-  load(): Promise<SaveLoadResult>;
+export interface SaveRepository<
+  TState = FixtureSaveState,
+  TEnvelope extends EnvelopeMetadataFields = SaveEnvelopeV2,
+> {
+  save(state: TState): Promise<TEnvelope>;
+  load(): Promise<SaveLoadResult<TState, TEnvelope>>;
   exportJson(): Promise<string>;
-  importJson(serializedEnvelope: string): Promise<SaveEnvelopeV2>;
+  importJson(serializedEnvelope: string): Promise<TEnvelope>;
 }
 
 export type PersistenceStatus =

@@ -5,7 +5,7 @@ import {
   type ItemInstance,
 } from "./item-generation";
 import { persistentInstanceId } from "./ids";
-import { Mulberry32 } from "./random";
+import { Mulberry32, type RandomState } from "./random";
 
 export interface EnemyLootWeights {
   readonly common: number;
@@ -21,6 +21,19 @@ export interface EnemyLootGeneratorConfig {
 export interface GeneratedEnemyLoot {
   readonly killSequence: number;
   readonly items: readonly ItemInstance[];
+}
+
+/**
+ * Serializable position within a run's deterministic loot sequence
+ * (TASK-705). Persisting it lets a restored session continue minting
+ * instance IDs and rolls exactly where the saved run stopped, so saved
+ * items can never collide with post-restore drops.
+ */
+export interface EnemyLootGeneratorSnapshot {
+  readonly seed: number;
+  readonly killSequence: number;
+  readonly itemSequence: number;
+  readonly random: RandomState;
 }
 
 export interface WorldLootDrop {
@@ -66,6 +79,33 @@ export class DeterministicEnemyLootGenerator {
         "Enemy loot rarity weights must be nonnegative integers with a total from 1 through 2^32.",
       );
     }
+  }
+
+  public snapshot(): EnemyLootGeneratorSnapshot {
+    return {
+      seed: this.#seed,
+      killSequence: this.#killSequence,
+      itemSequence: this.#itemSequence,
+      random: this.#random.saveState(),
+    };
+  }
+
+  /**
+   * Reconstructs a generator mid-sequence from a saved snapshot. Callers
+   * validate the snapshot shape (see `parseCharacterSave`).
+   */
+  public static fromSnapshot(
+    snapshot: EnemyLootGeneratorSnapshot,
+    rarityWeights: EnemyLootWeights,
+  ): DeterministicEnemyLootGenerator {
+    const generator = new DeterministicEnemyLootGenerator({
+      seed: snapshot.seed,
+      rarityWeights,
+    });
+    generator.#killSequence = snapshot.killSequence;
+    generator.#itemSequence = snapshot.itemSequence;
+    generator.#random.restoreState(snapshot.random);
+    return generator;
   }
 
   public generateForKill(): GeneratedEnemyLoot {

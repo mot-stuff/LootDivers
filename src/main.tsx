@@ -27,14 +27,24 @@ import type {
 } from "./adapters/phaser/synthetic-lifecycle-presentation";
 import { createReadModelChannel } from "./adapters/ui/read-model-channel";
 import {
+  CHARACTER_SAVE_CODEC,
+  CharacterSaveService,
+  FIXTURE_SAVE_CODEC,
   PersistenceFixtureService,
+  type CharacterSaveEnvelope,
   type FixtureSaveState,
   type PersistenceStatus,
 } from "./persistence";
-import { App, type PersistenceFixtureActions } from "./presentation/App";
+import type { CharacterSave } from "./core";
+import {
+  App,
+  type MainMenuCharacterSaveModel,
+  type PersistenceFixtureActions,
+} from "./presentation/App";
 import type {
   CanvasViewportReadModel,
   CharacterHudReadModel,
+  CombatHudReadModel,
   InventoryHudReadModel,
   ItemUiCommand,
   ProfessionUiCommand,
@@ -97,6 +107,24 @@ declare global {
       executeWorldCommand: (command: WorldUiCommand) => void;
       applyPlayerDamage: (amount: number) => DamageResult;
     };
+    __RARPG_CHARACTER_SAVE_TEST__?: {
+      saveNow: () => Promise<void>;
+      corruptActive: () => Promise<void>;
+      generationState: () => ReturnType<
+        IndexedDbSaveRepository["debugGenerationState"]
+      >;
+      /**
+       * Reads back the committed, checksum-verified active save (null when
+       * none decodes). E2e specs poll this before reloading so an
+       * in-flight queued save can never race the navigation.
+       */
+      activeSave: () => Promise<{
+        zoneId: string;
+        revision: number;
+        source: "active" | "backup";
+      } | null>;
+      reset: () => Promise<void>;
+    };
   }
 }
 
@@ -158,8 +186,39 @@ const repository = new IndexedDbSaveRepository({
   contentSchemaVersion: 1,
   checksumProvider: new WebCryptoSha256(),
   clock: new SystemSaveClock(),
+  codec: FIXTURE_SAVE_CODEC,
   faultInjector,
 });
+
+/**
+ * TASK-705 character save slot (DEC-034): its own IndexedDB database so the
+ * Phase 0 fixture envelope and the character envelope never share
+ * generations, wired through the same DEC-014 repository machinery.
+ */
+const characterRepository = new IndexedDbSaveRepository<
+  CharacterSave,
+  CharacterSaveEnvelope
+>({
+  databaseName: "rarpg-character-save-v1",
+  saveId: "character:slot-1",
+  build: "loot-divers-client",
+  contentSchemaVersion: 1,
+  checksumProvider: new WebCryptoSha256(),
+  clock: new SystemSaveClock(),
+  codec: CHARACTER_SAVE_CODEC,
+});
+const characterSaves = new CharacterSaveService(characterRepository);
+let characterSaveMenu: MainMenuCharacterSaveModel = {
+  available: false,
+  recovered: false,
+};
+let continueSavedCharacter: (() => boolean) | null = null;
+/**
+ * Save triggers stay disarmed until the player actually enters gameplay
+ * (New Game, Continue, or `?autostart`), so an untouched main menu can
+ * never overwrite an existing save on tab close.
+ */
+let gameplayStarted = false;
 const service = new PersistenceFixtureService(repository, {
   publish(status) {
     persistenceStatus = status;
@@ -214,6 +273,11 @@ function renderApp(): void {
       showPersistence={!worldAutomation || persistenceAutomation}
       showCombatPrototype={combatPrototype}
       showMainMenu={showMainMenu}
+      characterSave={characterSaveMenu}
+      onContinue={() => continueSavedCharacter?.() ?? false}
+      onGameplayStarted={() => {
+        gameplayStarted = true;
+      }}
     />,
     mount,
   );
@@ -352,6 +416,106 @@ if (!support.supported) {
         if (!showMainMenu) {
           canvas.focus({ preventScroll: true });
         }
+        // `?autostart` skips the menu entirely, so gameplay is live now.
+        if (!showMainMenu) {
+          gameplayStarted = true;
+        }
+
+        // TASK-705 save triggers (DEC-034): persist on zone travel and on
+        // page hide. Failures degrade to console warnings — local saves are
+        // best-effort by design (DEC-014). Trigger-based saves chain onto a
+        // FIFO queue so rapid triggers (e.g. two quick zone changes) can
+        // never land out of order and leave a stale save as the active
+        // generation; the snapshot is captured when its turn arrives, so a
+        // queued save always writes the freshest state.
+        let pendingCharacterSave: Promise<void> = Promise.resolve();
+        const persistCharacter = (): Promise<void> => {
+          pendingCharacterSave = pendingCharacterSave
+            .catch(() => undefined)
+            .then(() =>
+              characterSaves.save(renderer.combat.captureCharacterSave()),
+            );
+          return pendingCharacterSave;
+        };
+        const persistCharacterQuietly = (): void => {
+          persistCharacter().catch((error: unknown) => {
+            const detail =
+              error instanceof Error ? error.message : String(error);
+            console.warn(`Character save failed: ${detail}`);
+          });
+        };
+        // The simulation always boots into Hearthmere, so that is the
+        // baseline; the first hud snapshot with a different zone marks a
+        // completed travel (including New Game's move to Wakeshore Landing).
+        let lastObservedZoneId: string | null =
+          renderer.combat.diagnostics()?.zoneId ?? null;
+        window.addEventListener("rarpg:combat-hud", (event) => {
+          const hud = (event as CustomEvent<CombatHudReadModel>).detail;
+          if (lastObservedZoneId === null) {
+            lastObservedZoneId = hud.zoneId;
+            return;
+          }
+          if (hud.zoneId === lastObservedZoneId) return;
+          lastObservedZoneId = hud.zoneId;
+          if (!gameplayStarted) return;
+          persistCharacterQuietly();
+        });
+        const persistOnHide = (): void => {
+          // Never persist a dead character or an unstarted menu session.
+          if (!gameplayStarted) return;
+          if (renderer.combat.diagnostics()?.playerDead !== false) return;
+          persistCharacterQuietly();
+        };
+        window.addEventListener("pagehide", persistOnHide);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") persistOnHide();
+        });
+
+        // Boot-time load resolves the Continue button (DEC-031 deferral):
+        // corrupted or missing saves leave the button disabled, recovered
+        // backups surface a notice in the menu.
+        void characterSaves.loadForBoot().then((boot) => {
+          if (boot.failure !== null) {
+            console.warn(`Character save unavailable: ${boot.failure}`);
+          }
+          const save = boot.save;
+          if (save === null) return;
+          characterSaveMenu = { available: true, recovered: boot.recovered };
+          continueSavedCharacter = () => {
+            try {
+              renderer.combat.restoreCharacterSave(save);
+              return true;
+            } catch (error) {
+              const detail =
+                error instanceof Error ? error.message : String(error);
+              console.warn(`Saved character could not be restored: ${detail}`);
+              characterSaveMenu = { available: false, recovered: false };
+              renderApp();
+              return false;
+            }
+          };
+          renderApp();
+        });
+
+        window.__RARPG_CHARACTER_SAVE_TEST__ = {
+          saveNow: () => persistCharacter(),
+          corruptActive: () =>
+            characterRepository.debugCorruptActiveGeneration(),
+          generationState: () => characterRepository.debugGenerationState(),
+          activeSave: async () => {
+            try {
+              const loaded = await characterRepository.load();
+              return {
+                zoneId: loaded.state.zoneId,
+                revision: loaded.envelope.revision,
+                source: loaded.source,
+              };
+            } catch {
+              return null;
+            }
+          },
+          reset: () => characterRepository.debugReset(),
+        };
       }
       document.body.dataset.appState = "ready";
       publish({
