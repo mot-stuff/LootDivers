@@ -158,6 +158,14 @@ TASK-P0-013 or shared development.
   diagnostic timing harness. Current-machine timing is explicitly
   `INELIGIBLE`; representative browser population acceptance remains with
   TASK-P0-008.
+- **TASK-P0-008:** Complete and independently accepted on 2026-09-04. The
+  technical lifecycle fixture provides opaque runtime IDs, fixed-capacity typed
+  stores, complete cleanup, declared update order, interpolation, culling,
+  pooled Phaser presentations, exact P0-002 synthetic populations, and bounded
+  six-stage timing/allocation diagnostics without authoritative Phaser state or
+  gameplay semantics. All available pinned gates passed. Strict performance
+  remains `INELIGIBLE` pending eligible reference hardware and five fresh
+  repetitions; branded Chrome and real Safari hardware are unavailable.
 - **TASK-P0-010:** Complete pending independent acceptance on 2026-09-04. The
   synthetic local persistence foundation provides a framework-free repository
   and migration boundary, versioned checksummed envelopes, validated IndexedDB

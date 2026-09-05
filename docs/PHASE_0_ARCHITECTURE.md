@@ -701,7 +701,7 @@ authoritative state resides in Phaser objects; fixture reaches P0-002 population
 and emits timing/allocation metrics.
 **Testing:** Lifecycle tests, leak trend test, browser performance run.
 
-**Completion record (2026-09-04):** Complete pending independent acceptance.
+**Completion record (2026-09-04):** Complete and independently accepted.
 Opaque runtime IDs, fixed-capacity typed stores, declared update order, complete
 cleanup, dense technical populations, pooled Phaser presentations,
 interpolation, culling, and allocation/timing diagnostics are implemented. The
@@ -709,7 +709,13 @@ P0-002-shaped browser fixture reaches 200 technical actors, 500 wrapping
 projectiles, 1,000 pooled particles, and 100 loot visuals while running the
 required spatial queries and bounded path cadence over layered 128×128
 isometric terrain. Current-machine performance evidence is `INELIGIBLE`; no
-strict pass is claimed. No gameplay semantics or Phase 1 behavior were added.
+strict pass is claimed. Independent QA verified all available pinned gates,
+exact visible populations, separate culling behavior, lifecycle cleanup,
+authority boundaries, bounded six-stage diagnostics, and clean evidence
+provenance at implementation commit `a3d1133`. Branded Chrome, eligible
+reference hardware, five strict repetitions, and real Safari remain unavailable
+gates rather than implementation failures. No gameplay semantics or Phase 1
+behavior were added.
 
 ### TASK-P0-009 — Define and test ability execution contracts
 
