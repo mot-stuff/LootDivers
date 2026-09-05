@@ -2437,3 +2437,52 @@ a deferred system requiring its own approval per the roadmap. Supersedes
 the roadmap Final Phase's "DigitalOcean for the website / GitHub-hosted
 images" wording: the droplet hosts the API, Cloudflare Pages hosts the
 site and assets.
+
+# DEC-033
+
+## GitHub Actions CI scope: no Firefox e2e, hardware-sensitive specs skip on CI
+
+Date: 2026-09-05
+
+## Decision
+
+The GitHub Actions gate (`.github/workflows/ci.yml`) runs the e2e suite on
+chromium, edge, and webkit only, and eight hardware-sensitive specs skip
+themselves when `CI` is set in the environment. The authoritative pre-merge
+gate remains the full local four-browser matrix (chromium, edge, firefox,
+webkit) with no skips, as exercised by QA and task owners.
+
+## Reason
+
+CI run #5 (the first full run on `main`) failed with 51 e2e failures traced
+to two GitHub-hosted-runner limitations, not product defects:
+
+1. Runners have no GPU, and headless Linux Firefox exposes no WebGL at all.
+   The boot support gate correctly reports `data-app-state="unsupported"`,
+   so all 37 Firefox specs fail. The game genuinely cannot run there.
+2. Under software rendering the runner is slow enough that specs sampling
+   transient mid-simulation state (pre-hit attack snapshots), frame-timing
+   diagnostics, or pixel-exact canvas readbacks fail systematically:
+   `combat-arena` 27/286/566(480x720), `entity-lifecycle` 223,
+   `isometric-world` 276(webkit)/323, and `item-loot-loop` 32 (webkit).
+
+Skips are annotated inline with `DEC-033` and use the existing
+`test.skip(condition, reason)` idiom (precedent: the chromium-only visual
+baseline in `isometric-world.spec.ts`).
+
+## Alternatives Considered
+
+- Playwright retries in CI: rejected; the failures are systematic under
+  software rendering, not flaky.
+- Rewriting the specs to be timing-independent: preferred long-term for the
+  mid-simulation sampling tests (QA already flagged the webkit dodge-poll
+  pattern); tracked as tech debt, not a gate blocker.
+- A self-hosted GPU runner: rejected as premature cost/ops for the
+  vertical slice.
+
+## Consequences
+
+CI green means: typecheck, lint, content checks, unit, component, build,
+and the e2e suite minus eight skips on three browser engines. Firefox
+coverage and the skipped specs are validated only in the local gate, so
+task completion reports must keep running the full matrix locally.

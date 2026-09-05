@@ -50,5 +50,11 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: End-to-end tests (4-browser matrix)
-        run: node scripts/run-playwright.mjs --project=chromium --project=edge --project=firefox --project=webkit
+      # Firefox is excluded here: GitHub-hosted runners have no GPU and
+      # headless Linux Firefox exposes no WebGL, so the game correctly
+      # reports "unsupported" and every spec fails. A handful of
+      # hardware-sensitive specs also skip themselves when CI=true. The
+      # authoritative pre-merge gate remains the local 4-browser matrix
+      # (chromium, edge, firefox, webkit). See DEC-033.
+      - name: End-to-end tests (chromium, edge, webkit)
+        run: node scripts/run-playwright.mjs --project=chromium --project=edge --project=webkit

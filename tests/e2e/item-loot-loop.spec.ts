@@ -10,6 +10,10 @@ const RARITY_LABEL_COLORS: Readonly<Record<ItemRarity, string>> = {
 };
 const ABILITY_STONE_LABEL_COLOR = "#c084fc";
 
+// GitHub-hosted CI runners have no GPU; this flow is timing-sensitive under
+// webkit software rendering. Covered by the local four-browser gate (DEC-033).
+const RUNNING_IN_CI = process.env["CI"] !== undefined;
+
 function collectRuntimeFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("console", (message) => {
@@ -31,7 +35,11 @@ function collectRuntimeFailures(page: Page): string[] {
 
 test("enemy loot can be picked, equipped, and used to create an ability", async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(
+    RUNNING_IN_CI && testInfo.project.name === "webkit",
+    "hardware-sensitive on GPU-less CI (DEC-033)",
+  );
   const failures = collectRuntimeFailures(page);
   await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");

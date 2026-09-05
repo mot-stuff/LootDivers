@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+// GitHub-hosted CI runners have no GPU; frame-timing sampling is unreliable
+// under software rendering. Covered by the local four-browser gate (DEC-033).
+const RUNNING_IN_CI = process.env["CI"] !== undefined;
+
 test.describe.configure({ mode: "serial" });
 
 test.beforeEach(async ({ page }) => {
@@ -221,6 +225,7 @@ test("releases and reacquires one actor without stale ownership", async ({
 });
 
 test("samples allocation and frame diagnostics", async ({ page }) => {
+  test.skip(RUNNING_IN_CI, "hardware-sensitive on GPU-less CI (DEC-033)");
   await page.evaluate(() => window.__RARPG_FIXTURE_TEST__?.beginSample());
   await page.waitForTimeout(1_000);
   const summary = await page.evaluate(() =>

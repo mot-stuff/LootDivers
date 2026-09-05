@@ -2,6 +2,10 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+// GitHub-hosted CI runners have no GPU; pixel-exact canvas readbacks differ
+// under software rendering. Covered by the local four-browser gate (DEC-033).
+const RUNNING_IN_CI = process.env["CI"] !== undefined;
+
 const zoneFixturePath = fileURLToPath(
   new URL("../../public/zones/technical-isometric.zone.json", import.meta.url),
 );
@@ -273,7 +277,11 @@ for (const pointerCase of [
       deviceScaleFactor: pointerCase.deviceScaleFactor,
     });
 
-    test("normalizes ground and elevated cells", async ({ page }) => {
+    test("normalizes ground and elevated cells", async ({ page }, testInfo) => {
+      test.skip(
+        RUNNING_IN_CI && testInfo.project.name === "webkit",
+        "hardware-sensitive on GPU-less CI (DEC-033)",
+      );
       const dimensions = await page
         .getByLabel("RARPG Phaser diagnostic canvas")
         .evaluate((element) => {
@@ -327,6 +335,7 @@ test("matches deterministic projection, depth, elevation, and occlusion", async 
     testInfo.project.name !== "chromium",
     "Canonical visual baseline uses pinned Chromium.",
   );
+  test.skip(RUNNING_IN_CI, "hardware-sensitive on GPU-less CI (DEC-033)");
   await expect(
     page.getByLabel("RARPG Phaser diagnostic canvas"),
   ).toHaveScreenshot(`technical-isometric-${testInfo.project.name}.png`, {
