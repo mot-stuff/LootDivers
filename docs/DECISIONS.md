@@ -1947,3 +1947,86 @@ split from DEC-005.
 Fulfills the character-art import reserved in the Phase 7 roadmap note.
 Presentation-only per DEC-005; DEC-012 (Tiled zones) and enemy visuals
 remain future work.
+
+---
+
+# DEC-029
+
+### Status
+
+Accepted.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Fantasy UI theme — a CSS-first design-token restyle of the in-game shell.
+`src/presentation/styles.css` defines the theme once as `:root` custom
+properties (`--ui-panel-bg`, `--ui-border`, `--ui-accent`, `--ui-text`,
+and companions for surfaces, frames, text tiers, keycaps, and functional
+states), and every restyled rule consumes those tokens. The palette moves
+from the dark-blue diagnostic look to deep charcoal/umber panel
+backgrounds, aged-brass borders, ember-gold accents, and warm
+parchment-toned text. A shared framed-panel treatment (brass outer
+border, dark inlay and inner hairline via inset shadows, warm vignette
+gradient, and ember-gold corner brackets drawn by an absolutely
+positioned pseudo-element) styles the diagnostic overlay, vitals, ability
+bar, minimap frame, paused overlay, and all menu dialogs. Headings use a
+system serif stack ("Palatino Linotype", Palatino, "Book Antiqua",
+Georgia, serif); no font is vendored, no CDN fonts, no external asset
+packs, and no raster UI images. Rarity colors (magic `#6da5ff`, rare
+`#f0c75e`, unique `#ff8000`) and the health/mana/XP bar fills are
+preserved exactly as tokens; minimap zone floor/edge colors remain
+simulation data delivered as inline SVG attributes and are never set
+from CSS.
+
+### Context
+
+Phase 7 kickoff (TASK-701) asked for an original fantasy visual identity
+to replace the diagnostic styling, with no behavior changes, no
+copyrighted assets, and stable class names, roles, and test ids so the
+existing unit, component, and e2e suites keep passing.
+
+### Options Considered
+
+1. Vendor one OFL display typeface via `@font-face` for headings.
+2. Use a well-chosen system serif stack for headings, no vendored file.
+3. Raster panel artwork (nine-slice images) for the framed-panel look.
+
+### Chosen Approach
+
+Option 2 for typography and pure CSS (borders, shadows, gradients) for
+the panel treatment. Every class name, role, aria label, and data-testid
+was kept stable, and `App.tsx` needed zero changes; the restyle is
+entirely inside `styles.css`.
+
+### Why
+
+The system serif stack ships no binary asset and carries zero licensing
+risk while still reading as a fantasy heading face on all target
+desktop platforms; the packet explicitly allows it. CSS-only panel
+ornaments keep the theme resolution-independent and diffable, and
+avoiding markup changes eliminated test churn entirely.
+
+### Tradeoffs
+
+- Heading rendering varies slightly across platforms (Palatino Linotype
+  on Windows, Palatino/Georgia elsewhere). A vendored OFL display font
+  can later drop in by changing only `--ui-font-heading` plus one
+  `@font-face` rule.
+- The Phase 0 persistence/automation diagnostic panels received token
+  inheritance only, not the full framed treatment (they are test-only
+  surfaces, per the packet's out-of-scope list).
+
+### Systems Affected
+
+- `src/presentation/styles.css` (only file changed).
+
+### Relationship to Earlier Decisions
+
+Presentation-only; the DEC-005 core/presentation boundary is unchanged.
+Rarity colors from the DEC-020 loot UI and the simulation-fed minimap
+zone colors from DEC-027 are preserved exactly. First accepted packet of
+the Phase 7 kickoff (TASK-701).

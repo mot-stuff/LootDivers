@@ -178,10 +178,27 @@ Import our character spritesheet, we will want to stop at this point and prompt 
 **Status:** Character import done ahead of schedule. The owner-provided
 barbarian spritesheets now render the player (idle, run, attack, dodge roll,
 death across eight facings; the character faces the movement direction and
-attacks orient to the cursor) per DEC-028 (2026-09-05). Enemy and world art,
-sound, VFX, and the rest of Phase 7 remain open.
+attacks orient to the cursor) per DEC-028 (2026-09-05).
+
+Phase 7 kickoff in progress: fantasy UI restyle (DEC-029) shipped, tutorial
+level (DEC-030) open, and main menu with New Game flow (DEC-031) open. Local
+save/continue and accounts remain deferred (the menu reserves a disabled
+Continue slot); sound, VFX, enemy and world art, balance, and performance
+polish remain open.
 
 ---
+
+## Phase 8 - Map builder
+We will need to build something so i can build towns
+Zones/dungeons will be procedurally generated ideally using isometric tilesets
+
+
+## Final Phase
+We will be using digitalocean to deploy to our website. 
+We will need to build a db and backend for the game.
+We already own a url.
+I will need to push the code to my repo on github as well and host images there so we dont use up bandwidth. 
+Auction house will be the multiplayer portion of the game so we will want to make sure we track each players gold and account etc. 
 
 ## Deferred systems
 

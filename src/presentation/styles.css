@@ -1,6 +1,66 @@
+/*
+ * RARPG fantasy UI theme (TASK-701 / DEC-029).
+ *
+ * All themed rules consume the :root design tokens below. Rarity colors and
+ * the health/mana/XP bar colors are intentionally preserved from the
+ * pre-theme UI. Minimap floor/edge colors are simulation data delivered as
+ * inline SVG attributes and MUST NOT be overridden here.
+ */
 :root {
-  color: #e8f1ff;
-  background: #08111f;
+  /* Surfaces: deep charcoal/umber. */
+  --ui-page-bg: #0e0a07;
+  --ui-panel-bg: rgb(24 18 12 / 92%);
+  --ui-panel-bg-solid: #17110b;
+  --ui-panel-bg-raised: #241b11;
+  --ui-panel-vignette: linear-gradient(
+    180deg,
+    rgb(94 64 30 / 22%),
+    rgb(0 0 0 / 0%) 38%,
+    rgb(0 0 0 / 24%)
+  );
+
+  /* Frames: aged brass with a dark inlay line. */
+  --ui-border: #6d5731;
+  --ui-border-strong: #98783d;
+  --ui-border-dim: #46381f;
+  --ui-inlay: #0a0703;
+
+  /* Ember-gold accent. */
+  --ui-accent: #e0a935;
+  --ui-accent-soft: #cfa75c;
+  --ui-accent-glow: rgb(224 169 53 / 30%);
+  --ui-focus: #ffdf9e;
+
+  /* Parchment text. */
+  --ui-text: #ecdfc3;
+  --ui-text-bright: #f9f0da;
+  --ui-text-dim: #b3a17f;
+  --ui-heading: #e9c87f;
+
+  /* Keycaps. */
+  --ui-key-bg: #2e2213;
+  --ui-key-border: #8b6f3c;
+
+  /* Functional states (kept distinguishable from the gold accent). */
+  --ui-ready: #7fbf72;
+  --ui-warn: #ffd27d;
+  --ui-danger: #e25b52;
+  --ui-danger-text: #ffc9c2;
+  --ui-muted-state: #9b8e75;
+  --ui-arcane: #8a76c0;
+
+  /* Rarity colors: preserved exactly from the pre-theme UI. */
+  --rarity-magic: #6da5ff;
+  --rarity-rare: #f0c75e;
+  --rarity-unique: #ff8000;
+
+  /* Typography. */
+  --ui-font-heading:
+    "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman",
+    serif;
+
+  color: var(--ui-text);
+  background: var(--ui-page-bg);
   font-family:
     Inter,
     ui-sans-serif,
@@ -49,6 +109,68 @@ body.combat-mode #app,
   margin: 0;
 }
 
+/*
+ * Shared framed-panel treatment: brass outer border, dark inlay, inner
+ * brass hairline, warm vignette, and ember-gold corner brackets drawn by
+ * an absolutely-positioned pseudo-element (absolute so it never becomes a
+ * grid item inside grid panels).
+ */
+.combat-shell .diagnostic-shell,
+.combat-vitals-hud,
+.combat-minimap,
+.combat-action-hud,
+.combat-paused-hud,
+.item-menu {
+  position: relative;
+  border: 1px solid var(--ui-border);
+  background-color: var(--ui-panel-bg);
+  background-image: var(--ui-panel-vignette);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-inlay),
+    inset 0 0 0 2px var(--ui-border-dim),
+    0 0.6rem 1.8rem rgb(0 0 0 / 45%);
+}
+
+.combat-shell .diagnostic-shell::after,
+.combat-vitals-hud::after,
+.combat-minimap::after,
+.combat-action-hud::after,
+.combat-paused-hud::after,
+.item-menu::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background-image:
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft)),
+    linear-gradient(var(--ui-accent-soft), var(--ui-accent-soft));
+  background-position:
+    left top,
+    left top,
+    right top,
+    right top,
+    left bottom,
+    left bottom,
+    right bottom,
+    right bottom;
+  background-repeat: no-repeat;
+  background-size:
+    0.7rem 1px,
+    1px 0.7rem,
+    0.7rem 1px,
+    1px 0.7rem,
+    0.7rem 1px,
+    1px 0.7rem,
+    0.7rem 1px,
+    1px 0.7rem;
+  pointer-events: none;
+}
+
 .combat-shell .diagnostic-shell {
   position: absolute;
   z-index: 2;
@@ -57,9 +179,7 @@ body.combat-mode #app,
   width: auto;
   margin: 0;
   padding: 0.65rem 0.8rem;
-  border: 1px solid rgb(118 184 255 / 45%);
   border-radius: 0.45rem;
-  background: rgb(8 17 31 / 78%);
   pointer-events: none;
 }
 
@@ -88,6 +208,7 @@ body.combat-mode #app,
   padding: 0;
   border: 0;
   background: transparent;
+  box-shadow: none;
   font-size: 0.67rem;
   line-height: 1.2;
 }
@@ -114,7 +235,7 @@ body.combat-mode #app,
 }
 
 .combat-shell .shell-controls p {
-  color: #dceaff;
+  color: var(--ui-text);
   font-size: 0.85rem;
 }
 
@@ -134,9 +255,7 @@ body.combat-mode #app,
   gap: 0.45rem;
   width: 100%;
   padding: 0.55rem 0.65rem;
-  border: 1px solid rgb(196 205 217 / 55%);
   border-radius: 0.45rem;
-  background: rgb(8 17 31 / 84%);
   pointer-events: none;
 }
 
@@ -149,18 +268,17 @@ body.combat-mode #app,
   gap: 0.25rem;
   width: min(11.5rem, calc(100vw - 2rem));
   padding: 0.4rem 0.45rem 0.5rem;
-  border: 1px solid rgb(196 205 217 / 55%);
   border-radius: 0.45rem;
-  background: rgb(8 17 31 / 84%);
   pointer-events: none;
 }
 
 .combat-minimap-label {
   margin: 0;
-  color: #9eb6d4;
-  font-size: 0.68rem;
+  color: var(--ui-heading);
+  font-family: var(--ui-font-heading);
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
@@ -171,8 +289,14 @@ body.combat-mode #app,
   border-radius: 0.25rem;
 }
 
+/*
+ * Minimap contents are simulation data: floor and edge colors arrive as
+ * inline SVG attributes and must not be set from CSS. Only the void
+ * letterbox and marker palette below are presentation-owned; marker
+ * colors are preserved from the pre-theme UI.
+ */
 .combat-minimap-void {
-  fill: #071018;
+  fill: #0b0805;
 }
 
 .combat-minimap-bounds {
@@ -226,10 +350,7 @@ body.combat-mode #app,
   gap: 0.3rem;
   width: min(18rem, calc(100vw - 2rem));
   padding: 0.4rem;
-  border: 1px solid rgb(196 205 217 / 58%);
   border-radius: 0.45rem;
-  background: rgb(8 17 31 / 90%);
-  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 32%);
   pointer-events: none;
 }
 
@@ -250,10 +371,11 @@ body.combat-mode #app,
   gap: 0.15rem;
   min-height: 2.5rem;
   overflow: hidden;
-  border: 1px solid #52677f;
+  border: 1px solid var(--ui-border-dim);
   border-radius: 0.3rem;
   background:
-    radial-gradient(circle at 50% 60%, #26364a 0 22%, transparent 24%), #0d1726;
+    radial-gradient(circle at 50% 60%, #3a2c1a 0 22%, transparent 24%),
+    var(--ui-panel-bg-raised);
 }
 
 .combat-flask-slot kbd {
@@ -267,7 +389,7 @@ body.combat-mode #app,
   margin-top: 1.15rem;
   padding: 0 0.2rem 0.15rem;
   overflow: hidden;
-  color: #dceaff;
+  color: var(--ui-text);
   font-size: 0.52rem;
   line-height: 1.15;
   -webkit-box-orient: vertical;
@@ -275,11 +397,11 @@ body.combat-mode #app,
 }
 
 .combat-flask-slot[data-rarity="magic"] {
-  border-color: #6da5ff;
+  border-color: var(--rarity-magic);
 }
 
 .combat-flask-slot[data-rarity="rare"] {
-  border-color: #f0c75e;
+  border-color: var(--rarity-rare);
 }
 
 .combat-ability {
@@ -292,21 +414,23 @@ body.combat-mode #app,
   min-height: 4.2rem;
   padding: 0.3rem;
   overflow: hidden;
-  border: 1px solid #46617e;
+  border: 1px solid var(--ui-border);
   border-radius: 0.35rem;
   background:
-    radial-gradient(circle at 50% 48%, #26384f 0 24%, transparent 26%), #101a2b;
+    radial-gradient(circle at 50% 48%, #3a2c1a 0 24%, transparent 26%),
+    var(--ui-panel-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--ui-inlay);
 }
 
 .combat-ability[data-state="ready"] {
-  border-color: #63c7a1;
+  border-color: var(--ui-ready);
 }
 
 .combat-ability[data-state="busy"],
 .combat-ability[data-state="insufficient-mana"],
 .combat-ability[data-state="defeated"] {
-  border-color: #59697c;
-  color: #aab5c3;
+  border-color: var(--ui-border-dim);
+  color: var(--ui-muted-state);
 }
 
 .combat-ability-cooldown {
@@ -315,7 +439,7 @@ body.combat-mode #app,
   right: 0;
   bottom: 0;
   left: 0;
-  background: rgb(3 8 15 / 72%);
+  background: rgb(8 5 2 / 74%);
 }
 
 .combat-ability-heading,
@@ -332,10 +456,10 @@ body.combat-mode #app,
 
 .combat-ability kbd,
 .combat-flask-slot kbd {
-  border: 1px solid #7893b2;
+  border: 1px solid var(--ui-key-border);
   border-radius: 0.25rem;
-  color: #f4f8ff;
-  background: #182940;
+  color: var(--ui-text-bright);
+  background: var(--ui-key-bg);
   font-family: inherit;
   font-size: 0.66rem;
   font-weight: 800;
@@ -359,19 +483,19 @@ body.combat-mode #app,
 
 .combat-ability-state {
   align-self: end;
-  color: #7ee5bd;
+  color: var(--ui-ready);
   font-size: 0.58rem;
   font-weight: 700;
 }
 
 .combat-ability[data-state="cooldown"] .combat-ability-state {
-  color: #ffd27d;
+  color: var(--ui-warn);
 }
 
 .combat-ability[data-state="busy"] .combat-ability-state,
 .combat-ability[data-state="insufficient-mana"] .combat-ability-state,
 .combat-ability[data-state="defeated"] .combat-ability-state {
-  color: #c0cad6;
+  color: var(--ui-muted-state);
 }
 
 .combat-statuses {
@@ -383,10 +507,10 @@ body.combat-mode #app,
 
 .combat-status {
   padding: 0.18rem 0.42rem;
-  border: 1px solid #6f82a1;
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  color: #dfeaff;
-  background: #15243a;
+  color: var(--ui-text);
+  background: var(--ui-panel-bg-raised);
   font-size: 0.65rem;
 }
 
@@ -398,7 +522,8 @@ body.combat-mode #app,
 }
 
 .combat-vitals-label {
-  color: #f2f6fc;
+  color: var(--ui-heading);
+  font-family: var(--ui-font-heading);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -410,9 +535,10 @@ body.combat-mode #app,
   border-radius: 0.25rem;
 }
 
+/* Vitals keep their pre-theme fill colors so HP/MP/XP stay recognizable. */
 .combat-health-meter {
-  border: 1px solid #ffb0c2;
-  background: #24151d;
+  border: 1px solid #a3524d;
+  background: #2a120e;
 }
 
 .combat-vitals-meter span {
@@ -430,8 +556,8 @@ body.combat-mode #app,
 }
 
 .combat-mana-meter {
-  border: 1px solid #91c9ff;
-  background: #122238;
+  border: 1px solid #4a6c96;
+  background: #101d2e;
 }
 
 .combat-mana-meter span {
@@ -439,8 +565,8 @@ body.combat-mode #app,
 }
 
 .combat-experience-meter {
-  border: 1px solid #d0a7ff;
-  background: #241832;
+  border: 1px solid #77588f;
+  background: #1e1329;
 }
 
 .combat-experience-meter span {
@@ -455,10 +581,9 @@ body.combat-mode #app,
   display: grid;
   gap: 0.2rem;
   padding: 0.55rem 0.75rem;
-  border: 1px solid rgb(255 215 128 / 55%);
+  border-color: var(--ui-accent-soft);
   border-radius: 0.45rem;
-  color: #ffe2a8;
-  background: rgb(8 17 31 / 86%);
+  color: var(--ui-heading);
 }
 
 .combat-menu-toggles {
@@ -472,7 +597,7 @@ body.combat-mode #app,
 .character-menu-toggle {
   min-height: 2.4rem;
   padding: 0.4rem 0.55rem;
-  background: rgb(8 17 31 / 92%);
+  background: var(--ui-panel-bg-solid);
   pointer-events: auto;
 }
 
@@ -480,10 +605,10 @@ body.combat-mode #app,
 .character-menu-toggle kbd,
 .item-menu kbd {
   padding: 0.15rem 0.32rem;
-  border: 1px solid #7893b2;
+  border: 1px solid var(--ui-key-border);
   border-radius: 0.25rem;
-  color: #f4f8ff;
-  background: #182940;
+  color: var(--ui-text-bright);
+  background: var(--ui-key-bg);
   font: inherit;
   font-size: 0.7rem;
   font-weight: 800;
@@ -499,14 +624,17 @@ body.combat-mode #app,
   height: min(44rem, calc(100% - clamp(1rem, 6vw, 4rem)));
   margin: auto;
   overflow: hidden;
-  border: 1px solid #76b8ff;
+  border-color: var(--ui-border-strong);
   border-radius: 0.7rem;
-  background: rgb(8 17 31 / 98%);
-  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 70%);
+  background-color: rgb(23 17 11 / 98%);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-inlay),
+    inset 0 0 0 2px var(--ui-border-dim),
+    0 1.5rem 5rem rgb(0 0 0 / 70%);
 }
 
 .item-menu:focus {
-  outline: 2px solid #b9f6dc;
+  outline: 2px solid var(--ui-focus);
   outline-offset: -4px;
 }
 
@@ -516,7 +644,7 @@ body.combat-mode #app,
   justify-content: space-between;
   gap: 1rem;
   padding: 0.8rem 1rem;
-  border-bottom: 1px solid #29405e;
+  border-bottom: 1px solid var(--ui-border-dim);
 }
 
 .item-menu h2,
@@ -526,14 +654,18 @@ body.combat-mode #app,
 }
 
 .item-menu h2 {
+  color: var(--ui-text-bright);
+  font-family: var(--ui-font-heading);
   font-size: clamp(1.15rem, 3vw, 1.65rem);
+  letter-spacing: 0.02em;
 }
 
 .item-menu h3 {
   margin-bottom: 0.55rem;
-  color: #b9d8ff;
-  font-size: 0.83rem;
-  letter-spacing: 0.06em;
+  color: var(--ui-heading);
+  font-family: var(--ui-font-heading);
+  font-size: 0.86rem;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
@@ -570,8 +702,8 @@ body.combat-mode #app,
   min-height: 3.6rem;
   padding: 0.35rem;
   overflow: hidden;
-  border-color: #46617e;
-  background: #101a2b;
+  border-color: var(--ui-border-dim);
+  background: var(--ui-panel-bg-raised);
   font-size: 0.72rem;
 }
 
@@ -591,8 +723,8 @@ body.combat-mode #app,
 
 .inventory-slot.selected,
 .equipment-slot.selected {
-  border-color: #b9f6dc;
-  box-shadow: inset 0 0 0 1px #b9f6dc;
+  border-color: var(--ui-focus);
+  box-shadow: inset 0 0 0 1px var(--ui-focus);
 }
 
 .stone-choice ul {
@@ -679,10 +811,10 @@ body.combat-mode #app,
   justify-self: start;
   min-width: 1.2rem;
   padding: 0.12rem 0.28rem;
-  border: 1px solid #7893b2;
+  border: 1px solid var(--ui-key-border);
   border-radius: 0.25rem;
-  color: #f4f8ff;
-  background: #182940;
+  color: var(--ui-text-bright);
+  background: var(--ui-key-bg);
   font: inherit;
   font-size: 0.62rem;
   font-weight: 800;
@@ -690,14 +822,14 @@ body.combat-mode #app,
 }
 
 .paper-doll-flask strong {
-  color: #91a8c6;
+  color: var(--ui-text-dim);
   font-size: 0.58rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .paper-doll-flask span {
-  color: #6f82a1;
+  color: var(--ui-text-dim);
   font-size: 0.68rem;
 }
 
@@ -707,13 +839,13 @@ body.combat-mode #app,
   width: 100%;
   min-height: 3.75rem;
   padding: 0.35rem;
-  border-color: #52677f;
+  border-color: var(--ui-border);
   text-align: left;
   touch-action: none;
 }
 
 .equipment-slot strong {
-  color: #b9d8ff;
+  color: var(--ui-heading);
   font-size: 0.62rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -721,7 +853,7 @@ body.combat-mode #app,
 
 .equipment-slot span {
   overflow: hidden;
-  color: #b7c8dd;
+  color: var(--ui-text);
   font-size: 0.72rem;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -733,19 +865,20 @@ body.combat-mode #app,
   touch-action: none;
 }
 
+/* Rarity accents are preserved exactly (tokens hold the legacy values). */
 .inventory-slot[data-rarity="magic"],
 .equipment-slot[data-rarity="magic"] {
-  border-color: #6da5ff;
+  border-color: var(--rarity-magic);
 }
 
 .inventory-slot[data-rarity="rare"],
 .equipment-slot[data-rarity="rare"] {
-  border-color: #f0c75e;
+  border-color: var(--rarity-rare);
 }
 
 .inventory-slot[data-rarity="unique"],
 .equipment-slot[data-rarity="unique"] {
-  border-color: #ff8000;
+  border-color: var(--rarity-unique);
 }
 
 .item-menu-layout.dragging {
@@ -754,27 +887,27 @@ body.combat-mode #app,
 }
 
 .equipment-slot.drop-valid {
-  border-color: #63c7a1;
-  box-shadow: inset 0 0 0 1px #63c7a1;
+  border-color: var(--ui-ready);
+  box-shadow: inset 0 0 0 1px var(--ui-ready);
 }
 
 .equipment-slot.drop-invalid {
-  border-color: #40506a;
+  border-color: var(--ui-border-dim);
   opacity: 0.45;
 }
 
 .equipment-slot.drop-hover {
-  background: #16311f;
+  background: #223018;
 }
 
 .inventory-panel.drop-valid {
   border-radius: 0.45rem;
-  outline: 1px dashed #63c7a1;
+  outline: 1px dashed var(--ui-ready);
   outline-offset: 4px;
 }
 
 .inventory-panel.drop-hover {
-  background: rgb(99 199 161 / 8%);
+  background: rgb(127 191 114 / 8%);
 }
 
 .drag-ghost {
@@ -782,9 +915,9 @@ body.combat-mode #app,
   z-index: 6;
   max-width: 11rem;
   padding: 0.3rem 0.5rem;
-  border: 1px solid #76b8ff;
+  border: 1px solid var(--ui-accent);
   border-radius: 0.35rem;
-  background: rgb(8 17 31 / 95%);
+  background: rgb(23 17 11 / 95%);
   font-size: 0.72rem;
   pointer-events: none;
   transform: translate(0.75rem, 0.75rem);
@@ -806,53 +939,54 @@ body.combat-mode #app,
 .unequip-button {
   min-height: 2rem;
   padding: 0.3rem 0.45rem;
-  border-color: #52677f;
+  border-color: var(--ui-border);
   font-size: 0.7rem;
 }
 
 .item-tooltip {
   min-height: 12rem;
   padding: 0.85rem;
-  border: 1px solid #52677f;
+  border: 1px solid var(--ui-border);
   border-radius: 0.45rem;
-  background: #101a2b;
+  background: var(--ui-panel-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--ui-inlay);
 }
 
 .item-tooltip.rarity-magic {
-  border-color: #6da5ff;
+  border-color: var(--rarity-magic);
 }
 
 .item-tooltip.rarity-magic .item-rarity {
-  color: #6da5ff;
+  color: var(--rarity-magic);
 }
 
 .item-tooltip.rarity-rare {
-  border-color: #f0c75e;
+  border-color: var(--rarity-rare);
 }
 
 .item-tooltip.rarity-rare .item-rarity {
-  color: #f0c75e;
+  color: var(--rarity-rare);
 }
 
 /* Unique rarity is reserved (nothing drops as unique yet) but must render. */
 .item-tooltip.rarity-unique {
-  border-color: #ff8000;
+  border-color: var(--rarity-unique);
 }
 
 .item-tooltip.rarity-unique .item-rarity {
-  color: #ff8000;
+  color: var(--rarity-unique);
 }
 
 .item-tooltip h3 {
   margin: 0.2rem 0 0.45rem;
-  color: #f4f8ff;
+  color: var(--ui-text-bright);
   font-size: 1rem;
   letter-spacing: normal;
   text-transform: none;
 }
 
 .item-tooltip .item-rarity {
-  color: #91a8c6;
+  color: var(--ui-text-dim);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -868,12 +1002,12 @@ body.combat-mode #app,
 }
 
 .item-tooltip li {
-  color: #dceaff;
+  color: var(--ui-text);
   font-size: 0.78rem;
 }
 
 .item-tooltip li span {
-  color: #76b8ff;
+  color: var(--ui-accent-soft);
   font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -881,31 +1015,31 @@ body.combat-mode #app,
 
 .item-tooltip li .affix-tier {
   padding: 0.05rem 0.3rem;
-  border: 1px solid #52677f;
+  border: 1px solid var(--ui-border);
   border-radius: 0.25rem;
-  color: #91a8c6;
-  background: #0b1525;
+  color: var(--ui-text-dim);
+  background: var(--ui-panel-bg-solid);
   font-size: 0.6rem;
 }
 
 .item-tooltip li .affix-tier[data-tier="1"] {
-  border-color: #f0c75e;
-  color: #ffd27d;
+  border-color: var(--rarity-rare);
+  color: var(--ui-warn);
 }
 
 .item-tooltip-empty {
   display: grid;
   place-items: center;
-  color: #91a8c6;
+  color: var(--ui-text-dim);
   text-align: center;
 }
 
 .stone-choice {
   grid-column: 1 / -1;
   padding: 0.75rem;
-  border: 1px solid #7c6bb0;
+  border: 1px solid var(--ui-arcane);
   border-radius: 0.45rem;
-  background: #17152b;
+  background: #1c1426;
 }
 
 .stone-choice button {
@@ -947,16 +1081,16 @@ body.combat-mode #app,
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.55rem 0.65rem;
-  border: 1px solid #29405e;
+  border: 1px solid var(--ui-border-dim);
   border-radius: 0.45rem;
-  background: #101c2e;
+  background: var(--ui-panel-bg-raised);
 }
 
 .character-attribute-list p,
 .character-passive-list p,
 .character-summary p {
   margin: 0.25rem 0 0;
-  color: #9eb6d4;
+  color: var(--ui-text-dim);
   font-size: 0.8rem;
 }
 
@@ -974,12 +1108,12 @@ body.combat-mode #app,
 }
 
 .character-derived-stats dt {
-  color: #9eb6d4;
+  color: var(--ui-text-dim);
 }
 
 .character-derived-stats dd {
   margin: 0;
-  color: #f4f8ff;
+  color: var(--ui-text-bright);
 }
 
 .character-spend-buttons,
@@ -1000,14 +1134,14 @@ body.combat-mode #app,
 
 .combat-gathering {
   margin-top: 0.25rem;
-  color: #fbbf24;
+  color: var(--ui-accent);
   font-size: 0.75rem;
   font-weight: 700;
 }
 
 .combat-zone {
   margin-top: 0.25rem;
-  color: #9eb6d4;
+  color: var(--ui-text-dim);
   font-size: 0.72rem;
 }
 
@@ -1081,12 +1215,13 @@ body.combat-mode #app,
 }
 
 .combat-paused-hud strong {
-  font-size: 0.8rem;
-  letter-spacing: 0.12em;
+  font-family: var(--ui-font-heading);
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
 }
 
 .combat-paused-hud span {
-  color: #dceaff;
+  color: var(--ui-text);
   font-size: 0.75rem;
 }
 
@@ -1110,7 +1245,7 @@ body.combat-mode #app,
 
 .eyebrow {
   margin: 0 0 0.35rem;
-  color: #76b8ff;
+  color: var(--ui-accent-soft);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -1119,7 +1254,10 @@ body.combat-mode #app,
 
 h1 {
   margin: 0;
+  color: var(--ui-text-bright);
+  font-family: var(--ui-font-heading);
   font-size: clamp(1.7rem, 4vw, 2.8rem);
+  letter-spacing: 0.02em;
 }
 
 .diagnostics {
@@ -1133,13 +1271,13 @@ h1 {
 .boot-status,
 .persistence-fixture {
   padding: 0.85rem 1rem;
-  border: 1px solid #29405e;
+  border: 1px solid var(--ui-border-dim);
   border-radius: 0.55rem;
-  background: #101a2b;
+  background: var(--ui-panel-bg-raised);
 }
 
 .diagnostics dt {
-  color: #91a8c6;
+  color: var(--ui-text-dim);
   font-size: 0.75rem;
   text-transform: uppercase;
 }
@@ -1156,8 +1294,8 @@ h1 {
   left: 0.5rem;
   padding: 0.65rem 0.8rem;
   border-radius: 0.35rem;
-  color: #08111f;
-  background: #e8f1ff;
+  color: var(--ui-page-bg);
+  background: var(--ui-text);
   transform: translateY(-150%);
 }
 
@@ -1177,13 +1315,13 @@ h1 {
 }
 
 .boot-status {
-  border-color: #267657;
-  color: #b9f6dc;
+  border-color: #3f7a48;
+  color: #cbe8c4;
 }
 
 .boot-status.error {
-  border-color: #a64a4a;
-  color: #ffd0d0;
+  border-color: var(--ui-danger);
+  color: var(--ui-danger-text);
 }
 
 .persistence-fixture {
@@ -1198,17 +1336,17 @@ h1 {
 .persistence-fixture label {
   display: grid;
   gap: 0.35rem;
-  color: #b8c8de;
+  color: var(--ui-text);
   font-size: 0.85rem;
 }
 
 .persistence-fixture input,
 .persistence-fixture textarea,
 .persistence-fixture button {
-  border: 1px solid #385272;
+  border: 1px solid var(--ui-border);
   border-radius: 0.4rem;
-  color: #e8f1ff;
-  background: #08111f;
+  color: var(--ui-text);
+  background: var(--ui-panel-bg-solid);
   font: inherit;
 }
 
@@ -1236,14 +1374,14 @@ h1 {
 }
 
 .persistence-fixture button:hover {
-  border-color: #76b8ff;
+  border-color: var(--ui-accent);
 }
 
 .persistence-status {
   margin: 0;
   padding: 0.7rem 0.8rem;
-  border-left: 3px solid #4d7cab;
-  background: #0b1525;
+  border-left: 3px solid var(--ui-border-strong);
+  background: var(--ui-panel-bg-solid);
 }
 
 .persistence-status.saved,
@@ -1257,8 +1395,8 @@ h1 {
 }
 
 .persistence-status.error {
-  border-color: #c95656;
-  color: #ffd0d0;
+  border-color: var(--ui-danger);
+  color: var(--ui-danger-text);
 }
 
 #game-host {
@@ -1266,9 +1404,9 @@ h1 {
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border: 1px solid #29405e;
+  border: 1px solid var(--ui-border-dim);
   border-radius: 0.7rem;
-  background: #101a2b;
+  background: var(--ui-panel-bg-solid);
   box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 30%);
 }
 
@@ -1282,7 +1420,7 @@ h1 {
 }
 
 #game-canvas:focus-visible {
-  outline: 3px solid #76b8ff;
+  outline: 3px solid var(--ui-accent);
   outline-offset: -3px;
 }
 
@@ -1299,27 +1437,32 @@ h1 {
   gap: 0.75rem;
   padding: clamp(1rem, 4vw, 3rem);
   text-align: center;
-  background: rgb(8 17 31 / 94%);
+  background: rgb(14 10 7 / 94%);
 }
 
 .boot-overlay.error {
-  color: #ffd0d0;
+  color: var(--ui-danger-text);
 }
 
 button {
   min-height: 2.75rem;
   padding: 0.65rem 0.9rem;
-  border: 1px solid #76b8ff;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 0.35rem;
   color: inherit;
-  background: #101a2b;
+  background: var(--ui-panel-bg-raised);
   font: inherit;
   cursor: pointer;
 }
 
+button:hover:not(:disabled) {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0.5rem var(--ui-accent-glow);
+}
+
 button:focus-visible,
 a:focus-visible {
-  outline: 3px solid #b9f6dc;
+  outline: 3px solid var(--ui-focus);
   outline-offset: 3px;
 }
 
@@ -1334,7 +1477,7 @@ a:focus-visible {
 .shell-controls p {
   flex-basis: 100%;
   margin: 0;
-  color: #b7c8dd;
+  color: var(--ui-text);
 }
 
 .shell-controls output {
