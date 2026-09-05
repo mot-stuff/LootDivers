@@ -1,15 +1,16 @@
 # RARPG Phase 0 — Minimal Stack-Validation Gate
 
-**Status:** Scope reduced on 2026-09-04; existing implementation evidence is
-mapped below. Phase 1 is authorized immediately after TASK-P0-G07 passes.
-**Decision:** DEC-016
+**Status:** Scope reduced on 2026-09-04; P0-G01 through P0-G06 are complete.
+Phase 1 is authorized immediately after TASK-P0-G07 passes.
+**Decision:** DEC-016 and DEC-017
 **Scope:** The smallest browser foundation needed to begin combat prototyping.
 
 ## Purpose
 
 Phase 0 answers one question: can RARPG boot, render a correct isometric
 fixture, run framework-independent state, persist a fixture, survive a synthetic
-browser load, build for the web, and be deployed once to staging?
+browser load, build for the web, and serve its exact production artifact through
+a real browser?
 
 It is not a mandate to finish infrastructure for the vertical slice. Phaser
 4.2.1, strict TypeScript, WebGL2, Vite, Vitest, Playwright, Tiled, IndexedDB,
@@ -40,7 +41,7 @@ The following are not blockers for Phase 1:
 - a branded Chrome/Edge/Firefox/WebKit matrix or real Safari certification;
 - sophisticated WebGL context-loss restoration;
 - advanced CI/CD, immutable promotion, rollback drills, cache/header hardening,
-  and production hosting analysis;
+  public HTTPS staging, and production hosting analysis;
 - a full Preact UI shell, exhaustive accessibility review, HUD, menus, or
   information architecture;
 - advanced collision/navigation, bounded A*, scheduling, local separation,
@@ -113,8 +114,9 @@ status is acceptable and must not be relabeled as a strict performance pass.
 **Mapped evidence:** Former P0-002 specified the harness and former P0-008
 implemented it. Older strict multi-browser/reference-tier requirements are
 superseded for the Phase 0 gate.
-**Status:** Implementation complete; one fresh short run is required before G06
-and its evidence is inspected, not rerun, by G07.
+**Status:** Complete. Fresh short-run evidence is recorded in
+`reports/TASK-P0-008/local-browser-ineligible.json` and is inspected, not rerun,
+by G07.
 
 ### TASK-P0-G05 — Validate minimal IndexedDB persistence
 
@@ -130,21 +132,24 @@ migrations, generations, fallback, export/import, and failure UX are completed
 early, retained, and non-gating.
 **Status:** Complete from implementation evidence; rechecked by G07.
 
-### TASK-P0-G06 — Produce and stage one web build
+### TASK-P0-G06 — Produce and serve one web build
 
 **Owner:** Game Director / release engineering
 **Dependencies:** P0-G01 through P0-G05
-**Objective:** Prove the built static site can leave the development machine.
-**Scope:** One production `dist` build, one HTTPS staging deployment of that
-build, and one staging boot check.
-**Acceptance:** The exact locally tested `dist` output is deployed once; its
-root returns success over HTTPS and a current desktop Chromium browser reaches
-the ready diagnostic without uncaught or failed-asset errors.
+**Objective:** Prove the production artifact is browser-runnable independently
+of the development server.
+**Scope:** One production `dist` build served over loopback, plus Chromium and
+Microsoft Edge boot checks against that exact output.
+**Acceptance:** The exact production `dist` output is served over loopback; its
+root returns success; current desktop Chromium and Microsoft Edge reach the
+ready diagnostic with WebGL2 active and no uncaught or failed-asset errors.
 **Out of scope:** Provider comparison, production hosting choice, custom
 domains, CI automation, rollback drills, cache/header hardening, analytics, and
 production launch.
-**Status:** Production build capability exists. One staging deployment and its
-URL/evidence remain incomplete. This document does not perform that deployment.
+**Status:** Complete under the owner-approved DEC-017 local-only exception. The
+production build passed, Chromium production-artifact smoke passed, and the
+headed Edge current-machine run reached the ready WebGL2 fixture against the
+loopback-served artifact. Public HTTPS staging is deferred.
 
 ### TASK-P0-G07 — Run lean independent QA gate
 
@@ -152,11 +157,12 @@ URL/evidence remain incomplete. This document does not perform that deployment.
 **Dependencies:** P0-G01 through P0-G06
 **Objective:** Independently decide whether the minimal stack is safe for Phase
 1 combat.
-**Scope:** Execute the commands below on clean `main`, inspect staging evidence,
+**Scope:** Execute the commands below on clean `main`, inspect deployment evidence,
 and report only blockers against this compact gate.
 **Acceptance:** QA confirms all seven tasks and dependencies; retained
 safeguards; explicit deferrals; clean command results; the fresh synthetic run;
-and the staging boot. QA issues PASS or FAIL with blocking findings.
+and the production-artifact browser boots. QA issues PASS or FAIL with blocking
+findings.
 **Remediation policy:** Only failures of a listed acceptance criterion block.
 Major/minor improvements outside this gate are logged for later and do not
 require exhaustive remediation.
@@ -183,27 +189,18 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 git status --short
 ```
 
-Run the single P0-G04 performance execution after the local build checks and
-before staging:
+The single P0-G04 performance execution was recorded in
+`reports/TASK-P0-008/local-browser-ineligible.json`:
 
-```powershell
-& $npm run timing:fixture -- --warmup-seconds=2 --sample-seconds=10
-```
+- exact production artifact served over loopback;
+- short headed, hardware-accelerated Microsoft Edge run on an NVIDIA RTX 5070 Ti;
+- 1920×1080 at DPR 1, WebGL2 active;
+- p95 frame interval 14 ms and zero intervals over 33.4 ms;
+- no crash, page error, console error, failed required asset, or sample overflow.
 
-For the one staging deployment, release engineering records the provider's
-upload command, deployed commit, artifact identity, and URL. After upload:
-
-```powershell
-$env:RARPG_STAGING_URL = "https://<assigned-staging-url>"
-$response = Invoke-WebRequest -Uri "$env:RARPG_STAGING_URL/" -UseBasicParsing
-if ($response.StatusCode -ne 200) { throw "Staging root did not return HTTP 200" }
-Start-Process $env:RARPG_STAGING_URL
-```
-
-QA then confirms in current desktop Chromium that diagnostics reach `ready`,
-WebGL2 is active, and the console/network panels contain no uncaught error or
-failed required asset. This small manual staging check is sufficient until a
-remote-smoke command is justified.
+QA inspects this evidence and the Chromium smoke result; it does not rerun the
+synthetic benchmark. The evidence is a current-machine stack sanity test only
+and remains `INELIGIBLE` for Intel UHD 630 minimum-spec certification.
 
 ## Existing work mapped outside the gate
 

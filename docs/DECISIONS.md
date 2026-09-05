@@ -10,7 +10,8 @@ availability selections are recorded in `docs/PROJECT_BASELINE.md`: local Git
 only for now, an Intel UHD 630-class minimum reference tier, and no current real
 Safari hardware. Remote/CI and hosting providers remain future decisions.
 DEC-016 reduces Phase 0 to a seven-task validation gate and supersedes earlier
-Phase 0 completion/authorization language.
+Phase 0 completion/authorization language. DEC-017 accepts local production-
+artifact browser proof for P0-G06 and defers public HTTPS staging.
 
 ---
 
@@ -1053,3 +1054,83 @@ boundaries remain active safeguards.
 
 See `docs/PHASE_0_ARCHITECTURE.md`, `docs/PROJECT_BASELINE.md`, and
 `docs/ROADMAP.md`.
+
+---
+
+# DEC-017
+
+### Status
+
+Accepted as an owner-approved Phase 0 exception. Public HTTPS staging remains a
+later delivery obligation.
+
+### Date
+
+2026-09-04
+
+### Decision
+
+For P0-G06 only, treat the exact production artifact served over loopback plus
+successful Chromium and headed Microsoft Edge boot checks as sufficient
+deployment proof. Defer public HTTPS staging until a later delivery milestone.
+
+### Context
+
+The owner explicitly selected local-only development rather than GitHub or
+public staging. Requiring an external provider solely to begin the combat
+prototype would conflict with that choice and would test hosting operations
+rather than the reduced Phase 0 stack risks.
+
+The production build passed. Chromium production-artifact smoke passed 26 tests
+with one diagnostic-only skip. A short headed hardware-accelerated Microsoft
+Edge run reached the ready WebGL2 fixture on an NVIDIA RTX 5070 Ti at 1920×1080
+DPR 1, with a 14 ms p95 frame interval and zero intervals over 33.4 ms.
+
+### Options Considered
+
+1. Require public HTTPS staging before Phase 1.
+2. Accept loopback production-artifact browser proof temporarily.
+3. Remove deployment proof from Phase 0 entirely.
+
+### Chosen Approach
+
+Choose option 2. Preserve a real production build and browser boot requirement
+while postponing provider selection, public HTTPS transport, CDN behavior,
+cache/header validation, remote automation, and rollback work.
+
+### Why
+
+Serving `dist` over loopback exercises the built static artifact independently
+of Vite's development server. Chromium and branded Edge verify the current
+machine's production boot and WebGL2 path. This is enough for the reduced
+stack-validation purpose without pretending that local HTTP proves public
+delivery behavior.
+
+### Tradeoffs
+
+- Public HTTPS, external routing, CDN/cache headers, and remote-origin behavior
+  remain untested.
+- The performance evidence is a short current-machine stack sanity test, not a
+  statistical performance claim.
+- The NVIDIA RTX 5070 Ti evidence remains `INELIGIBLE` for the Intel UHD 630
+  minimum-spec certification and must not be relabeled as that certification.
+- Local-only Git has no off-device backup, hosted CI, branch protection, or
+  pull-request enforcement.
+
+### Systems Affected
+
+- Phase 0 P0-G06 and P0-G07 acceptance
+- Deployment planning and release engineering
+- Phase 1 authorization
+
+### Relationship to Earlier Decisions
+
+DEC-015 remains the long-term deployment direction. DEC-017 supersedes only its
+public staging requirement as a Phase 0 prerequisite. DEC-016's lean QA and
+automatic Phase 1 authorization rules remain active.
+
+### Reference
+
+See `docs/PHASE_0_ARCHITECTURE.md`, `docs/PROJECT_BASELINE.md`,
+`docs/ROADMAP.md`, and
+`reports/TASK-P0-008/local-browser-ineligible.json`.

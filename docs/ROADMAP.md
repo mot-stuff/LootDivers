@@ -13,7 +13,9 @@ Phase 0 contains exactly seven dependency-ordered gates:
    entity/component/presentation cleanup.
 4. **P0-G04 Synthetic performance** — one short browser population test.
 5. **P0-G05 IndexedDB persistence** — one fixture save/load round trip.
-6. **P0-G06 Web staging** — one production build and one staging deployment.
+6. **P0-G06 Production artifact boot** — one production build served over
+   loopback with Chromium and Microsoft Edge boot proof. Public HTTPS staging is
+   deferred by the owner-approved DEC-017 exception.
 7. **P0-G07 Independent QA** — lean acceptance of the six technical gates.
 
 Dependencies and exact acceptance commands are authoritative in

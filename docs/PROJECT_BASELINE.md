@@ -1,8 +1,8 @@
 # Phase 0 Project Baseline
 
-**Status:** Compact gate adopted; staging and final independent QA remain
+**Status:** P0-G01 through P0-G06 complete; final independent QA remains
 **Last updated:** 2026-09-04
-**Authority:** DEC-016 and `PHASE_0_ARCHITECTURE.md`
+**Authority:** DEC-016, DEC-017, and `PHASE_0_ARCHITECTURE.md`
 
 ## Approved technical baseline
 
@@ -19,8 +19,9 @@
 
 Local Git on `main` remains the source-control baseline. A remote, hosted CI,
 branch protection, production host, and real Safari hardware are not currently
-available and do not block the compact Phase 0 gate. One temporary HTTPS staging
-deployment is still required.
+available and do not block the compact Phase 0 gate. By explicit owner choice,
+the exact production artifact served over loopback with Chromium and Microsoft
+Edge boot proof satisfies P0-G06 temporarily. Public HTTPS staging is deferred.
 
 ## Phase boundary
 
@@ -31,7 +32,6 @@ hold the transition for exhaustive remediation of deferred work.
 Allowed before the gate:
 
 - rerun and repair only the compact acceptance checks;
-- select a temporary staging path and deploy the tested static artifact once;
 - perform independent QA against P0-G01 through P0-G07.
 
 Not authorized by this revision:
@@ -49,13 +49,18 @@ Not authorized by this revision:
   implementation and QA remediation were merged.
 - **P0-G03 Simulation lifecycle — Complete:** former P0-004 and P0-008 were
   independently accepted.
-- **P0-G04 Synthetic performance — Fresh short run required:** former P0-002
-  defined the contract and P0-008 implemented the browser fixture.
+- **P0-G04 Synthetic performance — Complete:** a fresh short headed Microsoft
+  Edge run passed the current-machine sanity gate at 1920×1080 DPR 1 with WebGL2
+  on an NVIDIA RTX 5070 Ti. Its p95 frame interval was 14 ms with zero intervals
+  over 33.4 ms. It remains `INELIGIBLE` for Intel UHD 630 minimum-spec
+  certification.
 - **P0-G05 IndexedDB persistence — Complete, recheck in G07:** former P0-010
   implementation and QA remediation were merged.
-- **P0-G06 Web staging — Blocked on one deployment:** production build
-  capability exists but staging evidence does not.
-- **P0-G07 Independent QA — Pending G06:** the compact gate has not been run.
+- **P0-G06 Production artifact boot — Complete under DEC-017:** the production
+  build passed; the exact artifact was served over loopback; Chromium smoke and
+  a headed hardware-accelerated Microsoft Edge ready/WebGL2 check passed. Public
+  HTTPS staging is deferred.
+- **P0-G07 Independent QA — Pending:** the compact gate has not been run.
 
 The table maps evidence; it does not retroactively claim that previously
 pending reviews passed. G07 independently rechecks every compact criterion and
@@ -97,10 +102,7 @@ The compact gate does not require:
 
 ## Remaining minimal blockers
 
-1. Run the fresh short synthetic Chromium performance test.
-2. Deploy the already testable production artifact once to an HTTPS staging URL
-   and record artifact/commit/URL plus a successful manual Chromium boot.
-3. Have an independent QA Reviewer execute the exact lean gate in
+1. Have an independent QA Reviewer execute the exact lean gate in
    `PHASE_0_ARCHITECTURE.md` and issue PASS.
 
 Nothing else is a Phase 1 authorization blocker unless one of those checks
