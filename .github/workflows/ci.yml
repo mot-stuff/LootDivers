@@ -81,12 +81,33 @@ jobs:
           name: dist
           path: dist
 
-      - name: Publish to Cloudflare Pages (project lootdivers)
-        uses: cloudflare/wrangler-action@v3
+      - uses: actions/setup-node@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=lootdivers --branch=main
+          node-version: "24.20.0"
+
+      # Plain wrangler instead of cloudflare/wrangler-action: transparent
+      # logs, no third-party action, and the failure tail is surfaced as an
+      # annotation so it is diagnosable through the Checks API.
+      - name: Publish to Cloudflare Pages (project lootdivers)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN repo secret is missing or empty"
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID repo secret is missing or empty"
+            exit 1
+          fi
+          if npx wrangler@4 pages deploy dist --project-name=lootdivers --branch=main 2>&1 | tee wrangler.log; then
+            exit 0
+          fi
+          tail_text="$(tail -c 700 wrangler.log | tr '\n' ' ')"
+          echo "::error::wrangler pages deploy failed: ${tail_text}"
+          exit 1
 
       - name: Post-deploy smoke (index + hashed asset reachable)
         run: |
