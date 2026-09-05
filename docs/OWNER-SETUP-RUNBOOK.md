@@ -479,8 +479,11 @@ database. A backup you have never restored is a hope, not a backup.
 
 ## Step 15 — First automated deploy + API verification
 
-Trigger: merge the TASK-707 PR to main (or re-run the deploy workflow).
-Then verify from your Windows machine:
+Trigger: any push to main AFTER Step 12 is done. Until the `.env` from
+Step 12 exists, the deploy job prints a SKIP message and stays green (it
+deploys nothing); once the file exists, the next main push — or a re-run
+of the latest main workflow from the GitHub Actions tab — performs the
+real first deploy. Then verify from your Windows machine:
 
 ```powershell
 # Health endpoint through Cloudflare (proves DNS + proxy + Caddy + API + DB)

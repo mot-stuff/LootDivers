@@ -192,8 +192,10 @@ jobs:
       # SSH pull-and-restart as the low-privilege deploy user (DEC-032,
       # runbook step 10). The script is piped over stdin so the very first
       # deploy works before /opt/lootdivers/app exists — deploy.sh clones
-      # the repo itself when missing. It requires /opt/lootdivers/.env
-      # (runbook Part B step 12) and fails with a clear message otherwise.
+      # the repo itself when missing. Until the owner creates
+      # /opt/lootdivers/.env (runbook Part B step 12) the script exits 0
+      # with a SKIP message so main stays green; it self-arms once the
+      # file exists. All other deploy problems fail the job loudly.
       - name: Deploy over SSH (pull-and-restart)
         env:
           DROPLET_HOST: ${{ secrets.DROPLET_HOST }}

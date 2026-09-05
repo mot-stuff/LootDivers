@@ -12,9 +12,16 @@ APP_DIR="/opt/lootdivers/app"
 ENV_FILE="/opt/lootdivers/.env"
 REPO_URL="https://github.com/mot-stuff/LootDivers.git"
 
+# Director review gate (TASK-707): a droplet that has not been initialized
+# (runbook Part B step 12 not done) is a GRACEFUL SKIP, not a failure —
+# otherwise every main push after this merges would go red until the owner
+# creates the env file. The deploy self-arms the moment the file exists.
+# Any problem OTHER than the missing env file still fails loudly.
 if [ ! -f "${ENV_FILE}" ]; then
-  echo "ERROR: ${ENV_FILE} missing — create it first (runbook Part B step 12)." >&2
-  exit 1
+  echo "SKIP: ${ENV_FILE} does not exist — droplet not initialized yet" \
+    "(runbook Part B step 12). Nothing deployed; this is expected until" \
+    "the owner completes Part B. Deploys arm automatically once the file exists."
+  exit 0
 fi
 
 if [ ! -d "${APP_DIR}/.git" ]; then
