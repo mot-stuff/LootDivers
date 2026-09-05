@@ -8,14 +8,33 @@ import {
   FIXED_STEP_SECONDS,
   FIXED_TICKS_PER_SECOND,
   FixedStepRunner,
+  IMPLEMENTED_ABILITY_CATALOG,
+  MAXIMUM_HEALTH_STAT_ID,
+  OUTGOING_DAMAGE_STAT_ID,
   WINTER_PULSE_ID,
+  affixById,
   definitionById,
+  equipmentBaseById,
   type CombatArenaDiagnostics,
   type CombatArenaEvent,
   type CombatAbilityId,
   type DamageResult,
+  type EquipmentItemInstance,
+  type EquipmentSlot,
+  type ItemInstance,
+  type ItemStatModifier,
+  type LoadoutSlot,
+  type WorldLootDrop,
 } from "../../core";
-import type { CombatHudReadModel } from "../../presentation/shell-contracts";
+import {
+  ITEM_COMMAND_EVENT,
+  ITEM_HUD_EVENT,
+  type CombatHudReadModel,
+  type EquipmentItemHudReadModel,
+  type InventoryHudReadModel,
+  type ItemModifierHudReadModel,
+  type ItemUiCommand,
+} from "../../presentation/shell-contracts";
 import { CombatInputAdapter } from "./combat-input";
 
 const ORIGIN_X = 480;
@@ -24,37 +43,45 @@ const ISO_X_SCALE = 0.65;
 const ISO_Y_SCALE = 0.34;
 const PRESENTATION_DEPTH = 3_500_000;
 
-const HUD_ABILITIES: readonly {
-  readonly id: CombatAbilityId;
+const HUD_SLOTS: readonly {
+  readonly slot: LoadoutSlot;
   readonly keyLabel: string;
   readonly accessibleKeyLabel: string;
-  readonly name: string;
 }[] = [
   {
-    id: BASIC_CLEAVE_ID,
+    slot: "lmb",
     keyLabel: "LMB",
     accessibleKeyLabel: "Left click",
-    name: "Basic Cleave",
   },
   {
-    id: CINDER_DART_ID,
+    slot: "q",
     keyLabel: "Q",
     accessibleKeyLabel: "Q",
-    name: "Cinder Dart",
   },
   {
-    id: WINTER_PULSE_ID,
+    slot: "e",
     keyLabel: "E",
     accessibleKeyLabel: "E",
-    name: "Winter Pulse",
   },
   {
-    id: DEFIANT_SIGNAL_ID,
+    slot: "f",
     keyLabel: "F",
     accessibleKeyLabel: "F",
-    name: "Defiant Signal",
   },
 ];
+
+const ABILITY_NAMES: Readonly<Record<string, string>> = {
+  [BASIC_CLEAVE_ID]: "Basic Cleave",
+  [CINDER_DART_ID]: "Cinder Dart",
+  [WINTER_PULSE_ID]: "Winter Pulse",
+  [DEFIANT_SIGNAL_ID]: "Defiant Signal",
+};
+
+const EQUIPMENT_SLOT_LABELS: Readonly<Record<EquipmentSlot, string>> = {
+  "main-hand": "Main hand",
+  chest: "Chest",
+  amulet: "Amulet",
+};
 
 const STATUS_LABELS = {
   chilled: "Chilled",
@@ -79,6 +106,12 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly renderedProjectileCount: number;
   readonly renderedAreaCount: number;
   readonly renderedStatusCount: number;
+  readonly renderedLoot: readonly {
+    readonly dropId: string;
+    readonly itemKind: ItemInstance["kind"];
+    readonly canvasX: number;
+    readonly canvasY: number;
+  }[];
 }
 
 export class CombatArenaPresentation {
@@ -95,6 +128,8 @@ export class CombatArenaPresentation {
   #pausedForUi = true;
   #automationPaused = false;
   #lastHudKey = "";
+  #lastItemHudKey = "";
+  #itemHudRevision = 0;
   #lastPointerX = ORIGIN_X + 150;
   #lastPointerY = ORIGIN_Y + 180;
   #impactCount = 0;
@@ -106,6 +141,10 @@ export class CombatArenaPresentation {
   #renderedProjectileCount = 0;
   #renderedAreaCount = 0;
   #renderedStatusCount = 0;
+  #renderedLoot: CombatPresentationDiagnostics["renderedLoot"] = [];
+  readonly #itemCommand = (event: CustomEvent<ItemUiCommand>): void => {
+    this.executeItemCommand(event.detail);
+  };
 
   public constructor(
     readonly scene: Phaser.Scene,
@@ -123,6 +162,7 @@ export class CombatArenaPresentation {
     this.#playerGraphics = scene.add
       .graphics()
       .setDepth(PRESENTATION_DEPTH + 2);
+    window.addEventListener(ITEM_COMMAND_EVENT, this.#itemCommand);
     this.drawArena();
     this.render(0);
   }
@@ -144,9 +184,6 @@ export class CombatArenaPresentation {
     if (input.dodgeRequested) {
       this.#simulation.requestDodge();
     }
-    if (input.primaryAttackRequested) {
-      this.#simulation.requestPrimaryAttack();
-    }
     if (input.hasPointer) {
       this.#lastPointerX = input.pointerX;
       this.#lastPointerY = input.pointerY;
@@ -164,18 +201,12 @@ export class CombatArenaPresentation {
       pointerPoint.y - aimOriginY,
     );
     this.#simulation.setAim(aim.x, aim.y);
-    if (input.cinderDartRequested) {
-      this.#simulation.requestAbility(CINDER_DART_ID);
-    }
-    if (input.winterPulseRequested) {
-      this.#simulation.requestAbility(WINTER_PULSE_ID, {
+    for (const slot of input.abilitySlotsRequested) {
+      this.#simulation.requestAbilitySlot(slot, {
         kind: "point",
         x: player.x + aim.x,
         y: player.y + aim.y,
       });
-    }
-    if (input.defiantSignalRequested) {
-      this.#simulation.requestAbility(DEFIANT_SIGNAL_ID);
     }
 
     const result = this.#runner.advance();
@@ -214,6 +245,7 @@ export class CombatArenaPresentation {
       renderedProjectileCount: this.#renderedProjectileCount,
       renderedAreaCount: this.#renderedAreaCount,
       renderedStatusCount: this.#renderedStatusCount,
+      renderedLoot: this.#renderedLoot,
     };
   }
 
@@ -254,6 +286,17 @@ export class CombatArenaPresentation {
     this.#simulation.requestPrimaryAttack();
   }
 
+  public setMovement(x: number, y: number): void {
+    this.#simulation.setMovement(x, y);
+  }
+
+  public requestAbilitySlot(slot: LoadoutSlot, x?: number, y?: number): void {
+    this.#simulation.requestAbilitySlot(
+      slot,
+      x === undefined || y === undefined ? undefined : { kind: "point", x, y },
+    );
+  }
+
   public requestCinderDart(): void {
     this.#simulation.requestAbility(CINDER_DART_ID);
   }
@@ -283,9 +326,39 @@ export class CombatArenaPresentation {
     this.render(0);
   }
 
+  public itemHud(): InventoryHudReadModel {
+    return this.createItemHud(this.#itemHudRevision);
+  }
+
+  public executeItemCommand(command: ItemUiCommand): void {
+    if (command.type === "item.equip") {
+      this.#simulation.equipCharacterItem(command.inventoryIndex);
+    } else if (command.type === "item.unequip") {
+      this.#simulation.unequipCharacterItem(command.equipmentSlot);
+    } else if (
+      command.type === "item.consume-ability-stone" &&
+      this.isCombatAbilityId(command.abilityId)
+    ) {
+      this.#simulation.consumeCharacterAbilityStone(
+        command.inventoryIndex,
+        command.abilityId,
+      );
+    } else if (
+      command.type === "item.assign-ability" &&
+      this.isCombatAbilityId(command.abilityId)
+    ) {
+      this.#simulation.assignAbilitySlot(
+        command.loadoutSlot,
+        command.abilityId,
+      );
+    }
+    this.render(0);
+  }
+
   public dispose(): void {
     this.#runner.pause();
     this.#input.dispose();
+    window.removeEventListener(ITEM_COMMAND_EVENT, this.#itemCommand);
     this.#arenaGraphics.destroy();
     this.#combatGraphics.destroy();
     this.#playerGraphics.destroy();
@@ -336,6 +409,7 @@ export class CombatArenaPresentation {
     this.#combatGraphics.clear();
     this.drawAttack(state, point);
     this.drawAbilityFeedback(state);
+    this.drawWorldLoot(state.worldLoot);
     this.drawEnemy(state, alpha);
 
     this.#playerGraphics.clear();
@@ -370,6 +444,7 @@ export class CombatArenaPresentation {
     );
 
     this.publishHud(state);
+    this.publishItemHud();
   }
 
   private drawAttack(
@@ -532,6 +607,50 @@ export class CombatArenaPresentation {
     }
   }
 
+  private drawWorldLoot(drops: readonly WorldLootDrop[]): void {
+    const rendered: Array<
+      CombatPresentationDiagnostics["renderedLoot"][number]
+    > = [];
+    for (const drop of drops) {
+      const point = this.project(drop.x, drop.y);
+      const color =
+        drop.item.kind === "ability-stone"
+          ? 0xc084fc
+          : drop.item.rarity === "rare"
+            ? 0xffd166
+            : drop.item.rarity === "magic"
+              ? 0x60a5fa
+              : 0xd1d5db;
+      this.#combatGraphics.fillStyle(0x06101c, 0.55);
+      this.#combatGraphics.fillEllipse(point.x, point.y + 3, 28, 12);
+      this.#combatGraphics.fillStyle(color, 0.92);
+      const marker = [
+        new Phaser.Math.Vector2(point.x, point.y - 13),
+        new Phaser.Math.Vector2(point.x + 10, point.y - 4),
+        new Phaser.Math.Vector2(point.x, point.y + 5),
+        new Phaser.Math.Vector2(point.x - 10, point.y - 4),
+      ];
+      this.#combatGraphics.fillPoints(marker, true);
+      this.#combatGraphics.lineStyle(2, 0x08111f, 1);
+      this.#combatGraphics.strokePoints(marker, true);
+      if (drop.item.kind === "ability-stone") {
+        this.#combatGraphics.lineStyle(2, 0xffffff, 0.9);
+        this.#combatGraphics.strokeCircle(point.x, point.y - 4, 4);
+      }
+      const canvasPoint = this.scene.cameras.main.matrixCombined.transformPoint(
+        point.x,
+        point.y - 4,
+      );
+      rendered.push({
+        dropId: drop.dropId,
+        itemKind: drop.item.kind,
+        canvasX: canvasPoint.x,
+        canvasY: canvasPoint.y,
+      });
+    }
+    this.#renderedLoot = rendered;
+  }
+
   private consumeEvents(events: readonly CombatArenaEvent[]): void {
     for (const event of events) {
       if (event.type === "damage-applied") {
@@ -556,6 +675,7 @@ export class CombatArenaPresentation {
   }
 
   private publishHud(state: CombatArenaDiagnostics): void {
+    const assignments = this.#simulation.characterItemLoadout().assignments;
     const hud: CombatHudReadModel = {
       paused: this.#pausedForUi,
       playerHealth: state.playerHealth,
@@ -565,10 +685,12 @@ export class CombatArenaPresentation {
       manaMaximum: state.maxMana,
       placeholderExperienceCurrent: 0,
       placeholderExperienceMaximum: 100,
-      abilities: HUD_ABILITIES.map((ability) => {
-        const definition = definitionById(ability.id);
+      abilities: HUD_SLOTS.map((slot) => {
+        const abilityId = assignments[slot.slot];
+        const definition =
+          abilityId === null ? undefined : definitionById(abilityId);
         const activation = state.abilities.find(
-          (candidate) => candidate.abilityId === ability.id,
+          (candidate) => candidate.abilityId === abilityId,
         );
         const manaCost = activation?.manaCost ?? 0;
         const cooldownRemainingSeconds =
@@ -582,7 +704,10 @@ export class CombatArenaPresentation {
               ? ("busy" as const)
               : (activation?.kind ?? "ready");
         return {
-          ...ability,
+          id: abilityId ?? `empty:${slot.slot}`,
+          keyLabel: slot.keyLabel,
+          accessibleKeyLabel: slot.accessibleKeyLabel,
+          name: abilityId === null ? "Empty" : this.abilityName(abilityId),
           manaCost,
           cooldownRemainingSeconds,
           cooldownMaximumSeconds,
@@ -607,6 +732,145 @@ export class CombatArenaPresentation {
         detail: hud,
       }),
     );
+  }
+
+  private publishItemHud(): void {
+    const comparable = this.createItemHud(0);
+    const key = JSON.stringify(comparable);
+    if (key === this.#lastItemHudKey) return;
+    this.#lastItemHudKey = key;
+    this.#itemHudRevision += 1;
+    window.dispatchEvent(
+      new CustomEvent<InventoryHudReadModel>(ITEM_HUD_EVENT, {
+        detail: this.createItemHud(this.#itemHudRevision),
+      }),
+    );
+  }
+
+  private createItemHud(revision: number): InventoryHudReadModel {
+    const loadout = this.#simulation.characterItemLoadout();
+    const owned = new Set<CombatAbilityId>(loadout.ownedAbilities);
+    const hasStone = loadout.inventory.some(
+      (item) => item?.kind === "ability-stone",
+    );
+    return {
+      revision,
+      inventorySlots: loadout.inventory.map((item, index) => ({
+        index,
+        item: item === null ? null : this.itemHudModel(item),
+      })),
+      equipmentSlots: (["main-hand", "chest", "amulet"] as const).map(
+        (slot) => ({
+          slot,
+          label: EQUIPMENT_SLOT_LABELS[slot],
+          item:
+            loadout.equipment[slot] === null
+              ? null
+              : this.equipmentHudModel(loadout.equipment[slot]),
+        }),
+      ),
+      abilityChoices: IMPLEMENTED_ABILITY_CATALOG.map((id) => ({
+        id,
+        displayName: this.abilityName(id),
+        owned: owned.has(id),
+        selectableFromStone: hasStone && !owned.has(id),
+      })),
+      loadout: HUD_SLOTS.map((slot) => {
+        const abilityId = loadout.assignments[slot.slot];
+        return {
+          slot: slot.slot,
+          keyLabel: slot.keyLabel,
+          accessibleKeyLabel: slot.accessibleKeyLabel,
+          abilityId,
+          displayName:
+            abilityId === null ? "Empty" : this.abilityName(abilityId),
+          borrowedDefault: abilityId !== null && !owned.has(abilityId),
+        };
+      }),
+      playerMaximumHealth: loadout.stats.maximumHealth,
+      outgoingAbilityDamagePercent:
+        loadout.stats.outgoingAbilityDamageBasisPoints / 100,
+    };
+  }
+
+  private itemHudModel(item: ItemInstance) {
+    return item.kind === "equipment"
+      ? this.equipmentHudModel(item)
+      : {
+          kind: "ability-stone" as const,
+          instanceId: item.instanceId,
+          displayName: "Ability Stone",
+          rarity: "common" as const,
+          typeLabel: "Ability Stone" as const,
+          quantity: item.quantity,
+        };
+  }
+
+  private equipmentHudModel(
+    item: EquipmentItemInstance,
+  ): EquipmentItemHudReadModel {
+    const base = equipmentBaseById(item.baseId);
+    if (base === undefined) {
+      throw new Error(
+        `Cannot present unknown equipment base "${item.baseId}".`,
+      );
+    }
+    const affixNames = item.affixes.map(
+      ({ affixId }) => affixById(affixId)?.displayName ?? String(affixId),
+    );
+    const modifiers: ItemModifierHudReadModel[] = [
+      ...base.baseModifiers.map((modifier, index) => ({
+        id: `${base.id}:base-${index}`,
+        source: "base" as const,
+        label: this.modifierLabel(modifier),
+      })),
+      ...item.affixes.map((affix) => ({
+        id: affix.affixId,
+        source: "affix" as const,
+        label: this.modifierLabel(affix.modifier),
+      })),
+    ];
+    return {
+      kind: "equipment",
+      instanceId: item.instanceId,
+      displayName:
+        affixNames.length === 0
+          ? base.displayName
+          : `${affixNames.join(" ")} ${base.displayName}`,
+      rarity: item.rarity,
+      slot: base.slot,
+      typeLabel:
+        base.slot === "main-hand"
+          ? "Melee weapon"
+          : base.slot === "chest"
+            ? "Body armor"
+            : "Amulet",
+      modifiers,
+    };
+  }
+
+  private modifierLabel(modifier: ItemStatModifier): string {
+    if (
+      modifier.statId === MAXIMUM_HEALTH_STAT_ID &&
+      modifier.operation === "flat"
+    ) {
+      return `+${modifier.value} maximum health`;
+    }
+    if (
+      modifier.statId === OUTGOING_DAMAGE_STAT_ID &&
+      modifier.operation === "additive-basis-points"
+    ) {
+      return `+${modifier.value / 100}% outgoing ability damage`;
+    }
+    return `${modifier.value} ${String(modifier.statId)}`;
+  }
+
+  private abilityName(abilityId: CombatAbilityId): string {
+    return ABILITY_NAMES[abilityId] ?? String(abilityId);
+  }
+
+  private isCombatAbilityId(value: string): value is CombatAbilityId {
+    return IMPLEMENTED_ABILITY_CATALOG.some((abilityId) => abilityId === value);
   }
 
   private project(

@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 
+import type { LoadoutSlot } from "../../core";
+
 export interface CombatInputSnapshot {
   readonly movementX: number;
   readonly movementY: number;
@@ -7,10 +9,7 @@ export interface CombatInputSnapshot {
   readonly pointerY: number;
   readonly hasPointer: boolean;
   readonly dodgeRequested: boolean;
-  readonly primaryAttackRequested: boolean;
-  readonly cinderDartRequested: boolean;
-  readonly winterPulseRequested: boolean;
-  readonly defiantSignalRequested: boolean;
+  readonly abilitySlotsRequested: readonly LoadoutSlot[];
   readonly resetRequested: boolean;
 }
 
@@ -20,10 +19,7 @@ export class CombatInputAdapter {
   #pointerY = 0;
   #hasPointer = false;
   #dodgeRequested = false;
-  #primaryAttackRequested = false;
-  #cinderDartRequested = false;
-  #winterPulseRequested = false;
-  #defiantSignalRequested = false;
+  readonly #abilitySlotsRequested: LoadoutSlot[] = [];
   #resetRequested = false;
   readonly #keyDown = (event: KeyboardEvent): void => {
     if (!this.isGameplayFocused(event)) {
@@ -48,9 +44,9 @@ export class CombatInputAdapter {
       event.code === "KeyF"
     ) {
       if (!event.repeat) {
-        if (event.code === "KeyQ") this.#cinderDartRequested = true;
-        if (event.code === "KeyE") this.#winterPulseRequested = true;
-        if (event.code === "KeyF") this.#defiantSignalRequested = true;
+        this.#abilitySlotsRequested.push(
+          event.code === "KeyQ" ? "q" : event.code === "KeyE" ? "e" : "f",
+        );
       }
       event.preventDefault();
     }
@@ -85,7 +81,7 @@ export class CombatInputAdapter {
       this.#pointerY =
         ((event.clientY - bounds.top) / bounds.height) * this.canvas.height;
       this.#hasPointer = true;
-      this.#primaryAttackRequested = true;
+      this.#abilitySlotsRequested.push("lmb");
       event.preventDefault();
     }
   };
@@ -120,17 +116,11 @@ export class CombatInputAdapter {
       pointerY: this.#pointerY,
       hasPointer: this.#hasPointer,
       dodgeRequested: this.#dodgeRequested,
-      primaryAttackRequested: this.#primaryAttackRequested,
-      cinderDartRequested: this.#cinderDartRequested,
-      winterPulseRequested: this.#winterPulseRequested,
-      defiantSignalRequested: this.#defiantSignalRequested,
+      abilitySlotsRequested: [...this.#abilitySlotsRequested],
       resetRequested: this.#resetRequested,
     };
     this.#dodgeRequested = false;
-    this.#primaryAttackRequested = false;
-    this.#cinderDartRequested = false;
-    this.#winterPulseRequested = false;
-    this.#defiantSignalRequested = false;
+    this.#abilitySlotsRequested.length = 0;
     this.#resetRequested = false;
     return snapshot;
   }
@@ -147,10 +137,7 @@ export class CombatInputAdapter {
   private clearHeldInput(): void {
     this.#held.clear();
     this.#dodgeRequested = false;
-    this.#primaryAttackRequested = false;
-    this.#cinderDartRequested = false;
-    this.#winterPulseRequested = false;
-    this.#defiantSignalRequested = false;
+    this.#abilitySlotsRequested.length = 0;
   }
 
   private isGameplayFocused(event: KeyboardEvent): boolean {

@@ -19,7 +19,7 @@ import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
 import type { CombatPresentationDiagnostics } from "./adapters/phaser/combat-arena-presentation";
-import type { DamageResult } from "./core";
+import type { DamageResult, LoadoutSlot } from "./core";
 import type {
   FrameSampleSummary,
   RawFrameSamples,
@@ -34,6 +34,8 @@ import {
 import { App, type PersistenceFixtureActions } from "./presentation/App";
 import type {
   CanvasViewportReadModel,
+  InventoryHudReadModel,
+  ItemUiCommand,
   ShellBindings,
   ShellIntent,
   ShellReadModel,
@@ -75,10 +77,14 @@ declare global {
       setAutomationPaused: (paused: boolean) => void;
       requestDodge: () => void;
       requestPrimaryAttack: () => void;
+      setMovement: (x: number, y: number) => void;
+      requestAbilitySlot: (slot: LoadoutSlot, x?: number, y?: number) => void;
       requestCinderDart: () => void;
       requestWinterPulse: (x: number, y: number) => void;
       requestDefiantSignal: () => void;
       advancePaused: (steps: number) => void;
+      itemHud: () => InventoryHudReadModel | null;
+      executeItemCommand: (command: ItemUiCommand) => void;
       applyPlayerDamage: (amount: number) => DamageResult;
     };
   }
@@ -281,6 +287,12 @@ if (!support.supported) {
           requestPrimaryAttack: () => {
             renderer.combat.requestPrimaryAttack();
           },
+          setMovement: (x, y) => {
+            renderer.combat.setMovement(x, y);
+          },
+          requestAbilitySlot: (slot, x, y) => {
+            renderer.combat.requestAbilitySlot(slot, x, y);
+          },
           requestCinderDart: () => {
             renderer.combat.requestCinderDart();
           },
@@ -292,6 +304,10 @@ if (!support.supported) {
           },
           advancePaused: (steps) => {
             renderer.combat.advancePaused(steps);
+          },
+          itemHud: () => renderer.combat.itemHud(),
+          executeItemCommand: (command) => {
+            renderer.combat.executeItemCommand(command);
           },
           applyPlayerDamage: (amount) =>
             renderer.combat.applyPlayerDamage(amount),

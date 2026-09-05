@@ -1,7 +1,11 @@
 import Phaser from "phaser";
 
-import type { DamageResult } from "../../core";
-import type { CanvasViewportReadModel } from "../../presentation/shell-contracts";
+import type { DamageResult, LoadoutSlot } from "../../core";
+import type {
+  CanvasViewportReadModel,
+  InventoryHudReadModel,
+  ItemUiCommand,
+} from "../../presentation/shell-contracts";
 import { applyCanvasViewport } from "../browser/canvas-viewport";
 import { assertWebGL2Context } from "../browser/webgl2";
 import {
@@ -201,6 +205,18 @@ class TechnicalWorldScene extends Phaser.Scene {
     this.#combat?.requestPrimaryAttack();
   }
 
+  public setCombatMovement(x: number, y: number): void {
+    this.#combat?.setMovement(x, y);
+  }
+
+  public requestCombatAbilitySlot(
+    slot: LoadoutSlot,
+    x?: number,
+    y?: number,
+  ): void {
+    this.#combat?.requestAbilitySlot(slot, x, y);
+  }
+
   public requestCombatCinderDart(): void {
     this.#combat?.requestCinderDart();
   }
@@ -215,6 +231,14 @@ class TechnicalWorldScene extends Phaser.Scene {
 
   public advanceCombatPaused(steps: number): void {
     this.#combat?.advancePaused(steps);
+  }
+
+  public combatItemHud(): InventoryHudReadModel | null {
+    return this.#combat?.itemHud() ?? null;
+  }
+
+  public executeCombatItemCommand(command: ItemUiCommand): void {
+    this.#combat?.executeItemCommand(command);
   }
 
   public applyCombatPlayerDamage(amount: number): DamageResult {
@@ -257,10 +281,14 @@ export interface PhaserBootResult {
     setAutomationPaused(paused: boolean): void;
     requestDodge(): void;
     requestPrimaryAttack(): void;
+    setMovement(x: number, y: number): void;
+    requestAbilitySlot(slot: LoadoutSlot, x?: number, y?: number): void;
     requestCinderDart(): void;
     requestWinterPulse(x: number, y: number): void;
     requestDefiantSignal(): void;
     advancePaused(steps: number): void;
+    itemHud(): InventoryHudReadModel | null;
+    executeItemCommand(command: ItemUiCommand): void;
     applyPlayerDamage(amount: number): DamageResult;
   };
   resize(viewport: CanvasViewportReadModel): void;
@@ -328,6 +356,12 @@ export function bootPhaser(
                 requestPrimaryAttack: () => {
                   scene.requestCombatPrimaryAttack();
                 },
+                setMovement: (x, y) => {
+                  scene.setCombatMovement(x, y);
+                },
+                requestAbilitySlot: (slot, x, y) => {
+                  scene.requestCombatAbilitySlot(slot, x, y);
+                },
                 requestCinderDart: () => {
                   scene.requestCombatCinderDart();
                 },
@@ -339,6 +373,10 @@ export function bootPhaser(
                 },
                 advancePaused: (steps) => {
                   scene.advanceCombatPaused(steps);
+                },
+                itemHud: () => scene.combatItemHud(),
+                executeItemCommand: (command) => {
+                  scene.executeCombatItemCommand(command);
                 },
                 applyPlayerDamage: (amount) =>
                   scene.applyCombatPlayerDamage(amount),

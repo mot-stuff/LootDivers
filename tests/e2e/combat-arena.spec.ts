@@ -31,7 +31,7 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(
-    page.getByRole("heading", { name: "Ability combat arena" }),
+    page.getByRole("heading", { name: "Item and loadout combat arena" }),
   ).toBeVisible();
   await expect.poll(() => diagnostics(page)).not.toBeNull();
 
