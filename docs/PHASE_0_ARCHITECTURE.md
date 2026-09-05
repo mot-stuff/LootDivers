@@ -730,6 +730,48 @@ triggers, mock executors, deterministic tests.
 cancellation, cooldown, and bounded trigger behavior without Phaser.
 **Testing:** Unit/contract tests and malformed-content tests.
 
+**Completion record (2026-09-04):** Implemented pending Systems Designer and
+independent QA review. The canonical content pipeline now validates and compiles
+typed synthetic ability definitions with explicit fixed-tick phases, registered
+tags/stats, costs, cooldown and cancellation/refund policies, snapshot/live stat
+semantics, ordered shared/custom effects, and acyclic trigger references. The
+framework-free executor uses explicit definition, resource, cooldown, target,
+stat, seeded-random, event, and effect-executor dependencies; runtime trigger
+depth/work is bounded and cycles are rejected. Deterministic mock tests cover
+success, invalid targeting, cancellation/refund, cooldown rejection,
+snapshot/live reads, cycle detection, work exhaustion, and fixed-step
+advancement. No playable ability, input, Phaser, animation/VFX, real damage,
+balance, production content, networking, or Phase 1 behavior was added. The
+implementation follows DEC-013 without requiring a new ADR.
+
+**Systems Designer remediation record (2026-09-04):** The initial review fail
+was addressed without expanding scope. Executor kinds now have a canonical
+registry and unavailable executors reject before settlement. Cooldowns start
+before observable stage events and use owner tokens. Costs use typed payment or
+reservation handles with explicit refund/commit/release. Cancellation is
+current-tick coherent and advances one pending stage tick before policy checks.
+Stat captures identify source/target subjects while effect reads choose snapshot
+or live values; target-dependent effects require entity targeting. Cost amounts
+must be attainable within registered resource maxima. Trigger requests are FIFO
+queued after parent effects, while chain depth/cycles and one aggregate
+simulation-tick work budget remain bounded. Deterministic tests cover each
+review finding. DEC-013 remains unchanged; independent acceptance is still
+pending.
+
+**Systems Designer second remediation record (2026-09-04):** Runtime tick
+admission now accepts arbitrary monotonic forward idle gaps, resets aggregate
+work once per newly observed tick, and rejects backward time. Activations reserve
+their complete effect batch atomically: immediate requests reject before
+settlement, while delayed activation failures terminally cancel, refund/release
+all settlements, and execute no effects. Observable active transitions now
+re-check terminal state, so synchronous cancellation cannot execute effects or
+fall through to completion. Regression tests reproduce all three review probes.
+Budget-abort state and settlement ownership are committed before rejection
+callbacks, making synchronous cancellation idempotent and exactly-once settled.
+Final QA remediation adds terminal guards after every custom executor boundary,
+outermost-dispatch ownership of FIFO trigger flushing under reentrant requests,
+and saved-state seeded-RNG replay coverage with identical effect observations.
+
 ### TASK-P0-010 — Establish persistence foundation
 
 **Owner:** Gameplay Engineer

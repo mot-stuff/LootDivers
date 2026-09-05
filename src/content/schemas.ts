@@ -1,7 +1,9 @@
 import type { JSONSchemaType } from "ajv";
 
 import {
+  type AbilityContentDefinition,
   ASSET_PATH_PATTERN,
+  type CompiledAbilityDefinitionsChunk,
   ASSET_TYPES,
   STABLE_ID_PATTERN,
   type AssetDefinition,
@@ -9,6 +11,8 @@ import {
   type CompiledRegistriesChunk,
   type CompiledTechnicalDefinitionsChunk,
   type ContentProject,
+  type EffectExecutorDefinition,
+  type EffectExecutorRegistry,
   type StatDefinition,
   type StatRegistry,
   type StatValue,
@@ -24,6 +28,8 @@ const VERSION_PATTERN = "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$";
 const SHA256_PATTERN = "^[a-f0-9]{64}$";
 const SAFE_NUMBER_MINIMUM = -1_000_000_000;
 const SAFE_NUMBER_MAXIMUM = 1_000_000_000;
+const MAXIMUM_ABILITY_TICKS = 36_000;
+const MAXIMUM_ABILITY_EFFECTS = 64;
 
 const stableIdSchema = {
   type: "string",
@@ -69,6 +75,15 @@ const tagDefinitionSchema = {
   required: ["id"],
 } as const satisfies JSONSchemaType<TagDefinition>;
 
+const effectExecutorDefinitionSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    id: stableIdSchema,
+  },
+  required: ["id"],
+} as const satisfies JSONSchemaType<EffectExecutorDefinition>;
+
 const assetDefinitionSchema = {
   type: "object",
   additionalProperties: false,
@@ -96,6 +111,217 @@ const statValueSchema = {
   },
   required: ["statId", "value"],
 } as const satisfies JSONSchemaType<StatValue>;
+
+const abilityEffectSchema = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", const: "modify-resource" },
+        resourceId: stableIdSchema,
+        amount: {
+          type: "number",
+          minimum: SAFE_NUMBER_MINIMUM,
+          maximum: SAFE_NUMBER_MAXIMUM,
+        },
+        recipient: { type: "string", enum: ["source", "target"] },
+      },
+      required: ["kind", "resourceId", "amount", "recipient"],
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", const: "trigger-ability" },
+        abilityId: stableIdSchema,
+      },
+      required: ["kind", "abilityId"],
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", const: "custom" },
+        executorKind: stableIdSchema,
+        parameters: {
+          type: "array",
+          maxItems: 32,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              key: { type: "string", minLength: 1, maxLength: 64 },
+              value: {
+                anyOf: [
+                  { type: "string", maxLength: 256 },
+                  {
+                    type: "number",
+                    minimum: SAFE_NUMBER_MINIMUM,
+                    maximum: SAFE_NUMBER_MAXIMUM,
+                  },
+                  { type: "boolean" },
+                ],
+              },
+            },
+            required: ["key", "value"],
+          },
+        },
+      },
+      required: ["kind", "executorKind", "parameters"],
+    },
+  ],
+} as const;
+
+const abilityDefinitionBody = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    schemaVersion: versionSchema,
+    contentVersion: versionSchema,
+    kind: { type: "string", const: "ability-definition" },
+    id: stableIdSchema,
+    tags: {
+      type: "array",
+      maxItems: 32,
+      uniqueItems: true,
+      items: stableIdSchema,
+    },
+    targeting: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        mode: {
+          type: "string",
+          enum: ["self", "entity", "point", "direction"],
+        },
+        range: {
+          type: "number",
+          minimum: 0,
+          maximum: SAFE_NUMBER_MAXIMUM,
+        },
+      },
+      required: ["mode", "range"],
+    },
+    timing: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        startupTicks: {
+          type: "integer",
+          minimum: 0,
+          maximum: MAXIMUM_ABILITY_TICKS,
+        },
+        activeTicks: {
+          type: "integer",
+          minimum: 0,
+          maximum: MAXIMUM_ABILITY_TICKS,
+        },
+        recoveryTicks: {
+          type: "integer",
+          minimum: 0,
+          maximum: MAXIMUM_ABILITY_TICKS,
+        },
+      },
+      required: ["startupTicks", "activeTicks", "recoveryTicks"],
+    },
+    costs: {
+      type: "array",
+      maxItems: 16,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          resourceId: stableIdSchema,
+          amount: {
+            type: "number",
+            exclusiveMinimum: 0,
+            maximum: SAFE_NUMBER_MAXIMUM,
+          },
+          settlement: { type: "string", enum: ["pay", "reserve"] },
+        },
+        required: ["resourceId", "amount", "settlement"],
+      },
+    },
+    cooldown: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        durationTicks: {
+          type: "integer",
+          minimum: 0,
+          maximum: MAXIMUM_ABILITY_TICKS,
+        },
+        startsOn: {
+          type: "string",
+          enum: ["pay", "active", "complete"],
+        },
+      },
+      required: ["durationTicks", "startsOn"],
+    },
+    cancellation: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        allowedDuring: {
+          type: "array",
+          uniqueItems: true,
+          items: {
+            type: "string",
+            enum: ["startup", "active", "recovery"],
+          },
+        },
+        refund: {
+          type: "string",
+          enum: ["none", "reserved", "all"],
+        },
+        cooldown: {
+          type: "string",
+          enum: ["retain", "clear"],
+        },
+      },
+      required: ["allowedDuring", "refund", "cooldown"],
+    },
+    statCaptures: {
+      type: "array",
+      maxItems: 32,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          subject: { type: "string", enum: ["source", "target"] },
+          statId: stableIdSchema,
+        },
+        required: ["subject", "statId"],
+      },
+    },
+    effects: {
+      type: "array",
+      maxItems: MAXIMUM_ABILITY_EFFECTS,
+      items: abilityEffectSchema,
+    },
+  },
+  required: [
+    "schemaVersion",
+    "contentVersion",
+    "kind",
+    "id",
+    "tags",
+    "targeting",
+    "timing",
+    "costs",
+    "cooldown",
+    "cancellation",
+    "statCaptures",
+    "effects",
+  ],
+} as const satisfies JSONSchemaType<AbilityContentDefinition>;
+
+export const abilityDefinitionSchema = {
+  $schema: META_SCHEMA,
+  $id: `${SCHEMA_ROOT}/ability-definition.schema.json`,
+  ...abilityDefinitionBody,
+} as const;
 
 export const projectSchema = {
   $schema: META_SCHEMA,
@@ -144,6 +370,23 @@ export const tagRegistrySchema = {
   },
   required: ["schemaVersion", "contentVersion", "kind", "entries"],
 } as const satisfies JSONSchemaType<TagRegistry>;
+
+export const effectExecutorRegistrySchema = {
+  $schema: META_SCHEMA,
+  $id: `${SCHEMA_ROOT}/effect-executor-registry.schema.json`,
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    schemaVersion: versionSchema,
+    contentVersion: versionSchema,
+    kind: { type: "string", const: "effect-executor-registry" },
+    entries: {
+      type: "array",
+      items: effectExecutorDefinitionSchema,
+    },
+  },
+  required: ["schemaVersion", "contentVersion", "kind", "entries"],
+} as const satisfies JSONSchemaType<EffectExecutorRegistry>;
 
 export const assetRegistrySchema = {
   $schema: META_SCHEMA,
@@ -254,8 +497,12 @@ export const compiledRegistriesChunkSchema = {
     assets: { type: "array", items: assetDefinitionSchema },
     stats: { type: "array", items: statDefinitionSchema },
     tags: { type: "array", items: tagDefinitionSchema },
+    effectExecutors: {
+      type: "array",
+      items: effectExecutorDefinitionSchema,
+    },
   },
-  required: ["assets", "stats", "tags"],
+  required: ["assets", "stats", "tags", "effectExecutors"],
 } as const satisfies JSONSchemaType<CompiledRegistriesChunk>;
 
 export const compiledTechnicalDefinitionsChunkSchema = {
@@ -264,6 +511,13 @@ export const compiledTechnicalDefinitionsChunkSchema = {
   type: "array",
   items: technicalDefinitionBody,
 } as const satisfies JSONSchemaType<CompiledTechnicalDefinitionsChunk>;
+
+export const compiledAbilityDefinitionsChunkSchema = {
+  $schema: META_SCHEMA,
+  $id: `${SCHEMA_ROOT}/compiled-ability-definitions-chunk.schema.json`,
+  type: "array",
+  items: abilityDefinitionBody,
+} as const satisfies JSONSchemaType<CompiledAbilityDefinitionsChunk>;
 
 export const commonSchema = {
   $schema: META_SCHEMA,
@@ -277,12 +531,16 @@ export const commonSchema = {
 } as const;
 
 export const CONTENT_SCHEMAS = {
+  "ability-definition.schema.json": abilityDefinitionSchema,
+  "compiled-ability-definitions-chunk.schema.json":
+    compiledAbilityDefinitionsChunkSchema,
   "asset-registry.schema.json": assetRegistrySchema,
   "common.schema.json": commonSchema,
   "compiled-manifest.schema.json": compiledManifestSchema,
   "compiled-registries-chunk.schema.json": compiledRegistriesChunkSchema,
   "compiled-technical-definitions-chunk.schema.json":
     compiledTechnicalDefinitionsChunkSchema,
+  "effect-executor-registry.schema.json": effectExecutorRegistrySchema,
   "project.schema.json": projectSchema,
   "stat-registry.schema.json": statRegistrySchema,
   "tag-registry.schema.json": tagRegistrySchema,
@@ -290,6 +548,8 @@ export const CONTENT_SCHEMAS = {
 } as const;
 
 export const SOURCE_SCHEMA_BY_KIND = {
+  "ability-definition": abilityDefinitionSchema,
+  "effect-executor-registry": effectExecutorRegistrySchema,
   project: projectSchema,
   "stat-registry": statRegistrySchema,
   "tag-registry": tagRegistrySchema,

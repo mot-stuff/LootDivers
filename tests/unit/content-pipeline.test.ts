@@ -73,6 +73,10 @@ describe("content validation", () => {
     expect(result.content?.definitions.map(({ id }) => id)).toEqual([
       "fixture:root",
     ]);
+    expect(result.content?.abilities.map(({ id }) => id)).toEqual([
+      "fixture:ability-contract",
+      "fixture:ability-contract-child",
+    ]);
   });
 
   it("reports source-specific invalid shape diagnostics", async () => {
@@ -274,6 +278,129 @@ describe("content validation", () => {
       ]),
     );
   });
+
+  it("rejects malformed and unbounded ability shapes", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.timing = {
+        startupTicks: -1,
+        activeTicks: 0,
+        recoveryTicks: 0,
+      };
+      ability.effects = Array.from({ length: 65 }, () => ({
+        kind: "trigger-ability",
+        abilityId: "fixture:ability-contract-child",
+      }));
+    });
+    await expectDiagnostic("SHAPE_INVALID", "fixtures/ability-contract.json");
+  });
+
+  it.each([
+    ["tags", ["fixture:missing"], "TAG_UNKNOWN"],
+    [
+      "costs",
+      [{ resourceId: "fixture:missing", amount: 1, settlement: "pay" }],
+      "STAT_UNKNOWN",
+    ],
+    [
+      "statCaptures",
+      [{ subject: "source", statId: "fixture:missing" }],
+      "STAT_UNKNOWN",
+    ],
+    [
+      "effects",
+      [
+        {
+          kind: "trigger-ability",
+          abilityId: "fixture:missing",
+        },
+      ],
+      "REFERENCE_MISSING",
+    ],
+  ])("rejects invalid ability %s references", async (field, value, code) => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability[field] = value;
+    });
+    await expectDiagnostic(code, "fixtures/ability-contract.json");
+  });
+
+  it("rejects target stat captures without entity targeting", async () => {
+    await mutate("fixtures/ability-contract-child.json", (ability) => {
+      ability.statCaptures = [{ subject: "target", statId: "fixture:power" }];
+    });
+    await expectDiagnostic(
+      "TARGETING_INVALID",
+      "fixtures/ability-contract-child.json",
+      "/statCaptures",
+    );
+  });
+
+  it("rejects unavailable custom executor kinds", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.effects = [
+        {
+          kind: "custom",
+          executorKind: "fixture:missing-executor",
+          parameters: [],
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "EXECUTOR_UNKNOWN",
+      "fixtures/ability-contract.json",
+      "/effects/0/executorKind",
+    );
+  });
+
+  it("rejects target-recipient effects without entity targeting", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.effects = [
+        {
+          kind: "modify-resource",
+          resourceId: "fixture:mana",
+          amount: 1,
+          recipient: "target",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "TARGETING_INVALID",
+      "fixtures/ability-contract.json",
+      "/effects/0/recipient",
+    );
+  });
+
+  it("rejects costs above the registered attainable maximum", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.costs = [
+        {
+          resourceId: "fixture:mana",
+          amount: 101,
+          settlement: "pay",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "RESOURCE_COST_UNATTAINABLE",
+      "fixtures/ability-contract.json",
+      "/costs/0/amount",
+    );
+  });
+
+  it("detects authored trigger cycles", async () => {
+    await mutate("fixtures/ability-contract-child.json", (ability) => {
+      ability.effects = [
+        {
+          kind: "trigger-ability",
+          abilityId: "fixture:ability-contract",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "TRIGGER_CYCLE",
+      "fixtures/ability-contract-child.json",
+      "/effects/0/abilityId",
+    );
+  });
 });
 
 describe("content compilation", () => {
@@ -287,6 +414,7 @@ describe("content compilation", () => {
     ) as Record<string, unknown>;
 
     expect(result.files).toEqual([
+      "chunks/abilities.json",
       "chunks/registries.json",
       "chunks/technical-definitions.json",
       "manifest.json",

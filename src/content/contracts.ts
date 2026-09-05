@@ -39,6 +39,15 @@ export interface TagRegistry extends VersionedDocument {
   readonly entries: readonly TagDefinition[];
 }
 
+export interface EffectExecutorDefinition {
+  readonly id: StableId;
+}
+
+export interface EffectExecutorRegistry extends VersionedDocument {
+  readonly kind: "effect-executor-registry";
+  readonly entries: readonly EffectExecutorDefinition[];
+}
+
 export const ASSET_TYPES = ["audio", "data", "image"] as const;
 export type AssetType = (typeof ASSET_TYPES)[number];
 
@@ -67,9 +76,67 @@ export interface TechnicalDefinition extends VersionedDocument {
   readonly references: readonly StableId[];
 }
 
+export interface AbilityCostContent {
+  readonly resourceId: StableId;
+  readonly amount: number;
+  readonly settlement: "pay" | "reserve";
+}
+
+export type AbilityEffectContent =
+  | {
+      readonly kind: "modify-resource";
+      readonly resourceId: StableId;
+      readonly amount: number;
+      readonly recipient: "source" | "target";
+    }
+  | {
+      readonly kind: "trigger-ability";
+      readonly abilityId: StableId;
+    }
+  | {
+      readonly kind: "custom";
+      readonly executorKind: StableId;
+      readonly parameters: readonly {
+        readonly key: string;
+        readonly value: string | number | boolean;
+      }[];
+    };
+
+export interface AbilityContentDefinition extends VersionedDocument {
+  readonly kind: "ability-definition";
+  readonly id: StableId;
+  readonly tags: readonly StableId[];
+  readonly targeting: {
+    readonly mode: "self" | "entity" | "point" | "direction";
+    readonly range: number;
+  };
+  readonly timing: {
+    readonly startupTicks: number;
+    readonly activeTicks: number;
+    readonly recoveryTicks: number;
+  };
+  readonly costs: readonly AbilityCostContent[];
+  readonly cooldown: {
+    readonly durationTicks: number;
+    readonly startsOn: "pay" | "active" | "complete";
+  };
+  readonly cancellation: {
+    readonly allowedDuring: readonly ("startup" | "active" | "recovery")[];
+    readonly refund: "none" | "reserved" | "all";
+    readonly cooldown: "retain" | "clear";
+  };
+  readonly statCaptures: readonly {
+    readonly subject: "source" | "target";
+    readonly statId: StableId;
+  }[];
+  readonly effects: readonly AbilityEffectContent[];
+}
+
 export type ContentDocument =
+  | AbilityContentDefinition
   | AssetRegistry
   | ContentProject
+  | EffectExecutorRegistry
   | StatRegistry
   | TagRegistry
   | TechnicalDefinition;
@@ -87,6 +154,8 @@ export interface ValidatedContent {
   readonly stats: readonly StatDefinition[];
   readonly tags: readonly TagDefinition[];
   readonly definitions: readonly TechnicalDefinition[];
+  readonly abilities: readonly AbilityContentDefinition[];
+  readonly effectExecutors: readonly EffectExecutorDefinition[];
   readonly sourceHash: string;
 }
 
@@ -109,6 +178,9 @@ export interface CompiledRegistriesChunk {
   readonly assets: readonly AssetDefinition[];
   readonly stats: readonly StatDefinition[];
   readonly tags: readonly TagDefinition[];
+  readonly effectExecutors: readonly EffectExecutorDefinition[];
 }
 
 export type CompiledTechnicalDefinitionsChunk = readonly TechnicalDefinition[];
+export type CompiledAbilityDefinitionsChunk =
+  readonly AbilityContentDefinition[];

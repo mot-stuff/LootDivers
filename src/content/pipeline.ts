@@ -18,16 +18,19 @@ import Ajv2020, {
 } from "ajv/dist/2020.js";
 
 import {
+  type AbilityContentDefinition,
   ASSET_PATH_PATTERN,
   SUPPORTED_COMPILER_VERSION,
   SUPPORTED_SCHEMA_VERSION,
   type AssetDefinition,
+  type CompiledAbilityDefinitionsChunk,
   type CompiledContentManifest,
   type CompiledRegistriesChunk,
   type CompiledTechnicalDefinitionsChunk,
   type ContentDocument,
   type ContentProject,
   type Diagnostic,
+  type EffectExecutorDefinition,
   type StatDefinition,
   type StableId,
   type TagDefinition,
@@ -35,6 +38,7 @@ import {
   type ValidatedContent,
 } from "./contracts.ts";
 import {
+  compiledAbilityDefinitionsChunkSchema,
   compiledManifestSchema,
   compiledRegistriesChunkSchema,
   compiledTechnicalDefinitionsChunkSchema,
@@ -404,8 +408,11 @@ export async function validateContentDirectory(
   const assets: AssetDefinition[] = [];
   const stats: StatDefinition[] = [];
   const tags: TagDefinition[] = [];
+  const effectExecutors: EffectExecutorDefinition[] = [];
   const definitions: TechnicalDefinition[] = [];
+  const abilities: AbilityContentDefinition[] = [];
   const definitionSources = new Map<StableId, string>();
+  const abilitySources = new Map<StableId, string>();
   const statSources = new Map<StableId, SourcePointer>();
 
   const registryDocuments = new Map<string, SourcePointer[]>();
@@ -462,6 +469,16 @@ export async function validateContentDirectory(
           diagnostics,
         ),
       );
+    } else if (value.kind === "effect-executor-registry") {
+      value.entries.forEach((entry, index) =>
+        addUnique(
+          { source, path: `/entries/${index}/id`, value: entry },
+          "effect executor",
+          effectExecutors,
+          idSources,
+          diagnostics,
+        ),
+      );
     } else if (value.kind === "technical-definition") {
       addUnique(
         { source, path: "/id", value },
@@ -473,6 +490,17 @@ export async function validateContentDirectory(
       if (!definitionSources.has(value.id)) {
         definitionSources.set(value.id, source);
       }
+    } else if (value.kind === "ability-definition") {
+      addUnique(
+        { source, path: "/id", value },
+        "ability",
+        abilities,
+        idSources,
+        diagnostics,
+      );
+      if (!abilitySources.has(value.id)) {
+        abilitySources.set(value.id, source);
+      }
     }
   }
 
@@ -480,6 +508,7 @@ export async function validateContentDirectory(
     "asset-registry",
     "stat-registry",
     "tag-registry",
+    "effect-executor-registry",
   ] as const) {
     const registrySources = registryDocuments.get(kind) ?? [];
     const count = registrySources.length;
@@ -513,6 +542,8 @@ export async function validateContentDirectory(
   const statById = new Map(stats.map((entry) => [entry.id, entry]));
   const tagIds = new Set(tags.map((entry) => entry.id));
   const definitionIds = new Set(definitions.map((entry) => entry.id));
+  const abilityIds = new Set(abilities.map((entry) => entry.id));
+  const effectExecutorIds = new Set(effectExecutors.map((entry) => entry.id));
 
   for (const stat of stats) {
     if (stat.minimum > stat.maximum) {
@@ -628,6 +659,218 @@ export async function validateContentDirectory(
     });
   }
 
+  for (const ability of abilities) {
+    const source = abilitySources.get(ability.id) ?? "<unknown>";
+    ability.tags.forEach((id, index) => {
+      if (!tagIds.has(id)) {
+        diagnostics.push(
+          diagnostic(
+            "TAG_UNKNOWN",
+            source,
+            `/tags/${index}`,
+            `Unknown tag ID "${id}".`,
+          ),
+        );
+      }
+    });
+    const usedCosts = new Set<StableId>();
+    ability.costs.forEach((cost, index) => {
+      if (usedCosts.has(cost.resourceId)) {
+        diagnostics.push(
+          diagnostic(
+            "DUPLICATE_VALUE",
+            source,
+            `/costs/${index}/resourceId`,
+            `Resource ID "${cost.resourceId}" is repeated in ability costs.`,
+          ),
+        );
+      }
+      usedCosts.add(cost.resourceId);
+      const resource = statById.get(cost.resourceId);
+      if (resource === undefined) {
+        diagnostics.push(
+          diagnostic(
+            "STAT_UNKNOWN",
+            source,
+            `/costs/${index}/resourceId`,
+            `Unknown resource stat ID "${cost.resourceId}".`,
+          ),
+        );
+      } else if (cost.amount > resource.maximum) {
+        diagnostics.push(
+          diagnostic(
+            "RESOURCE_COST_UNATTAINABLE",
+            source,
+            `/costs/${index}/amount`,
+            `Cost ${cost.amount} exceeds attainable "${resource.id}" maximum ${resource.maximum}.`,
+          ),
+        );
+      }
+    });
+    const usedCaptures = new Set<string>();
+    ability.statCaptures.forEach((capture, index) => {
+      const captureKey = `${capture.subject}\0${capture.statId}`;
+      if (usedCaptures.has(captureKey)) {
+        diagnostics.push(
+          diagnostic(
+            "DUPLICATE_VALUE",
+            source,
+            `/statCaptures/${index}`,
+            `Stat "${capture.statId}" is captured more than once for "${capture.subject}".`,
+          ),
+        );
+      }
+      usedCaptures.add(captureKey);
+      if (!statById.has(capture.statId)) {
+        diagnostics.push(
+          diagnostic(
+            "STAT_UNKNOWN",
+            source,
+            `/statCaptures/${index}/statId`,
+            `Unknown captured stat ID "${capture.statId}".`,
+          ),
+        );
+      }
+    });
+    if (
+      ability.targeting.mode !== "entity" &&
+      ability.statCaptures.some(({ subject }) => subject === "target")
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "TARGETING_INVALID",
+          source,
+          "/statCaptures",
+          "Target stat captures require entity targeting.",
+        ),
+      );
+    }
+    if (ability.targeting.mode === "self" && ability.targeting.range !== 0) {
+      diagnostics.push(
+        diagnostic(
+          "TARGETING_INVALID",
+          source,
+          "/targeting/range",
+          "Self-targeted abilities must use range 0.",
+        ),
+      );
+    }
+    ability.effects.forEach((effect, index) => {
+      if (effect.kind === "modify-resource") {
+        if (!statById.has(effect.resourceId)) {
+          diagnostics.push(
+            diagnostic(
+              "STAT_UNKNOWN",
+              source,
+              `/effects/${index}/resourceId`,
+              `Unknown resource stat ID "${effect.resourceId}".`,
+            ),
+          );
+        }
+        if (
+          effect.recipient === "target" &&
+          ability.targeting.mode !== "entity"
+        ) {
+          diagnostics.push(
+            diagnostic(
+              "TARGETING_INVALID",
+              source,
+              `/effects/${index}/recipient`,
+              "Target-recipient effects require entity targeting.",
+            ),
+          );
+        }
+        if (!effectExecutorIds.has("core:modify-resource")) {
+          diagnostics.push(
+            diagnostic(
+              "EXECUTOR_UNKNOWN",
+              source,
+              `/effects/${index}/kind`,
+              'Shared effect requires registered executor "core:modify-resource".',
+            ),
+          );
+        }
+      } else if (
+        effect.kind === "trigger-ability" &&
+        !abilityIds.has(effect.abilityId)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "REFERENCE_MISSING",
+            source,
+            `/effects/${index}/abilityId`,
+            `Triggered ability ID "${effect.abilityId}" does not exist.`,
+          ),
+        );
+      } else if (effect.kind === "custom") {
+        if (!effectExecutorIds.has(effect.executorKind)) {
+          diagnostics.push(
+            diagnostic(
+              "EXECUTOR_UNKNOWN",
+              source,
+              `/effects/${index}/executorKind`,
+              `Unknown effect executor ID "${effect.executorKind}".`,
+            ),
+          );
+        }
+        const keys = new Set<string>();
+        effect.parameters.forEach((parameter, parameterIndex) => {
+          if (keys.has(parameter.key)) {
+            diagnostics.push(
+              diagnostic(
+                "DUPLICATE_VALUE",
+                source,
+                `/effects/${index}/parameters/${parameterIndex}/key`,
+                `Custom parameter key "${parameter.key}" is repeated.`,
+              ),
+            );
+          }
+          keys.add(parameter.key);
+        });
+      }
+    });
+  }
+
+  const abilityById = new Map(
+    abilities.map((ability) => [ability.id, ability]),
+  );
+  const visitState = new Map<StableId, "visiting" | "visited">();
+  for (const root of sortById(abilities)) {
+    if (visitState.get(root.id) !== undefined) continue;
+    const stack: { ability: AbilityContentDefinition; nextEffect: number }[] = [
+      { ability: root, nextEffect: 0 },
+    ];
+    visitState.set(root.id, "visiting");
+    while (stack.length > 0) {
+      const frame = stack[stack.length - 1];
+      if (frame === undefined) break;
+      const effectIndex = frame.nextEffect;
+      const effect = frame.ability.effects[effectIndex];
+      if (effect === undefined) {
+        visitState.set(frame.ability.id, "visited");
+        stack.pop();
+        continue;
+      }
+      frame.nextEffect += 1;
+      if (effect.kind !== "trigger-ability") continue;
+      const target = abilityById.get(effect.abilityId);
+      if (target === undefined) continue;
+      if (visitState.get(target.id) === "visiting") {
+        diagnostics.push(
+          diagnostic(
+            "TRIGGER_CYCLE",
+            abilitySources.get(frame.ability.id) ?? "<unknown>",
+            `/effects/${effectIndex}/abilityId`,
+            `Trigger edge "${frame.ability.id}" -> "${target.id}" forms a cycle.`,
+          ),
+        );
+      } else if (visitState.get(target.id) === undefined) {
+        visitState.set(target.id, "visiting");
+        stack.push({ ability: target, nextEffect: 0 });
+      }
+    }
+  }
+
   diagnostics.sort((left, right) =>
     compareCodeUnits(
       `${left.source}\0${left.path}\0${left.code}`,
@@ -651,6 +894,7 @@ export async function validateContentDirectory(
       assets: sortById(assets),
       stats: sortById(stats),
       tags: sortById(tags),
+      effectExecutors: sortById(effectExecutors),
       definitions: sortById(definitions).map((definition) => ({
         ...definition,
         assets: [...definition.assets].sort(compareCodeUnits),
@@ -659,6 +903,16 @@ export async function validateContentDirectory(
           compareCodeUnits(left.statId, right.statId),
         ),
         tags: [...definition.tags].sort(compareCodeUnits),
+      })),
+      abilities: sortById(abilities).map((ability) => ({
+        ...ability,
+        statCaptures: [...ability.statCaptures].sort((left, right) =>
+          compareCodeUnits(
+            `${left.subject}\0${left.statId}`,
+            `${right.subject}\0${right.statId}`,
+          ),
+        ),
+        tags: [...ability.tags].sort(compareCodeUnits),
       })),
       sourceHash,
     },
@@ -702,9 +956,16 @@ export async function compileContent(
     assets: content.assets,
     stats: content.stats,
     tags: content.tags,
+    effectExecutors: content.effectExecutors,
   };
   const definitionsChunk: CompiledTechnicalDefinitionsChunk =
     content.definitions;
+  const abilitiesChunk: CompiledAbilityDefinitionsChunk = content.abilities;
+  assertGeneratedContract(
+    compiledAbilityDefinitionsChunkSchema,
+    abilitiesChunk,
+    "ability definitions chunk",
+  );
   assertGeneratedContract(
     compiledRegistriesChunkSchema,
     registriesChunk,
@@ -718,8 +979,13 @@ export async function compileContent(
 
   const chunks: readonly [
     string,
-    CompiledRegistriesChunk | CompiledTechnicalDefinitionsChunk,
+    (
+      | CompiledAbilityDefinitionsChunk
+      | CompiledRegistriesChunk
+      | CompiledTechnicalDefinitionsChunk
+    ),
   ][] = [
+    ["abilities", abilitiesChunk],
     ["registries", registriesChunk],
     ["technical-definitions", definitionsChunk],
   ] as const;

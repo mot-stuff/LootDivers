@@ -104,3 +104,39 @@ new document kind. Add both positive and malformed-content tests. Keep semantic
 rules in project validation when JSON Schema cannot express cross-file
 identity, references, or registry-defined bounds. P0-006 owns zone/map schemas;
 do not add them here.
+
+## Ability contract fixture
+
+TASK-P0-009 adds the `ability-definition` document kind as a Phase 0 contract,
+not production combat content. Definitions use fixed-tick startup, active, and
+recovery durations; registered tags/stats; typed targeting, cost, cooldown,
+cancellation/refund, stat-capture, and ordered effect policies. Effect arrays
+are capped at 64 entries. Trigger references must exist and the content graph
+must be acyclic; runtime execution additionally enforces explicit depth and
+simulation-tick-scoped aggregate work budgets.
+
+The effect-executor registry is canonical content. Every shared or custom effect
+must reference a registered stable executor kind, and runtime composition must
+provide that executor before any cost settles. Resource ports distinguish
+payment from reservation handles and expose refund, commit, and release.
+Cooldown handles similarly make clearing owner-aware.
+
+Stat captures identify both source/target subject and stat ID. Effects may read
+declared snapshots while also reading current source or entity-target values.
+Target captures and target-recipient effects require entity targeting. Ability
+costs cannot exceed their registered resource maximum. Nested trigger requests
+are queued FIFO after the parent's ordered effects, independent of child phase
+duration. The checked-in `fixture:` abilities and executors are contract
+evidence only and must not become gameplay content.
+
+Each activation atomically reserves its complete ordered effect count. Immediate
+activations reject before resource settlement when the current tick lacks work;
+delayed activations that cannot reserve are explicitly cancelled with payments
+refunded and reservations released. Forward idle tick gaps start one fresh
+budget for the observed tick; backward operations fail.
+
+Effect execution re-checks terminal state after every registered executor call.
+Only the outermost public dispatch owns trigger flushing, so reentrant requests
+cannot drain queued children before the current parent effect batch finishes.
+Seeded random state is supplied through effect context and supports saved-state
+replay with identical observations and final generator state.
