@@ -11,7 +11,9 @@ import {
   DeterministicEnemyLootGenerator,
   EQUIPMENT_BASE_CATALOG,
   FIXED_STEP_SECONDS,
+  GOLD_MAX_TOTAL,
   HOLLOWDEEP_ID,
+  STARTING_GOLD,
   WINTER_PULSE_ID,
   createAbilityStoneStack,
   definitionById,
@@ -87,6 +89,9 @@ function playedSimulation(): CombatArenaSimulation {
   simulation.grantExperience(experienceToNextLevel(1));
   expect(simulation.allocateAttribute("strength").accepted).toBe(true);
 
+  // Nonzero gold (TASK-705B): no drops exist yet, so grant directly.
+  expect(simulation.grantGold(137)).toBe(137);
+
   // Own gear (crafted-origin) and abilities beyond the defaults.
   simulation.addCharacterItem(
     generateEquipmentItem({
@@ -131,11 +136,28 @@ describe("character save DTO", () => {
     restored.restoreCharacterSave(parsed);
     expect(restored.captureCharacterSave()).toEqual(save);
 
+    expect(save.gold).toBe(137);
+    expect(restored.gold()).toBe(137);
+
     const diagnostics = restored.diagnostics();
     expect(diagnostics.zoneId).toBe(HOLLOWDEEP_ID);
     expect(diagnostics.level).toBe(save.progression.level);
     expect(diagnostics.playerHealth).toBe(diagnostics.playerMaxHealth);
     expect(diagnostics.mana).toBe(diagnostics.maxMana);
+  });
+
+  it("starts broke and clamps gold grants at the cap", () => {
+    const simulation = new CombatArenaSimulation(DEFAULT_COMBAT_ARENA_CONFIG);
+    expect(simulation.gold()).toBe(STARTING_GOLD);
+    expect(simulation.captureCharacterSave().gold).toBe(0);
+
+    expect(simulation.grantGold(GOLD_MAX_TOTAL - 5)).toBe(GOLD_MAX_TOTAL - 5);
+    expect(simulation.grantGold(10)).toBe(GOLD_MAX_TOTAL);
+    expect(simulation.captureCharacterSave().gold).toBe(GOLD_MAX_TOTAL);
+
+    expect(() => simulation.grantGold(-1)).toThrow(RangeError);
+    expect(() => simulation.grantGold(2.5)).toThrow(RangeError);
+    expect(simulation.gold()).toBe(GOLD_MAX_TOTAL);
   });
 
   it("continues the deterministic loot sequence from a snapshot", () => {
@@ -170,6 +192,25 @@ describe("character save DTO", () => {
     const badZone = clone();
     badZone.zoneId = "zone:does-not-exist";
     expect(() => parseCharacterSave(badZone)).toThrow(/not a known zone/);
+
+    // Gold (TASK-705B): non-negative integer, capped at GOLD_MAX_TOTAL.
+    const negativeGold = clone();
+    negativeGold.gold = -1;
+    expect(() => parseCharacterSave(negativeGold)).toThrow(/gold/);
+
+    const fractionalGold = clone();
+    fractionalGold.gold = 12.5;
+    expect(() => parseCharacterSave(fractionalGold)).toThrow(/gold/);
+
+    const overCapGold = clone();
+    overCapGold.gold = GOLD_MAX_TOTAL + 1;
+    expect(() => parseCharacterSave(overCapGold)).toThrow(/gold/);
+
+    const missingGold = clone();
+    delete missingGold.gold;
+    expect(() => parseCharacterSave(missingGold)).toThrow(
+      /missing required field "gold"/,
+    );
 
     const duplicated = clone() as unknown as {
       items: {

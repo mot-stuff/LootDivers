@@ -60,6 +60,8 @@ export {
   type WorldInteractableReadModel,
 } from "./combat-arena";
 export {
+  GOLD_MAX_TOTAL,
+  STARTING_GOLD,
   parseCharacterSave,
   type CharacterSave,
   type CharacterSaveGenerators,

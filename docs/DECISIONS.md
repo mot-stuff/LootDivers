@@ -2505,7 +2505,10 @@ Date: 2026-09-05 (TASK-705)
 1. **The character save DTO lives in core** (`src/core/character-save.ts`).
    `CharacterSave` is pure JSON-safe data capturing the complete persistent
    character: current zone, quest stage, banked tutorial steps (DEC-030
-   amendment), progression (level/XP/attributes/passives/unspent points),
+   amendment), carried gold (TASK-705B / TASK-713 memo: `gold` is an
+   integer from 0 through `GOLD_MAX_TOTAL` = 1,000,000,000, starting at 0;
+   shipped in v1 ahead of TASK-712's gold drops so gold needs no v2
+   migration), progression (level/XP/attributes/passives/unspent points),
    profession levels and XP, all item locations (48-slot inventory layout,
    worn equipment, flasks), owned abilities, loadout assignments, and the
    instance-ID generator positions (craft/vendor/material serials plus the

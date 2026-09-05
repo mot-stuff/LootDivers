@@ -69,7 +69,12 @@ import {
   type ProfessionReadModel,
   type WorldInteractableKind,
 } from "./professions";
-import { parseCharacterSave, type CharacterSave } from "./character-save";
+import {
+  GOLD_MAX_TOTAL,
+  STARTING_GOLD,
+  parseCharacterSave,
+  type CharacterSave,
+} from "./character-save";
 import { TutorialTracker, type TutorialReadModel } from "./tutorial";
 import {
   ASHTRAIL_ENEMY,
@@ -474,6 +479,12 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   readonly #progression = new CharacterProgression();
   readonly #professions = new ProfessionProgression();
   readonly #tutorial = new TutorialTracker();
+  /**
+   * Carried gold (TASK-705B). Persistent wallet state like progression
+   * and items: it survives `reset()` and rides the character save. No
+   * drops or spending exist yet (TASK-712).
+   */
+  #gold = STARTING_GOLD;
   #zoneId: ZoneId = ASHTRAIL_EXPANSE_ID;
   #questStage: QuestStage = "inactive";
   #vendorOpen = false;
@@ -849,6 +860,24 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     return this.#progression.grantExperience(amount);
   }
 
+  public gold(): number {
+    return this.#gold;
+  }
+
+  /**
+   * Adds gold to the character's wallet, clamping the total at
+   * `GOLD_MAX_TOTAL` (TASK-713 memo §4: collection clamps, parsing
+   * rejects). Returns the new total. TASK-712's walk-over collection is
+   * the intended caller; until then tests use it directly.
+   */
+  public grantGold(amount: number): number {
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      throw new RangeError("Gold grants must be nonnegative safe integers.");
+    }
+    this.#gold = Math.min(GOLD_MAX_TOTAL, this.#gold + amount);
+    return this.#gold;
+  }
+
   public allocateAttribute(attribute: AttributeId): ProgressionSpendResult {
     const result = this.#progression.allocateAttribute(attribute);
     if (result.accepted) this.synchronizeCharacterResources();
@@ -1200,6 +1229,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       zoneId: this.#zoneId,
       questStage: this.#questStage,
       tutorialBankedSteps: this.#tutorial.bankedSteps(),
+      gold: this.#gold,
       progression: this.#progression.snapshot(),
       professions: this.#professions.snapshot(),
       items: this.#characterItems.snapshot(),
@@ -1230,6 +1260,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#characterItems.restore(parsed.items);
     this.#tutorial.restore(parsed.tutorialBankedSteps);
     this.#questStage = parsed.questStage;
+    this.#gold = parsed.gold;
     this.#nextCraftSerial = parsed.generators.craftSerial;
     this.#nextVendorSerial = parsed.generators.vendorSerial;
     this.#nextMaterialSerial = parsed.generators.materialSerial;

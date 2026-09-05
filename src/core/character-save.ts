@@ -61,11 +61,26 @@ export interface CharacterSave {
   readonly questStage: QuestStage;
   /** Banked tutorial steps in canonical order (DEC-030 amendment). */
   readonly tutorialBankedSteps: readonly TutorialStepId[];
+  /**
+   * Carried gold (TASK-705B, TASK-713 memo §2): integer from 0 through
+   * `GOLD_MAX_TOTAL`. In v1 nothing drops or spends gold yet (TASK-712);
+   * the field ships in save v1 so gold needs no v2 migration.
+   */
+  readonly gold: number;
   readonly progression: CharacterProgressionSnapshot;
   readonly professions: ProfessionProgressionSnapshot;
   readonly items: CharacterItemsSnapshot;
   readonly generators: CharacterSaveGenerators;
 }
+
+/** New characters and pre-gold saves start broke (TASK-713 memo §2.1). */
+export const STARTING_GOLD = 0;
+
+/**
+ * Gold cap (TASK-713 memo §2.1): collection clamps here; the parser
+ * rejects values above it.
+ */
+export const GOLD_MAX_TOTAL = 1_000_000_000;
 
 /**
  * Instance-ID generator positions. Persisting these is what makes restored
@@ -603,6 +618,7 @@ export function parseCharacterSave(value: unknown): CharacterSave {
       "zoneId",
       "questStage",
       "tutorialBankedSteps",
+      "gold",
       "progression",
       "professions",
       "items",
@@ -634,6 +650,7 @@ export function parseCharacterSave(value: unknown): CharacterSave {
     tutorialBankedSteps: TUTORIAL_STEP_IDS.filter((step) =>
       bankedSteps.includes(step),
     ),
+    gold: integerAt(save.gold, "gold", 0, GOLD_MAX_TOTAL),
     progression,
     professions: professionsAt(save.professions),
     items: itemsAt(save.items, progression.level),
