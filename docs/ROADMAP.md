@@ -125,7 +125,9 @@ inventory toggle, and LMB/Q/E/R ability keys.
 ---
 
 ## Phase 4 — Character Progression
-We can press C to open the character screen. The button for it would be on the right of the inventory button
+
+Owner-requested UX for this phase: pressing C opens the character screen, with
+an on-screen button placed to the right of the inventory button.
 
 Features include XP, levels, attributes, a small passive/mastery system, level
 requirements, and a respec prototype.
