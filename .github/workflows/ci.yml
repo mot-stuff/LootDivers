@@ -58,3 +58,42 @@ jobs:
       # (chromium, edge, firefox, webkit). See DEC-033.
       - name: End-to-end tests (chromium, edge, webkit)
         run: node scripts/run-playwright.mjs --project=chromium --project=edge --project=webkit
+
+      # The deploy job publishes these exact bytes (DEC-015: the deployed
+      # artifact is the tested artifact; no rebuild).
+      - name: Upload tested build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to Cloudflare Pages
+    needs: gates
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download tested build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish to Cloudflare Pages (project lootdivers)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=lootdivers --branch=main
+
+      - name: Post-deploy smoke (index + hashed asset reachable)
+        run: |
+          set -euo pipefail
+          sleep 15
+          curl -fsSI https://lootdivers.pages.dev/ | head -n 1
+          curl -fsS https://lootdivers.pages.dev/ | grep -qi "Loot Divers"
+          asset="$(basename "$(ls dist/assets/*.js | head -n 1)")"
+          echo "checking /assets/${asset}"
+          curl -fsSI "https://lootdivers.pages.dev/assets/${asset}" | head -n 1

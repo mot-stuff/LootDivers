@@ -1,0 +1,25 @@
+# Cloudflare Pages cache policy (TASK-706, DEC-032).
+# Rules are matched top to bottom; for a duplicated header the last
+# matching rule wins, so the art subdirectory rules below override the
+# blanket immutable rule for unhashed PNGs.
+
+# Hashed Vite build output (dist/assets/*.js, *.css, sourcemaps): content
+# hash in the filename, safe to cache forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Unhashed art assets (branding, spritesheets): filenames are stable and
+# the bytes DO change when the owner updates art. Cache for four hours,
+# then revalidate (ETag 304s keep repeat loads cheap).
+/assets/branding/*
+  Cache-Control: public, max-age=14400, must-revalidate
+
+/assets/characters/*
+  Cache-Control: public, max-age=14400, must-revalidate
+
+# The HTML shell must never be stale: it carries the hashed asset names.
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
