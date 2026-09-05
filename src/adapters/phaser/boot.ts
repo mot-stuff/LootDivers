@@ -187,6 +187,22 @@ class TechnicalWorldScene extends Phaser.Scene {
     this.#combat?.setAimDirection(x, y);
   }
 
+  public setCombatAutomationPaused(paused: boolean): void {
+    this.#combat?.setAutomationPaused(paused);
+  }
+
+  public requestCombatDodge(): void {
+    this.#combat?.requestDodge();
+  }
+
+  public requestCombatPrimaryAttack(): void {
+    this.#combat?.requestPrimaryAttack();
+  }
+
+  public advanceCombatPaused(steps: number): void {
+    this.#combat?.advancePaused(steps);
+  }
+
   public applyCombatPlayerDamage(amount: number): DamageResult {
     if (this.#combat === null) {
       throw new Error("Combat prototype is not active.");
@@ -224,6 +240,10 @@ export interface PhaserBootResult {
     diagnostics(): CombatPresentationDiagnostics | null;
     reset(): void;
     setAimDirection(x: number, y: number): void;
+    setAutomationPaused(paused: boolean): void;
+    requestDodge(): void;
+    requestPrimaryAttack(): void;
+    advancePaused(steps: number): void;
     applyPlayerDamage(amount: number): DamageResult;
   };
   resize(viewport: CanvasViewportReadModel): void;
@@ -281,6 +301,18 @@ export function bootPhaser(
                 },
                 setAimDirection: (x, y) => {
                   scene.setCombatAimDirection(x, y);
+                },
+                setAutomationPaused: (paused) => {
+                  scene.setCombatAutomationPaused(paused);
+                },
+                requestDodge: () => {
+                  scene.requestCombatDodge();
+                },
+                requestPrimaryAttack: () => {
+                  scene.requestCombatPrimaryAttack();
+                },
+                advancePaused: (steps) => {
+                  scene.advanceCombatPaused(steps);
                 },
                 applyPlayerDamage: (amount) =>
                   scene.applyCombatPlayerDamage(amount),

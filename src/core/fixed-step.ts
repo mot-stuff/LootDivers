@@ -79,6 +79,14 @@ export class FixedStepRunner {
     this.running = false;
   }
 
+  reset(): void {
+    this.accumulatorMilliseconds = 0;
+    this.nextTick = 0;
+    if (this.running) {
+      this.lastClockMilliseconds = this.readClock();
+    }
+  }
+
   resume(): void {
     if (this.running) {
       return;

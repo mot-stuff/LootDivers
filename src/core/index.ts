@@ -10,7 +10,6 @@ export {
   type CombatArenaEvent,
   type CombatArenaEventReader,
   type CombatTargetReadModel,
-  type CombatTargetRegistration,
   type PrimaryAttackConfig,
 } from "./combat-arena";
 export {
@@ -21,6 +20,14 @@ export {
   type DamageResult,
   type HealthReadModel,
 } from "./health";
+export {
+  SimpleMeleeEnemy,
+  type MeleeEnemyState,
+  type MeleeEnemyTarget,
+  type PlayerDamageApplicator,
+  type SimpleMeleeEnemyConfig,
+  type SimpleMeleeEnemyDiagnostics,
+} from "./simple-melee-enemy";
 export {
   AbilityExecutionEngine,
   type AbilityExecutionDependencies,

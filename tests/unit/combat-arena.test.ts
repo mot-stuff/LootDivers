@@ -92,13 +92,13 @@ describe("CombatArenaSimulation", () => {
   });
 
   it("snapshots aim and applies damage on the first active tick", () => {
-    const simulation = new CombatArenaSimulation();
-    simulation.registerTarget({
-      id: "target",
-      x: DEFAULT_COMBAT_ARENA_CONFIG.width / 2 + 90,
-      y: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
-      radius: 16,
-      maxHealth: 100,
+    const simulation = new CombatArenaSimulation({
+      ...DEFAULT_COMBAT_ARENA_CONFIG,
+      enemy: {
+        ...DEFAULT_COMBAT_ARENA_CONFIG.enemy,
+        spawnX: DEFAULT_COMBAT_ARENA_CONFIG.width / 2 + 90,
+        spawnY: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
+      },
     });
     simulation.setAim(1, 0);
     simulation.requestPrimaryAttack();
@@ -150,13 +150,13 @@ describe("CombatArenaSimulation", () => {
   });
 
   it("hits each target at most once per attack execution", () => {
-    const simulation = new CombatArenaSimulation();
-    simulation.registerTarget({
-      id: "target",
-      x: DEFAULT_COMBAT_ARENA_CONFIG.width / 2 + 90,
-      y: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
-      radius: 16,
-      maxHealth: 100,
+    const simulation = new CombatArenaSimulation({
+      ...DEFAULT_COMBAT_ARENA_CONFIG,
+      enemy: {
+        ...DEFAULT_COMBAT_ARENA_CONFIG.enemy,
+        spawnX: DEFAULT_COMBAT_ARENA_CONFIG.width / 2 + 90,
+        spawnY: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
+      },
     });
     simulation.requestPrimaryAttack();
     step(
@@ -234,6 +234,14 @@ describe("CombatArenaSimulation", () => {
       attackPhase: "idle",
       attackCount: 0,
       dodgeCount: 0,
+      enemy: {
+        x: DEFAULT_COMBAT_ARENA_CONFIG.enemy.spawnX,
+        y: DEFAULT_COMBAT_ARENA_CONFIG.enemy.spawnY,
+        health: DEFAULT_COMBAT_ARENA_CONFIG.enemy.maxHealth,
+        state: "approaching",
+        attackCount: 0,
+        damageAttemptCount: 0,
+      },
       eventCount: 0,
     });
   });

@@ -67,9 +67,9 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
     })
     .toEqual({
       attackCount: 1,
-      attackHitCount: 1,
-      targetHealth: 75,
-      impactCount: 1,
+      attackHitCount: 0,
+      targetHealth: 100,
+      impactCount: 0,
     });
 
   await page.keyboard.down("w");
@@ -118,6 +118,137 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
 
   await page.keyboard.press("w");
   expect((await diagnostics(page))?.tick).toBe(pausedState?.tick);
+  expect(failures).toEqual([]);
+});
+
+test("playable encounter approaches and dies to four directional attacks", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+  await expect.poll(() => diagnostics(page)).not.toBeNull();
+
+  await page.evaluate(() => {
+    const combat = window.__RARPG_COMBAT_TEST__;
+    combat?.setAutomationPaused(true);
+    combat?.reset();
+    combat?.advancePaused(113);
+    combat?.setAimDirection(1, 0);
+  });
+  await expect
+    .poll(async () => (await diagnostics(page))?.enemy.state)
+    .toBe("windup");
+
+  for (let attack = 1; attack <= 4; attack += 1) {
+    await page.evaluate(() => {
+      const combat = window.__RARPG_COMBAT_TEST__;
+      combat?.requestPrimaryAttack();
+      combat?.advancePaused(15);
+    });
+    await expect
+      .poll(async () => (await diagnostics(page))?.enemy.health)
+      .toBe(100 - attack * 25);
+  }
+
+  const defeated = await diagnostics(page);
+  expect(defeated).toMatchObject({
+    attackCount: 4,
+    attackHitCount: 1,
+    enemy: {
+      health: 0,
+      dead: true,
+      state: "dead",
+    },
+    deathFeedbackCount: 1,
+  });
+  expect(failures).toEqual([]);
+});
+
+test("enemy cadence honors exact-tick dodge and reset semantics", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+  await expect.poll(() => diagnostics(page)).not.toBeNull();
+
+  await page.evaluate(() => {
+    const combat = window.__RARPG_COMBAT_TEST__;
+    combat?.setAutomationPaused(true);
+    combat?.reset();
+    combat?.setAimDirection(1, 0);
+    combat?.advancePaused(130);
+  });
+  expect(await diagnostics(page)).toMatchObject({
+    tick: 130,
+    playerHealth: 100,
+    enemy: {
+      state: "windup",
+      windupTicksRemaining: 1,
+      attackCount: 1,
+      damageAttemptCount: 0,
+    },
+  });
+
+  await page.evaluate(() => {
+    const combat = window.__RARPG_COMBAT_TEST__;
+    combat?.requestDodge();
+    combat?.advancePaused(1);
+  });
+  expect(await diagnostics(page)).toMatchObject({
+    tick: 131,
+    playerHealth: 100,
+    dodging: true,
+    enemy: {
+      damageAttemptCount: 1,
+      damageAppliedCount: 0,
+    },
+    enemyStrikeFeedbackCount: 1,
+    impactCount: 0,
+  });
+
+  await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.advancePaused(60));
+  expect(await diagnostics(page)).toMatchObject({
+    tick: 191,
+    playerHealth: 80,
+    enemy: {
+      attackCount: 2,
+      damageAttemptCount: 2,
+      damageAppliedCount: 1,
+    },
+    enemyStrikeFeedbackCount: 2,
+    impactCount: 1,
+  });
+
+  await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
+  expect(await diagnostics(page)).toMatchObject({
+    tick: 0,
+    x: 600,
+    y: 400,
+    playerHealth: 100,
+    playerDead: false,
+    dodgeCount: 0,
+    dodgeTicksRemaining: 0,
+    cooldownTicksRemaining: 0,
+    attackCount: 0,
+    attackPhaseTicksRemaining: 0,
+    enemy: {
+      x: 860,
+      y: 400,
+      health: 100,
+      dead: false,
+      state: "approaching",
+      windupTicksRemaining: 0,
+      cadenceTicksRemaining: 0,
+      attackCount: 0,
+      damageAttemptCount: 0,
+      damageAppliedCount: 0,
+    },
+    impactCount: 0,
+    deathFeedbackCount: 0,
+    enemyStrikeFeedbackCount: 0,
+  });
   expect(failures).toEqual([]);
 });
 

@@ -2,6 +2,7 @@ import Phaser from "phaser";
 
 import {
   CombatArenaSimulation,
+  FIXED_STEP_SECONDS,
   FixedStepRunner,
   type CombatArenaDiagnostics,
   type CombatArenaEvent,
@@ -15,7 +16,6 @@ const ORIGIN_Y = 72;
 const ISO_X_SCALE = 0.65;
 const ISO_Y_SCALE = 0.34;
 const PRESENTATION_DEPTH = 3_500_000;
-const INITIAL_TARGET_ID = "enemy:integration-target";
 
 export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly pausedForUi: boolean;
@@ -23,8 +23,11 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly playerCanvasY: number;
   readonly facingCanvasX: number;
   readonly facingCanvasY: number;
+  readonly enemyCanvasX: number;
+  readonly enemyCanvasY: number;
   readonly impactCount: number;
   readonly deathFeedbackCount: number;
+  readonly enemyStrikeFeedbackCount: number;
 }
 
 export class CombatArenaPresentation {
@@ -36,14 +39,18 @@ export class CombatArenaPresentation {
   readonly #playerGraphics: Phaser.GameObjects.Graphics;
   readonly #renderedPlayerPoint = new Phaser.Math.Vector2();
   readonly #renderedFacingPoint = new Phaser.Math.Vector2();
+  readonly #renderedEnemyPoint = new Phaser.Math.Vector2();
   #pausedForUi = true;
+  #automationPaused = false;
   #lastHudKey = "";
   #lastPointerX = ORIGIN_X + 150;
   #lastPointerY = ORIGIN_Y + 180;
   #impactCount = 0;
   #deathFeedbackCount = 0;
+  #enemyStrikeFeedbackCount = 0;
   #targetFlashUntil = 0;
   #playerFlashUntil = 0;
+  #enemyStrikeUntil = 0;
 
   public constructor(
     readonly scene: Phaser.Scene,
@@ -61,13 +68,6 @@ export class CombatArenaPresentation {
     this.#playerGraphics = scene.add
       .graphics()
       .setDepth(PRESENTATION_DEPTH + 2);
-    this.#simulation.registerTarget({
-      id: INITIAL_TARGET_ID,
-      x: this.#simulation.config.width / 2 + 92,
-      y: this.#simulation.config.height / 2,
-      radius: 20,
-      maxHealth: 100,
-    });
     this.drawArena();
     this.render(0);
   }
@@ -75,9 +75,9 @@ export class CombatArenaPresentation {
   public update(): void {
     const input = this.#input.sample();
     const focused = this.#input.gameplayFocused;
-    if (focused && !this.#runner.isRunning) {
+    if (focused && !this.#automationPaused && !this.#runner.isRunning) {
       this.#runner.resume();
-    } else if (!focused && this.#runner.isRunning) {
+    } else if ((!focused || this.#automationPaused) && this.#runner.isRunning) {
       this.#runner.pause();
     }
     this.#pausedForUi = !focused;
@@ -116,11 +116,15 @@ export class CombatArenaPresentation {
   }
 
   public reset(): void {
+    this.#runner.reset();
     this.#simulation.reset();
     this.#impactCount = 0;
     this.#deathFeedbackCount = 0;
+    this.#enemyStrikeFeedbackCount = 0;
     this.#targetFlashUntil = 0;
     this.#playerFlashUntil = 0;
+    this.#enemyStrikeUntil = 0;
+    this.render(0);
   }
 
   public diagnostics(): CombatPresentationDiagnostics {
@@ -131,15 +135,18 @@ export class CombatArenaPresentation {
       playerCanvasY: this.#renderedPlayerPoint.y,
       facingCanvasX: this.#renderedFacingPoint.x,
       facingCanvasY: this.#renderedFacingPoint.y,
+      enemyCanvasX: this.#renderedEnemyPoint.x,
+      enemyCanvasY: this.#renderedEnemyPoint.y,
       impactCount: this.#impactCount,
       deathFeedbackCount: this.#deathFeedbackCount,
+      enemyStrikeFeedbackCount: this.#enemyStrikeFeedbackCount,
     };
   }
 
   public applyPlayerDamage(amount: number): DamageResult {
     const result = this.#simulation.applyPlayerDamage({
       amount,
-      sourceId: INITIAL_TARGET_ID,
+      sourceId: this.#simulation.config.enemy.id,
     });
     this.consumeEvents(this.#simulation.drainEvents());
     this.render(0);
@@ -156,6 +163,38 @@ export class CombatArenaPresentation {
     );
     this.#lastPointerX = canvasTarget.x;
     this.#lastPointerY = canvasTarget.y;
+  }
+
+  public setAutomationPaused(paused: boolean): void {
+    this.#automationPaused = paused;
+    if (paused) {
+      this.#runner.pause();
+    }
+  }
+
+  public requestDodge(): void {
+    this.#simulation.requestDodge();
+  }
+
+  public requestPrimaryAttack(): void {
+    this.#simulation.requestPrimaryAttack();
+  }
+
+  public advancePaused(steps: number): void {
+    if (!this.#automationPaused) {
+      throw new Error("Combat automation must be paused before advancing.");
+    }
+    if (!Number.isSafeInteger(steps) || steps < 0) {
+      throw new RangeError("Combat steps must be a non-negative safe integer.");
+    }
+    for (let index = 0; index < steps; index += 1) {
+      this.#simulation.step({
+        tick: this.#simulation.diagnostics().tick,
+        deltaSeconds: FIXED_STEP_SECONDS,
+      });
+    }
+    this.consumeEvents(this.#simulation.drainEvents());
+    this.render(0);
   }
 
   public dispose(): void {
@@ -210,7 +249,7 @@ export class CombatArenaPresentation {
 
     this.#combatGraphics.clear();
     this.drawAttack(state, point);
-    this.drawTargets(state);
+    this.drawEnemy(state, alpha);
 
     this.#playerGraphics.clear();
     const playerColor = state.playerDead
@@ -274,42 +313,69 @@ export class CombatArenaPresentation {
     this.#combatGraphics.strokePoints(points.slice(1), false);
   }
 
-  private drawTargets(state: CombatArenaDiagnostics): void {
-    for (const target of state.targets) {
-      const point = this.project(target.x, target.y);
-      const flashing =
-        target.id === INITIAL_TARGET_ID &&
-        performance.now() < this.#targetFlashUntil;
-      const color = target.dead ? 0x4b5563 : flashing ? 0xffffff : 0xef476f;
-      this.#combatGraphics.fillStyle(color, target.dead ? 0.45 : 1);
-      this.#combatGraphics.fillCircle(point.x, point.y - 8, target.radius);
-      this.#combatGraphics.lineStyle(4, 0x08111f, 1);
-      if (target.dead) {
-        this.#combatGraphics.lineBetween(
-          point.x - 12,
-          point.y - 20,
-          point.x + 12,
-          point.y + 4,
+  private drawEnemy(state: CombatArenaDiagnostics, alpha: number): void {
+    const enemy = state.enemy;
+    const x = Phaser.Math.Linear(enemy.previousX, enemy.x, alpha);
+    const y = Phaser.Math.Linear(enemy.previousY, enemy.y, alpha);
+    const point = this.project(x, y);
+    const flashing = performance.now() < this.#targetFlashUntil;
+    const color = enemy.dead ? 0x4b5563 : flashing ? 0xffffff : 0xef476f;
+    this.#combatGraphics.fillStyle(color, enemy.dead ? 0.45 : 1);
+    this.#combatGraphics.fillCircle(point.x, point.y - 8, enemy.radius);
+    this.#combatGraphics.lineStyle(4, 0x08111f, 1);
+    if (enemy.dead) {
+      this.#combatGraphics.lineBetween(
+        point.x - 12,
+        point.y - 20,
+        point.x + 12,
+        point.y + 4,
+      );
+      this.#combatGraphics.lineBetween(
+        point.x + 12,
+        point.y - 20,
+        point.x - 12,
+        point.y + 4,
+      );
+    } else {
+      const facingScreenX = (enemy.facingX - enemy.facingY) * ISO_X_SCALE;
+      const facingScreenY = (enemy.facingX + enemy.facingY) * ISO_Y_SCALE;
+      const facingLength = Math.hypot(facingScreenX, facingScreenY) || 1;
+      this.#combatGraphics.lineBetween(
+        point.x,
+        point.y - 8,
+        point.x + (facingScreenX / facingLength) * 25,
+        point.y - 8 + (facingScreenY / facingLength) * 25,
+      );
+      if (enemy.state === "windup") {
+        const progress =
+          1 -
+          enemy.windupTicksRemaining /
+            this.#simulation.config.enemy.attackWindupTicks;
+        this.#combatGraphics.lineStyle(3 + progress * 5, 0xffd166, 0.95);
+        this.#combatGraphics.strokeCircle(
+          point.x,
+          point.y - 8,
+          enemy.radius + 8 + progress * 8,
         );
-        this.#combatGraphics.lineBetween(
-          point.x + 12,
-          point.y - 20,
-          point.x - 12,
-          point.y + 4,
-        );
-      } else {
-        const healthWidth = 44 * (target.health / target.maxHealth);
-        this.#combatGraphics.fillStyle(0x32131b, 1);
-        this.#combatGraphics.fillRect(point.x - 22, point.y - 38, 44, 5);
-        this.#combatGraphics.fillStyle(0xff6b6b, 1);
-        this.#combatGraphics.fillRect(
-          point.x - 22,
-          point.y - 38,
-          healthWidth,
-          5,
+      } else if (performance.now() < this.#enemyStrikeUntil) {
+        this.#combatGraphics.lineStyle(7, 0xff9f1c, 0.9);
+        this.#combatGraphics.strokeCircle(
+          point.x,
+          point.y - 8,
+          enemy.radius + 15,
         );
       }
+      const healthWidth = 44 * (enemy.health / enemy.maxHealth);
+      this.#combatGraphics.fillStyle(0x32131b, 1);
+      this.#combatGraphics.fillRect(point.x - 22, point.y - 38, 44, 5);
+      this.#combatGraphics.fillStyle(0xff6b6b, 1);
+      this.#combatGraphics.fillRect(point.x - 22, point.y - 38, healthWidth, 5);
     }
+    this.scene.cameras.main.matrixCombined.transformPoint(
+      point.x,
+      point.y - 8,
+      this.#renderedEnemyPoint,
+    );
   }
 
   private consumeEvents(events: readonly CombatArenaEvent[]): void {
@@ -318,9 +384,17 @@ export class CombatArenaPresentation {
         this.#impactCount += 1;
         if (event.targetId === "player") {
           this.#playerFlashUntil = performance.now() + 110;
+          this.#enemyStrikeFeedbackCount += 1;
+          this.#enemyStrikeUntil = performance.now() + 140;
         } else {
           this.#targetFlashUntil = performance.now() + 110;
         }
+      } else if (
+        event.type === "damage-ignored" &&
+        event.targetId === "player"
+      ) {
+        this.#enemyStrikeFeedbackCount += 1;
+        this.#enemyStrikeUntil = performance.now() + 140;
       } else if (event.type === "entity-died") {
         this.#deathFeedbackCount += 1;
       }

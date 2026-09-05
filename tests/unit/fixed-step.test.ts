@@ -92,6 +92,27 @@ describe("FixedStepRunner", () => {
     });
   });
 
+  it("resets tick and partial timing without stopping a running runner", () => {
+    const clock = new ManualClock();
+    const ticks: number[] = [];
+    const runner = new FixedStepRunner(clock, ({ tick }) => ticks.push(tick));
+    runner.resume();
+    clock.advance(FIXED_STEP_MILLISECONDS * 2.5);
+    expect(runner.advance().tick).toBe(2);
+
+    runner.reset();
+    expect(runner.isRunning).toBe(true);
+    expect(runner.tick).toBe(0);
+    clock.advance(FIXED_STEP_MILLISECONDS);
+    const afterReset = runner.advance();
+    expect(afterReset).toMatchObject({
+      stepsRun: 1,
+      tick: 1,
+    });
+    expect(afterReset.interpolationAlpha).toBeCloseTo(0, 10);
+    expect(ticks).toEqual([0, 1, 0]);
+  });
+
   it("rejects invalid or backwards clock values", () => {
     const clock = new ManualClock();
     const runner = new FixedStepRunner(clock, () => undefined);

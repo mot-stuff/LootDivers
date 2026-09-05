@@ -72,6 +72,10 @@ declare global {
       diagnostics: () => CombatPresentationDiagnostics | null;
       reset: () => void;
       setAimDirection: (x: number, y: number) => void;
+      setAutomationPaused: (paused: boolean) => void;
+      requestDodge: () => void;
+      requestPrimaryAttack: () => void;
+      advancePaused: (steps: number) => void;
       applyPlayerDamage: (amount: number) => DamageResult;
     };
   }
@@ -264,6 +268,18 @@ if (!support.supported) {
           },
           setAimDirection: (x, y) => {
             renderer.combat.setAimDirection(x, y);
+          },
+          setAutomationPaused: (paused) => {
+            renderer.combat.setAutomationPaused(paused);
+          },
+          requestDodge: () => {
+            renderer.combat.requestDodge();
+          },
+          requestPrimaryAttack: () => {
+            renderer.combat.requestPrimaryAttack();
+          },
+          advancePaused: (steps) => {
+            renderer.combat.advancePaused(steps);
           },
           applyPlayerDamage: (amount) =>
             renderer.combat.applyPlayerDamage(amount),

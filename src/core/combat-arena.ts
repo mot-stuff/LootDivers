@@ -2,6 +2,11 @@ import { FIXED_TICKS_PER_SECOND, type FixedStep } from "./fixed-step";
 import { HealthPool, type DamageRequest, type DamageResult } from "./health";
 import { PresentationKind, TechnicalEntityLifecycle } from "./entity-lifecycle";
 import type { RuntimeEntityId } from "./ids";
+import {
+  SimpleMeleeEnemy,
+  type SimpleMeleeEnemyConfig,
+  type SimpleMeleeEnemyDiagnostics,
+} from "./simple-melee-enemy";
 
 export type AttackPhase = "idle" | "startup" | "active" | "recovery";
 
@@ -24,17 +29,15 @@ export interface CombatArenaConfig {
   readonly dodgeDurationSeconds: number;
   readonly dodgeCooldownSeconds: number;
   readonly primaryAttack: PrimaryAttackConfig;
+  readonly enemy: SimpleMeleeEnemyConfig;
 }
 
-export interface CombatTargetRegistration {
+export interface CombatTargetReadModel {
   readonly id: string;
   readonly x: number;
   readonly y: number;
   readonly radius: number;
   readonly maxHealth: number;
-}
-
-export interface CombatTargetReadModel extends CombatTargetRegistration {
   readonly health: number;
   readonly dead: boolean;
 }
@@ -97,6 +100,7 @@ export interface CombatArenaDiagnostics {
   readonly attackAimX: number;
   readonly attackAimY: number;
   readonly attackHitCount: number;
+  readonly enemy: SimpleMeleeEnemyDiagnostics;
   readonly targets: readonly CombatTargetReadModel[];
   readonly eventCount: number;
 }
@@ -118,15 +122,22 @@ export const DEFAULT_COMBAT_ARENA_CONFIG: CombatArenaConfig = {
     range: 110,
     halfAngleDegrees: 55,
   },
+  enemy: {
+    id: "enemy:melee-prototype",
+    spawnX: 860,
+    spawnY: 400,
+    radius: 20,
+    maxHealth: 100,
+    moveSpeed: 105,
+    meleeRange: 64,
+    attackDamage: 20,
+    attackWindupTicks: 18,
+    attackIntervalTicks: 60,
+  },
 };
 
 function secondsToTicks(seconds: number): number {
   return Math.max(1, Math.round(seconds * FIXED_TICKS_PER_SECOND));
-}
-
-interface MutableCombatTarget {
-  registration: CombatTargetRegistration;
-  readonly health: HealthPool;
 }
 
 export class CombatArenaSimulation implements CombatArenaEventReader {
@@ -135,7 +146,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   readonly #lifecycle = new TechnicalEntityLifecycle(1);
   readonly #playerId: RuntimeEntityId;
   readonly #playerHealth: HealthPool;
-  readonly #targets = new Map<string, MutableCombatTarget>();
+  readonly #enemy: SimpleMeleeEnemy;
   readonly #events: CombatArenaEvent[] = [];
   readonly #attackHitTargets = new Set<string>();
   #tick = 0;
@@ -165,6 +176,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#dodgeDurationTicks = secondsToTicks(config.dodgeDurationSeconds);
     this.#dodgeCooldownTicks = secondsToTicks(config.dodgeCooldownSeconds);
     this.#playerHealth = new HealthPool(config.playerMaxHealth);
+    this.#enemy = new SimpleMeleeEnemy(config.enemy);
     this.#playerId = this.#lifecycle.create(
       { x: config.width / 2, y: config.height / 2, elevation: 0 },
       PresentationKind.Actor,
@@ -203,34 +215,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
   public requestPrimaryAttack(): void {
     this.#attackRequested = true;
-  }
-
-  public registerTarget(registration: CombatTargetRegistration): void {
-    this.validateTarget(registration);
-    if (this.#targets.has(registration.id)) {
-      throw new Error(
-        `Combat target "${registration.id}" is already registered.`,
-      );
-    }
-    this.#targets.set(registration.id, {
-      registration: { ...registration },
-      health: new HealthPool(registration.maxHealth),
-    });
-  }
-
-  public removeTarget(id: string): boolean {
-    return this.#targets.delete(id);
-  }
-
-  public setTargetPosition(id: string, x: number, y: number): void {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      throw new RangeError("Combat target position must be finite.");
-    }
-    const target = this.#targets.get(id);
-    if (target === undefined) {
-      throw new Error(`Combat target "${id}" is not registered.`);
-    }
-    target.registration = { ...target.registration, x, y };
   }
 
   public applyPlayerDamage(request: DamageRequest): DamageResult {
@@ -309,6 +293,16 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.clampToArena();
 
     this.advanceAttack();
+    const player = this.playerPosition();
+    this.#enemy.step(
+      step,
+      {
+        x: player.x,
+        y: player.y,
+        dead: this.#playerHealth.health.dead,
+      },
+      (request) => this.applyPlayerDamage(request),
+    );
     if (this.#dodgeTicksRemaining > 0) {
       this.#dodgeTicksRemaining -= 1;
     }
@@ -337,9 +331,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#cooldownTicksRemaining = 0;
     this.#dodgeCount = 0;
     this.#playerHealth.reset();
-    for (const target of this.#targets.values()) {
-      target.health.reset();
-    }
+    this.#enemy.reset();
     this.#attackRequested = false;
     this.#attackPhase = "idle";
     this.#attackPhaseTicksRemaining = 0;
@@ -358,6 +350,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
   public diagnostics(): CombatArenaDiagnostics {
     const transformIndex = this.playerTransformIndex();
+    const enemy = this.#enemy.diagnostics();
     return {
       tick: this.#tick,
       x: this.#lifecycle.transforms.x[transformIndex] ?? 0,
@@ -386,11 +379,18 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       attackAimX: this.#attackAimX,
       attackAimY: this.#attackAimY,
       attackHitCount: this.#attackHitCount,
-      targets: [...this.#targets.values()].map((target) => ({
-        ...target.registration,
-        health: target.health.health.current,
-        dead: target.health.health.dead,
-      })),
+      enemy,
+      targets: [
+        {
+          id: enemy.id,
+          x: enemy.x,
+          y: enemy.y,
+          radius: enemy.radius,
+          maxHealth: enemy.maxHealth,
+          health: enemy.health,
+          dead: enemy.dead,
+        },
+      ],
       eventCount: this.#events.length,
     };
   }
@@ -457,47 +457,46 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     const attack = this.config.primaryAttack;
     const minimumDot = Math.cos((attack.halfAngleDegrees * Math.PI) / 180);
 
-    for (const [targetId, target] of this.#targets) {
-      if (target.health.health.dead || this.#attackHitTargets.has(targetId)) {
-        continue;
-      }
-      const deltaX = target.registration.x - playerX;
-      const deltaY = target.registration.y - playerY;
-      const distance = Math.hypot(deltaX, deltaY);
-      if (distance > attack.range + target.registration.radius) {
-        continue;
-      }
-      const dot =
-        distance === 0
-          ? 1
-          : (deltaX * this.#attackAimX + deltaY * this.#attackAimY) / distance;
-      if (dot < minimumDot) {
-        continue;
-      }
+    const target = this.#enemy.diagnostics();
+    if (target.dead || this.#attackHitTargets.has(target.id)) {
+      return;
+    }
+    const deltaX = target.x - playerX;
+    const deltaY = target.y - playerY;
+    const distance = Math.hypot(deltaX, deltaY);
+    if (distance > attack.range + target.radius) {
+      return;
+    }
+    const dot =
+      distance === 0
+        ? 1
+        : (deltaX * this.#attackAimX + deltaY * this.#attackAimY) / distance;
+    if (dot < minimumDot) {
+      return;
+    }
 
-      this.#attackHitTargets.add(targetId);
-      const result = target.health.applyDamage({
-        amount: attack.damage,
+    this.#attackHitTargets.add(target.id);
+    const result = this.#enemy.applyDamage({
+      amount: attack.damage,
+      sourceId: "player",
+    });
+    if (result.applied > 0) {
+      this.#attackHitCount += 1;
+      this.#events.push({
+        type: "damage-applied",
+        tick: this.#tick,
         sourceId: "player",
+        targetId: target.id,
+        amount: result.applied,
+        currentHealth: result.currentHealth,
       });
-      if (result.applied > 0) {
-        this.#attackHitCount += 1;
-        this.#events.push({
-          type: "damage-applied",
-          tick: this.#tick,
-          sourceId: "player",
-          targetId,
-          amount: result.applied,
-          currentHealth: result.currentHealth,
-        });
-      }
-      if (result.died) {
-        this.#events.push({
-          type: "entity-died",
-          tick: this.#tick,
-          entityId: targetId,
-        });
-      }
+    }
+    if (result.died) {
+      this.#events.push({
+        type: "entity-died",
+        tick: this.#tick,
+        entityId: target.id,
+      });
     }
   }
 
@@ -546,6 +545,14 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     return index;
   }
 
+  private playerPosition(): { readonly x: number; readonly y: number } {
+    const index = this.playerTransformIndex();
+    return {
+      x: this.#lifecycle.transforms.x[index] ?? 0,
+      y: this.#lifecycle.transforms.y[index] ?? 0,
+    };
+  }
+
   private validateConfig(config: CombatArenaConfig): void {
     const positiveValues = [
       config.width,
@@ -590,20 +597,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       attack.halfAngleDegrees > 180
     ) {
       throw new RangeError("Primary attack configuration is invalid.");
-    }
-  }
-
-  private validateTarget(target: CombatTargetRegistration): void {
-    if (target.id.length === 0) {
-      throw new RangeError("Combat target ID must not be empty.");
-    }
-    const values = [target.x, target.y, target.radius, target.maxHealth];
-    if (
-      values.some((value) => !Number.isFinite(value)) ||
-      target.radius <= 0 ||
-      target.maxHealth <= 0
-    ) {
-      throw new RangeError("Combat target values must be finite and positive.");
     }
   }
 }
