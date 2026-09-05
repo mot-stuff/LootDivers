@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   NavigationGrid,
+  FIXTURE_STAGE_SAMPLE_CAPACITY,
   PresentationKind,
   SYNTHETIC_ENTITY_COUNT,
   SYNTHETIC_FIXTURE_SEED,
@@ -149,10 +150,13 @@ describe("fixed presentation pool", () => {
 describe("P0-002 lifecycle fixture", () => {
   it("creates exact populations and executes the declared load", () => {
     const fixture = new SyntheticLifecycleFixture(fixtureGrid());
+    fixture.beginTimingSample();
     for (let step = 0; step < 6; step += 1) {
       fixture.step();
     }
+    fixture.endTimingSample();
     const diagnostics = fixture.diagnostics();
+    const rawTimings = fixture.rawTimingSamples();
 
     expect(diagnostics.seed).toBe(SYNTHETIC_FIXTURE_SEED);
     expect(diagnostics.updateOrder).toEqual(TECHNICAL_UPDATE_ORDER);
@@ -174,6 +178,17 @@ describe("P0-002 lifecycle fixture", () => {
     );
     expect(diagnostics.paths.invalid).toBe(0);
     expect(diagnostics.projectAllocations.structuralAfterWarmup).toBe(0);
+    expect(diagnostics.timingSamples).toMatchObject({
+      sampling: false,
+      capacity: FIXTURE_STAGE_SAMPLE_CAPACITY,
+      overflowCount: 0,
+      simulation: { sampleCount: 6 },
+      spatial: { sampleCount: 6 },
+      pathfinding: { sampleCount: 6 },
+    });
+    expect(rawTimings.simulationMilliseconds).toHaveLength(6);
+    expect(rawTimings.spatialMilliseconds).toHaveLength(6);
+    expect(rawTimings.pathfindingMilliseconds).toHaveLength(6);
 
     fixture.dispose();
     expect(fixture.lifecycle.diagnostics()).toMatchObject({

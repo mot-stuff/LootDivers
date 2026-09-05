@@ -41,6 +41,15 @@ contains:
 - 200 radius and 500 swept-segment queries per simulation step;
 - one 2,048-expansion-capped A* request every three 60 Hz steps.
 
+The technical presentation plane repeats around the moving camera while the
+authoritative records retain their documented movement. This projects each
+record into the camera's nearest repeated cell, so the required 200 actor, 500
+projectile, 1,000 particle, and 100 loot presentations are all visibly rendered
+throughout the moving-camera sample. Diagnostics expose visible and culled
+counts per kind. A test-only culling probe moves one actor presentation outside
+the camera bounds, proves it is culled without changing authoritative
+populations, and restores the exact visible contract before timing.
+
 The committed synthetic atlas is `public/assets/technical-entities.svg`.
 Presentation pools have fixed capacities, explicit acquire/release ownership,
 high-water and exhaustion diagnostics, interpolation, and culling. Per-entity
@@ -49,10 +58,21 @@ slot. Phaser objects contain no authoritative state.
 
 The browser adapter uses the established `FixedStepRunner`. Reports separate
 warm-up and sample steps/callbacks, catch-up and discarded time, visibility and
-focus invalidation, simulation/presentation/render work, exact query/path rates,
-and every P0-002 threshold. The overall state remains `INELIGIBLE` on the
-current machine, while each hypothetical threshold is still reported as
-`PASS` or `FAIL`.
+focus invalidation, exact query/path rates, and every P0-002 threshold. The six
+named timing stages are `simulation`, `spatial`, `pathfinding`, `presentation`,
+`renderSubmission`, and `combined`. Raw values and p95/maximum summaries are
+retained in preallocated buffers: 10,000 fixed-step samples and 20,000 browser
+callback samples. Overflow invalidates the corresponding gate. The overall
+state remains `INELIGIBLE` on the current machine, while each hypothetical
+threshold is still reported as `PASS` or `FAIL`.
+
+Simulation-step validity is derived from measured warm-up/sample duration.
+The bounded tolerance is six 60 Hz steps (100 ms), matching the separate
+maximum-frame-interval validity ceiling. Callback minimums, callback-to-stage
+sample accounting, zero dropped time, duration, focus/visibility stability, and
+the 100 ms ceiling remain independent failure checks, so the tolerance only
+prevents a delayed wall-clock timer callback from falsely imposing exactly
+7,200 steps.
 
 The project-authored fixture reuses query specifications, bounds, transform
 storage, fixed-step records, projection output, and fixed-capacity frame sample
@@ -87,6 +107,13 @@ Reports are always `INELIGIBLE` on the currently recorded machine and must not
 be described as strict performance acceptance. The current command collects one
 diagnostic repetition; a strict acceptance session still requires five fresh
 browser processes, the controlled conditions in P0-002, and eligible hardware.
+
+Evidence is generated only after committing implementation and building that
+clean commit. The JSON names that implementation hash as
+`provenance.testedImplementationCommit`; the generated JSON and fixture budget
+may then be committed in one follow-up evidence-only commit. The evidence
+commit does not alter eligibility, and branded-browser availability is reported
+separately from code/test failures.
 
 ## Scope exclusions
 

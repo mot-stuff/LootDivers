@@ -11,8 +11,10 @@ import {
   SYNTHETIC_PARTICLE_COUNT,
   SYNTHETIC_PROJECTILE_COUNT,
   SyntheticLifecycleFixture,
+  type RawFixtureStageSamples,
   type RuntimeEntityId,
   type SyntheticFixtureDiagnostics,
+  type TimingSampleSummary,
 } from "../../core";
 import {
   NAVIGATION_GRID_VERSION,
@@ -32,6 +34,7 @@ const ISO_ORIGIN_X = 4096;
 const MAX_CATCH_UP_STEPS = 5;
 const PRESENTATION_MARGIN = 96;
 const FRAME_SAMPLE_CAPACITY = 20_000;
+const SIMULATION_STEP_TOLERANCE = 6;
 const ACTOR_FRAME_NAMES = Array.from({ length: 32 }, (_, index) => {
   const direction = Math.floor(index / 8);
   return `actor-${direction}-${index % 8}`;
@@ -45,6 +48,7 @@ export interface SyntheticPresentationDiagnostics {
   readonly presentationObjects: number;
   readonly visible: number;
   readonly culled: number;
+  readonly visibility: PresentationVisibilityDiagnostics;
   readonly terrainChunks: number;
   readonly foregroundCells: number;
   readonly listenerCount: number;
@@ -56,11 +60,7 @@ export interface SyntheticPresentationDiagnostics {
     readonly loot: FixedPresentationPoolDiagnostics;
   };
   readonly runner: FixtureRunnerDiagnostics;
-  readonly renderTimingsMilliseconds: {
-    readonly presentation: number;
-    readonly renderSubmission: number;
-    readonly combined: number;
-  };
+  readonly stageTimings: StageTimingSummary;
   readonly simulation: SyntheticFixtureDiagnostics | null;
   readonly frame: FrameSampleSummary;
   readonly jsHeapBytes: number | null;
@@ -72,11 +72,13 @@ export interface FrameSampleSummary {
   readonly sampleCount: number;
   readonly durationMilliseconds: number;
   readonly p95FrameIntervalMilliseconds: number | null;
-  readonly p95MainThreadWorkMilliseconds: number | null;
   readonly intervalsOver33_4Milliseconds: number;
   readonly maximumFrameIntervalMilliseconds: number | null;
   readonly callbackCount: number;
   readonly simulationSteps: number;
+  readonly expectedSimulationSteps: number;
+  readonly simulationStepDelta: number;
+  readonly simulationStepTolerance: number;
   readonly droppedMilliseconds: number;
   readonly catchUpCallbacks: number;
   readonly maximumStepsPerCallback: number;
@@ -85,6 +87,22 @@ export interface FrameSampleSummary {
   readonly invalidReasons: readonly string[];
   readonly sampleCapacity: number;
   readonly sampleOverflowCount: number;
+}
+
+export interface PresentationVisibilityDiagnostics {
+  readonly actors: { readonly visible: number; readonly culled: number };
+  readonly projectiles: { readonly visible: number; readonly culled: number };
+  readonly particles: { readonly visible: number; readonly culled: number };
+  readonly loot: { readonly visible: number; readonly culled: number };
+}
+
+export interface StageTimingSummary {
+  readonly simulation: TimingSampleSummary;
+  readonly spatial: TimingSampleSummary;
+  readonly pathfinding: TimingSampleSummary;
+  readonly presentation: TimingSampleSummary;
+  readonly renderSubmission: TimingSampleSummary;
+  readonly combined: TimingSampleSummary;
 }
 
 export interface FixtureRunnerDiagnostics {
@@ -99,7 +117,12 @@ export interface FixtureRunnerDiagnostics {
 
 export interface RawFrameSamples {
   readonly frameIntervalsMilliseconds: readonly number[];
-  readonly mainThreadWorkMilliseconds: readonly number[];
+  readonly simulationMilliseconds: readonly number[];
+  readonly spatialMilliseconds: readonly number[];
+  readonly pathfindingMilliseconds: readonly number[];
+  readonly presentationMilliseconds: readonly number[];
+  readonly renderSubmissionMilliseconds: readonly number[];
+  readonly combinedMilliseconds: readonly number[];
 }
 
 interface MutableFrameSamples {
@@ -108,9 +131,11 @@ interface MutableFrameSamples {
   endedAt: number;
   previousFrameAt: number;
   intervals: Float64Array;
-  mainThreadWork: Float64Array;
+  presentation: Float64Array;
+  renderSubmission: Float64Array;
+  combined: Float64Array;
   intervalCount: number;
-  workCount: number;
+  stageCount: number;
   overflowCount: number;
 }
 
@@ -127,9 +152,11 @@ export class SyntheticLifecyclePresentation {
     endedAt: 0,
     previousFrameAt: 0,
     intervals: new Float64Array(FRAME_SAMPLE_CAPACITY),
-    mainThreadWork: new Float64Array(FRAME_SAMPLE_CAPACITY),
+    presentation: new Float64Array(FRAME_SAMPLE_CAPACITY),
+    renderSubmission: new Float64Array(FRAME_SAMPLE_CAPACITY),
+    combined: new Float64Array(FRAME_SAMPLE_CAPACITY),
     intervalCount: 0,
-    workCount: 0,
+    stageCount: 0,
     overflowCount: 0,
   };
   #fixture: SyntheticLifecycleFixture | null = null;
@@ -167,6 +194,14 @@ export class SyntheticLifecyclePresentation {
   #lastPresentationWork = 0;
   #lastRenderSubmissionWork = 0;
   #lastCombinedWork = 0;
+  #renderSubmissionStartedAt = 0;
+  #cullingProbeEnabled = false;
+  readonly #visibility = {
+    actors: { visible: 0, culled: 0 },
+    projectiles: { visible: 0, culled: 0 },
+    particles: { visible: 0, culled: 0 },
+    loot: { visible: 0, culled: 0 },
+  };
   #visibilityHandler: (() => void) | null = null;
   #focusHandler: (() => void) | null = null;
   #blurHandler: (() => void) | null = null;
@@ -269,8 +304,11 @@ export class SyntheticLifecyclePresentation {
         advance.stepsRun,
       );
     }
+    const presentationStartedAt = performance.now();
     this.#syncPresentation(advance.interpolationAlpha);
-    this.#lastPresentationWork = performance.now() - workStart;
+    this.#renderSubmissionStartedAt = performance.now();
+    this.#lastPresentationWork =
+      this.#renderSubmissionStartedAt - presentationStartedAt;
   }
 
   public beginSample(): void {
@@ -278,6 +316,7 @@ export class SyntheticLifecyclePresentation {
       throw new Error("Fixture must be ready before sampling.");
     }
     this.#fixture?.markWarmupComplete();
+    this.#fixture?.beginTimingSample();
     this.#warmupSteps = this.#fixture?.diagnostics().simulationSteps ?? 0;
     this.#warmupDurationMilliseconds =
       performance.now() - this.#fixtureStartedAt;
@@ -289,7 +328,7 @@ export class SyntheticLifecyclePresentation {
     this.#sampleInvalidReasons.clear();
     this.#endedSummary = null;
     this.#samples.intervalCount = 0;
-    this.#samples.workCount = 0;
+    this.#samples.stageCount = 0;
     this.#samples.overflowCount = 0;
     this.#samples.startedAt = performance.now();
     this.#samples.endedAt = 0;
@@ -312,6 +351,7 @@ export class SyntheticLifecyclePresentation {
   public endSample(): FrameSampleSummary {
     this.#samples.sampling = false;
     this.#samples.endedAt = performance.now();
+    this.#fixture?.endTimingSample();
     this.#fixture?.assertNoStructuralAllocationsAfterWarmup();
     this.#endedSummary = this.#createFrameSummary();
     return this.#endedSummary;
@@ -342,14 +382,32 @@ export class SyntheticLifecyclePresentation {
   }
 
   public rawSamples(): RawFrameSamples {
+    const fixtureSamples: RawFixtureStageSamples =
+      this.#fixture?.rawTimingSamples() ?? {
+        simulationMilliseconds: [],
+        spatialMilliseconds: [],
+        pathfindingMilliseconds: [],
+      };
     return {
       frameIntervalsMilliseconds: Array.from(
         this.#samples.intervals.subarray(0, this.#samples.intervalCount),
       ),
-      mainThreadWorkMilliseconds: Array.from(
-        this.#samples.mainThreadWork.subarray(0, this.#samples.workCount),
+      ...fixtureSamples,
+      presentationMilliseconds: Array.from(
+        this.#samples.presentation.subarray(0, this.#samples.stageCount),
+      ),
+      renderSubmissionMilliseconds: Array.from(
+        this.#samples.renderSubmission.subarray(0, this.#samples.stageCount),
+      ),
+      combinedMilliseconds: Array.from(
+        this.#samples.combined.subarray(0, this.#samples.stageCount),
       ),
     };
+  }
+
+  public setCullingProbe(enabled: boolean): void {
+    this.#cullingProbeEnabled = enabled;
+    this.#syncPresentation(0);
   }
 
   public diagnostics(): SyntheticPresentationDiagnostics {
@@ -369,6 +427,12 @@ export class SyntheticLifecyclePresentation {
       presentationObjects: this.#objects.length,
       visible: this.#visible,
       culled: this.#culled,
+      visibility: {
+        actors: { ...this.#visibility.actors },
+        projectiles: { ...this.#visibility.projectiles },
+        particles: { ...this.#visibility.particles },
+        loot: { ...this.#visibility.loot },
+      },
       terrainChunks: this.#terrain.length,
       foregroundCells: this.#foregroundCells,
       listenerCount: this.#listenerCount,
@@ -388,11 +452,7 @@ export class SyntheticLifecyclePresentation {
           emptyPoolDiagnostics(SYNTHETIC_LOOT_COUNT),
       },
       runner: this.#runnerDiagnostics(),
-      renderTimingsMilliseconds: {
-        presentation: this.#lastPresentationWork,
-        renderSubmission: this.#lastRenderSubmissionWork,
-        combined: this.#lastCombinedWork,
-      },
+      stageTimings: this.#stageTimingSummary(),
       simulation: this.#fixture?.diagnostics() ?? null,
       frame: this.#frameSummary(),
       jsHeapBytes: memory.memory?.usedJSHeapSize ?? null,
@@ -454,6 +514,7 @@ export class SyntheticLifecyclePresentation {
     }
     this.#visible = 0;
     this.#culled = 0;
+    this.#resetVisibility();
   }
 
   #registerAtlasFrames(): void {
@@ -634,27 +695,32 @@ export class SyntheticLifecyclePresentation {
     );
     this.#visible = 0;
     this.#culled = 0;
+    this.#resetVisibility();
     this.#syncPool(
       fixture.actorIds,
       this.#requirePool(this.#actorPool, "actor"),
       alpha,
+      "actors",
       "actor",
     );
     this.#syncPool(
       fixture.projectileIds,
       this.#requirePool(this.#projectilePool, "projectile"),
       alpha,
+      "projectiles",
     );
     this.#syncPool(
       fixture.particleIds,
       this.#requirePool(this.#particlePool, "particle"),
       alpha,
+      "particles",
       "particle",
     );
     this.#syncPool(
       fixture.lootIds,
       this.#requirePool(this.#lootPool, "loot"),
       alpha,
+      "loot",
     );
   }
 
@@ -662,6 +728,7 @@ export class SyntheticLifecyclePresentation {
     ids: Uint32Array,
     pool: FixedPresentationPool<Phaser.GameObjects.Image>,
     alpha: number,
+    kind: keyof PresentationVisibilityDiagnostics,
     customization?: "actor" | "particle",
   ): void {
     const fixture = this.#requireFixture();
@@ -690,6 +757,21 @@ export class SyntheticLifecyclePresentation {
       );
       projectInto(x, y, this.#projectedPoint);
       const point = this.#projectedPoint;
+      if (!(this.#cullingProbeEnabled && kind === "actors" && index === 0)) {
+        point.x = wrapToRange(
+          point.x,
+          camera.worldView.left + 32,
+          camera.worldView.right - 32,
+        );
+        point.y = wrapToRange(
+          point.y,
+          camera.worldView.top + 32,
+          camera.worldView.bottom - 32,
+        );
+      } else {
+        point.x = right + PRESENTATION_MARGIN;
+        point.y = bottom + PRESENTATION_MARGIN;
+      }
       const visible =
         point.x >= left &&
         point.x <= right &&
@@ -710,8 +792,10 @@ export class SyntheticLifecyclePresentation {
           object.setAlpha(fixture.particleAlpha[index] ?? 1);
         }
         this.#visible += 1;
+        this.#visibility[kind].visible += 1;
       } else {
         this.#culled += 1;
+        this.#visibility[kind].culled += 1;
       }
     }
   }
@@ -757,16 +841,18 @@ export class SyntheticLifecyclePresentation {
       this.#lastCombinedWork = performance.now() - this.#frameWorkStartedAt;
       this.#lastRenderSubmissionWork = Math.max(
         0,
-        this.#lastCombinedWork - this.#lastPresentationWork,
+        performance.now() - this.#renderSubmissionStartedAt,
       );
       this.#frameWorkStartedAt = 0;
       if (!this.#samples.sampling) {
         return;
       }
-      if (this.#samples.workCount < this.#samples.mainThreadWork.length) {
-        this.#samples.mainThreadWork[this.#samples.workCount] =
-          this.#lastCombinedWork;
-        this.#samples.workCount += 1;
+      if (this.#samples.stageCount < this.#samples.combined.length) {
+        const index = this.#samples.stageCount;
+        this.#samples.presentation[index] = this.#lastPresentationWork;
+        this.#samples.renderSubmission[index] = this.#lastRenderSubmissionWork;
+        this.#samples.combined[index] = this.#lastCombinedWork;
+        this.#samples.stageCount += 1;
       } else {
         this.#samples.overflowCount += 1;
         this.invalidateSample("work-sample-capacity-exhausted");
@@ -798,25 +884,27 @@ export class SyntheticLifecyclePresentation {
       }
       maximum = maximum === null ? interval : Math.max(maximum, interval);
     }
+    const durationMilliseconds =
+      this.#samples.startedAt === 0 ? 0 : end - this.#samples.startedAt;
+    const simulationSteps =
+      (this.#fixture?.diagnostics().simulationSteps ?? 0) -
+      this.#sampleStartSteps;
+    const expectedSimulationSteps = Math.round(durationMilliseconds * 0.06);
     return {
       sampling: this.#samples.sampling,
       sampleCount: this.#samples.intervalCount,
-      durationMilliseconds:
-        this.#samples.startedAt === 0 ? 0 : end - this.#samples.startedAt,
+      durationMilliseconds,
       p95FrameIntervalMilliseconds: percentile95(
         this.#samples.intervals,
         this.#samples.intervalCount,
       ),
-      p95MainThreadWorkMilliseconds: percentile95(
-        this.#samples.mainThreadWork,
-        this.#samples.workCount,
-      ),
       intervalsOver33_4Milliseconds: over33,
       maximumFrameIntervalMilliseconds: maximum,
       callbackCount: this.#callbacks - this.#sampleStartCallbacks,
-      simulationSteps:
-        (this.#fixture?.diagnostics().simulationSteps ?? 0) -
-        this.#sampleStartSteps,
+      simulationSteps,
+      expectedSimulationSteps,
+      simulationStepDelta: simulationSteps - expectedSimulationSteps,
+      simulationStepTolerance: SIMULATION_STEP_TOLERANCE,
       droppedMilliseconds:
         this.#droppedMilliseconds - this.#sampleStartDroppedMilliseconds,
       catchUpCallbacks:
@@ -840,6 +928,38 @@ export class SyntheticLifecyclePresentation {
       visibilityChanges: this.#visibilityChanges,
       focusChanges: this.#focusChanges,
     };
+  }
+
+  #stageTimingSummary(): StageTimingSummary {
+    const fixture = this.#fixture?.diagnostics().timingSamples;
+    return {
+      simulation: fixture?.simulation ?? emptyTimingSummary(),
+      spatial: fixture?.spatial ?? emptyTimingSummary(),
+      pathfinding: fixture?.pathfinding ?? emptyTimingSummary(),
+      presentation: summarizeTimingSamples(
+        this.#samples.presentation,
+        this.#samples.stageCount,
+      ),
+      renderSubmission: summarizeTimingSamples(
+        this.#samples.renderSubmission,
+        this.#samples.stageCount,
+      ),
+      combined: summarizeTimingSamples(
+        this.#samples.combined,
+        this.#samples.stageCount,
+      ),
+    };
+  }
+
+  #resetVisibility(): void {
+    this.#visibility.actors.visible = 0;
+    this.#visibility.actors.culled = 0;
+    this.#visibility.projectiles.visible = 0;
+    this.#visibility.projectiles.culled = 0;
+    this.#visibility.particles.visible = 0;
+    this.#visibility.particles.culled = 0;
+    this.#visibility.loot.visible = 0;
+    this.#visibility.loot.culled = 0;
   }
 
   #requirePool(
@@ -880,6 +1000,14 @@ function interpolate(previous: number, current: number, alpha: number): number {
   return previous + (current - previous) * alpha;
 }
 
+function wrapToRange(value: number, minimum: number, maximum: number): number {
+  const span = maximum - minimum;
+  if (span <= 0) {
+    return minimum;
+  }
+  return minimum + ((((value - minimum) % span) + span) % span);
+}
+
 function emptyPoolDiagnostics(
   capacity: number,
 ): FixedPresentationPoolDiagnostics {
@@ -903,6 +1031,30 @@ function percentile95(values: Float64Array, count: number): number | null {
     (left, right) => left - right,
   );
   return sorted[Math.ceil(count * 0.95) - 1] ?? null;
+}
+
+function summarizeTimingSamples(
+  values: Float64Array,
+  count: number,
+): TimingSampleSummary {
+  let maximum: number | null = null;
+  for (let index = 0; index < count; index += 1) {
+    const value = values[index] ?? 0;
+    maximum = maximum === null ? value : Math.max(maximum, value);
+  }
+  return {
+    sampleCount: count,
+    p95Milliseconds: percentile95(values, count),
+    maximumMilliseconds: maximum,
+  };
+}
+
+function emptyTimingSummary(): TimingSampleSummary {
+  return {
+    sampleCount: 0,
+    p95Milliseconds: null,
+    maximumMilliseconds: null,
+  };
 }
 
 function isNavigationGrid(

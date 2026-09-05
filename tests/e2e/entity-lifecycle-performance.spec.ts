@@ -132,7 +132,7 @@ test("collects labeled P0-002 full-fixture diagnostics", async ({
   });
   const report = {
     task: "TASK-P0-008",
-    schema: "task-p0-008-browser-performance-v1",
+    schema: "task-p0-008-browser-performance-v2",
     gateState: "INELIGIBLE",
     acceptanceClaim: false,
     reason:
@@ -154,6 +154,14 @@ test("collects labeled P0-002 full-fixture diagnostics", async ({
             ],
     },
     build,
+    provenance: {
+      testedImplementationCommit: build.commit,
+      builtFromCleanImplementation: !build.dirty,
+      evidenceCommit:
+        "This report is committed in a follow-up evidence-only commit.",
+      eligibility:
+        "Commit provenance does not change this current-machine run from INELIGIBLE to PASS.",
+    },
     git: {
       head: git("rev-parse", "HEAD"),
       status: git("status", "--short"),
@@ -253,6 +261,29 @@ test("collects labeled P0-002 full-fixture diagnostics", async ({
   expect(
     diagnostics?.simulation?.projectAllocations.structuralAfterWarmup,
   ).toBe(0);
+  expect(diagnostics?.visibility).toEqual({
+    actors: { visible: 200, culled: 0 },
+    projectiles: { visible: 500, culled: 0 },
+    particles: { visible: 1_000, culled: 0 },
+    loot: { visible: 100, culled: 0 },
+  });
+  expect(diagnostics?.stageTimings.simulation.sampleCount).toBe(
+    summary?.simulationSteps,
+  );
+  expect(raw?.simulationMilliseconds).toHaveLength(
+    summary?.simulationSteps ?? 0,
+  );
+  expect(raw?.spatialMilliseconds).toHaveLength(summary?.simulationSteps ?? 0);
+  expect(raw?.pathfindingMilliseconds).toHaveLength(
+    summary?.simulationSteps ?? 0,
+  );
+  expect(raw?.presentationMilliseconds.length).toBeGreaterThan(0);
+  expect(raw?.renderSubmissionMilliseconds).toHaveLength(
+    raw?.presentationMilliseconds.length ?? 0,
+  );
+  expect(raw?.combinedMilliseconds).toHaveLength(
+    raw?.presentationMilliseconds.length ?? 0,
+  );
 });
 
 function evaluateThresholds(
@@ -281,6 +312,8 @@ function evaluateThresholds(
   const expectedSampleSteps = Math.round(
     (summary?.durationMilliseconds ?? 0) * 0.06,
   );
+  const stepTolerance = summary?.simulationStepTolerance ?? 6;
+  const stageTimings = diagnostics?.stageTimings;
   return {
     repetitions: evaluation(false, 1, "5 fresh browser processes"),
     cleanBuild: evaluation(
@@ -297,15 +330,20 @@ function evaluateThresholds(
     ),
     webgl2: evaluation(environment.webgl2, environment.webgl2, "true"),
     warmupSteps: evaluation(
-      Math.abs((summary?.warmupSteps ?? -1) - expectedWarmupSteps) <= 1 &&
-        (summary?.warmupDurationMilliseconds ?? 0) >= 30_000,
+      Math.abs((summary?.warmupSteps ?? -1) - expectedWarmupSteps) <=
+        stepTolerance && (summary?.warmupDurationMilliseconds ?? 0) >= 30_000,
       summary?.warmupSteps,
-      `${expectedWarmupSteps} ±1 for actual >=30s warmup`,
+      `${expectedWarmupSteps} ±${stepTolerance} for actual >=30s warmup`,
     ),
     sampleSteps: evaluation(
-      Math.abs((summary?.simulationSteps ?? -1) - expectedSampleSteps) <= 1,
-      summary?.simulationSteps,
-      `${expectedSampleSteps} ±1 for actual sample duration`,
+      Math.abs(summary?.simulationStepDelta ?? Infinity) <= stepTolerance,
+      {
+        actual: summary?.simulationSteps,
+        expectedFromMeasuredDuration: expectedSampleSteps,
+        delta: summary?.simulationStepDelta,
+        tolerance: stepTolerance,
+      },
+      `measured-duration expectation ±${stepTolerance} steps (100ms maximum callback interval)`,
     ),
     sampleDuration: evaluation(
       (summary?.durationMilliseconds ?? 0) >= 118_000,
@@ -316,6 +354,17 @@ function evaluateThresholds(
       (summary?.callbackCount ?? 0) >= 7_080,
       summary?.callbackCount,
       ">=7080",
+    ),
+    callbackAccounting: evaluation(
+      Math.abs(
+        (stageTimings?.presentation.sampleCount ?? -Infinity) -
+          (summary?.callbackCount ?? Infinity),
+      ) <= 1,
+      {
+        callbacks: summary?.callbackCount,
+        presentationSamples: stageTimings?.presentation.sampleCount,
+      },
+      "presentation samples equal measured callbacks ±1",
     ),
     pooledFrameP95: evaluation(
       (summary?.p95FrameIntervalMilliseconds ?? Infinity) <= 18,
@@ -328,13 +377,13 @@ function evaluateThresholds(
       "<=20ms",
     ),
     pooledMainThreadP95: evaluation(
-      (summary?.p95MainThreadWorkMilliseconds ?? Infinity) <= 16.7,
-      summary?.p95MainThreadWorkMilliseconds,
+      (stageTimings?.combined.p95Milliseconds ?? Infinity) <= 16.7,
+      stageTimings?.combined.p95Milliseconds,
       "<=16.7ms",
     ),
     repetitionMainThreadP95: evaluation(
-      (summary?.p95MainThreadWorkMilliseconds ?? Infinity) <= 18,
-      summary?.p95MainThreadWorkMilliseconds,
+      (stageTimings?.combined.p95Milliseconds ?? Infinity) <= 18,
+      stageTimings?.combined.p95Milliseconds,
       "<=18ms",
     ),
     intervalsOver33_4: evaluation(overRatio <= 0.001, overRatio, "<=0.001"),
@@ -366,6 +415,37 @@ function evaluateThresholds(
         simulation.populations.total === 1_800,
       simulation?.populations ?? null,
       "200/500/1000/100",
+    ),
+    visiblePopulationExact: evaluation(
+      diagnostics?.visibility.actors.visible === 200 &&
+        diagnostics.visibility.projectiles.visible === 500 &&
+        diagnostics.visibility.particles.visible === 1_000 &&
+        diagnostics.visibility.loot.visible === 100 &&
+        diagnostics.culled === 0,
+      diagnostics?.visibility ?? null,
+      "visible 200/500/1000/100 with zero contract-population culls",
+    ),
+    stageSamplesRetained: evaluation(
+      stageTimings !== undefined &&
+        stageTimings.simulation.sampleCount === summary?.simulationSteps &&
+        stageTimings.spatial.sampleCount === summary.simulationSteps &&
+        stageTimings.pathfinding.sampleCount === summary.simulationSteps &&
+        stageTimings.presentation.sampleCount > 0 &&
+        stageTimings.renderSubmission.sampleCount ===
+          stageTimings.presentation.sampleCount &&
+        stageTimings.combined.sampleCount ===
+          stageTimings.presentation.sampleCount,
+      stageTimings ?? null,
+      "all six named stages sampled and retained",
+    ),
+    sampleCapacity: evaluation(
+      (summary?.sampleOverflowCount ?? Infinity) === 0 &&
+        (simulation?.timingSamples.overflowCount ?? Infinity) === 0,
+      {
+        frameOverflow: summary?.sampleOverflowCount,
+        simulationOverflow: simulation?.timingSamples.overflowCount,
+      },
+      "zero bounded-buffer overflow",
     ),
     actorQueryRate: evaluation(
       simulation?.queries.actorRadius === steps * 200,

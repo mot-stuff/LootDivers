@@ -63,6 +63,7 @@ declare global {
         readonly destroyed: number;
         readonly created: number;
       };
+      setCullingProbe: (enabled: boolean) => void;
     };
     __RARPG_FIXTURE_FAILURE__?: SyntheticPresentationDiagnostics | null;
   }
@@ -238,6 +239,9 @@ if (!support.supported) {
           resetAtStep: (steps) => renderer.fixture.resetAtStep(steps),
           rawSamples: () => renderer.fixture.rawSamples(),
           cycleActor: (actor) => renderer.fixture.cycleActor(actor),
+          setCullingProbe: (enabled) => {
+            renderer.fixture.setCullingProbe(enabled);
+          },
         };
       }
       document.body.dataset.appState = "ready";

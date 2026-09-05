@@ -36,6 +36,7 @@ export const SYNTHETIC_ENTITY_COUNT =
 export const SYNTHETIC_WORLD_SIZE = 128 * 32;
 export const SYNTHETIC_CAMERA_WIDTH = 1920;
 export const SYNTHETIC_CAMERA_HEIGHT = 1080;
+export const FIXTURE_STAGE_SAMPLE_CAPACITY = 10_000;
 
 const ACTOR_SPEED = 72;
 const ACTOR_RADIUS = 10;
@@ -53,6 +54,27 @@ export interface FixtureStageTimings {
   readonly pathfinding: number;
   readonly cleanup: number;
   readonly total: number;
+}
+
+export interface TimingSampleSummary {
+  readonly sampleCount: number;
+  readonly p95Milliseconds: number | null;
+  readonly maximumMilliseconds: number | null;
+}
+
+export interface FixtureStageSampleSummary {
+  readonly sampling: boolean;
+  readonly capacity: number;
+  readonly overflowCount: number;
+  readonly simulation: TimingSampleSummary;
+  readonly spatial: TimingSampleSummary;
+  readonly pathfinding: TimingSampleSummary;
+}
+
+export interface RawFixtureStageSamples {
+  readonly simulationMilliseconds: readonly number[];
+  readonly spatialMilliseconds: readonly number[];
+  readonly pathfindingMilliseconds: readonly number[];
 }
 
 export interface FixturePathDiagnostics {
@@ -90,7 +112,7 @@ export interface SyntheticFixtureDiagnostics {
     readonly particleRecycles: number;
     readonly projectileWraps: number;
   };
-  readonly timingsMilliseconds: FixtureStageTimings;
+  readonly timingSamples: FixtureStageSampleSummary;
   readonly lifecycle: ReturnType<TechnicalEntityLifecycle["diagnostics"]>;
 }
 
@@ -109,6 +131,15 @@ interface MutableAabb {
   minY: number;
   maxX: number;
   maxY: number;
+}
+
+interface MutableFixtureStageSamples {
+  sampling: boolean;
+  count: number;
+  overflowCount: number;
+  simulation: Float64Array;
+  spatial: Float64Array;
+  pathfinding: Float64Array;
 }
 
 class FixturePathSink implements PathCompletionSink {
@@ -208,6 +239,14 @@ export class SyntheticLifecycleFixture {
     cleanup: 0,
     total: 0,
   };
+  readonly #timingSamples: MutableFixtureStageSamples = {
+    sampling: false,
+    count: 0,
+    overflowCount: 0,
+    simulation: new Float64Array(FIXTURE_STAGE_SAMPLE_CAPACITY),
+    spatial: new Float64Array(FIXTURE_STAGE_SAMPLE_CAPACITY),
+    pathfinding: new Float64Array(FIXTURE_STAGE_SAMPLE_CAPACITY),
+  };
   readonly #timer: FixtureTimer | undefined;
   #simulationSteps = 0;
   #actorQueries = 0;
@@ -284,6 +323,7 @@ export class SyntheticLifecycleFixture {
 
     this.#simulationSteps += 1;
     this.#setTiming("total", this.#now() - totalStart);
+    this.#recordTimingSample();
   }
 
   public cameraPosition(output: { x: number; y: number }): void {
@@ -310,6 +350,30 @@ export class SyntheticLifecycleFixture {
   public markWarmupComplete(): void {
     this.#spatial.writeAllocationDiagnostics(this.#spatialDiagnostics);
     this.#warmupStructuralAllocations = this.#structuralAllocations();
+  }
+
+  public beginTimingSample(): void {
+    this.#timingSamples.count = 0;
+    this.#timingSamples.overflowCount = 0;
+    this.#timingSamples.sampling = true;
+  }
+
+  public endTimingSample(): void {
+    this.#timingSamples.sampling = false;
+  }
+
+  public rawTimingSamples(): RawFixtureStageSamples {
+    return {
+      simulationMilliseconds: Array.from(
+        this.#timingSamples.simulation.subarray(0, this.#timingSamples.count),
+      ),
+      spatialMilliseconds: Array.from(
+        this.#timingSamples.spatial.subarray(0, this.#timingSamples.count),
+      ),
+      pathfindingMilliseconds: Array.from(
+        this.#timingSamples.pathfinding.subarray(0, this.#timingSamples.count),
+      ),
+    };
   }
 
   public assertNoStructuralAllocationsAfterWarmup(): void {
@@ -427,7 +491,7 @@ export class SyntheticLifecycleFixture {
         particleRecycles: this.#particleRecycles,
         projectileWraps: this.#projectileWraps,
       },
-      timingsMilliseconds: { ...this.#timings },
+      timingSamples: this.#timingSampleSummary(),
       lifecycle: this.lifecycle.diagnostics(),
     };
   }
@@ -763,6 +827,41 @@ export class SyntheticLifecycleFixture {
   #setTiming(key: keyof FixtureStageTimings, value: number): void {
     (this.#timings as Record<keyof FixtureStageTimings, number>)[key] = value;
   }
+
+  #recordTimingSample(): void {
+    if (!this.#timingSamples.sampling) {
+      return;
+    }
+    const index = this.#timingSamples.count;
+    if (index >= this.#timingSamples.simulation.length) {
+      this.#timingSamples.overflowCount += 1;
+      return;
+    }
+    this.#timingSamples.simulation[index] = this.#timings.total;
+    this.#timingSamples.spatial[index] = this.#timings.spatial;
+    this.#timingSamples.pathfinding[index] = this.#timings.pathfinding;
+    this.#timingSamples.count += 1;
+  }
+
+  #timingSampleSummary(): FixtureStageSampleSummary {
+    return {
+      sampling: this.#timingSamples.sampling,
+      capacity: this.#timingSamples.simulation.length,
+      overflowCount: this.#timingSamples.overflowCount,
+      simulation: summarizeTimingSamples(
+        this.#timingSamples.simulation,
+        this.#timingSamples.count,
+      ),
+      spatial: summarizeTimingSamples(
+        this.#timingSamples.spatial,
+        this.#timingSamples.count,
+      ),
+      pathfinding: summarizeTimingSamples(
+        this.#timingSamples.pathfinding,
+        this.#timingSamples.count,
+      ),
+    };
+  }
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -784,6 +883,32 @@ function directionFrame(x: number, y: number): number {
     return x >= 0 ? 1 : 3;
   }
   return y >= 0 ? 2 : 0;
+}
+
+function summarizeTimingSamples(
+  values: Float64Array,
+  count: number,
+): TimingSampleSummary {
+  let maximum: number | null = null;
+  for (let index = 0; index < count; index += 1) {
+    const value = values[index] ?? 0;
+    maximum = maximum === null ? value : Math.max(maximum, value);
+  }
+  return {
+    sampleCount: count,
+    p95Milliseconds: percentile95(values, count),
+    maximumMilliseconds: maximum,
+  };
+}
+
+function percentile95(values: Float64Array, count: number): number | null {
+  if (count === 0) {
+    return null;
+  }
+  const sorted = Array.from(values.subarray(0, count)).sort(
+    (left, right) => left - right,
+  );
+  return sorted[Math.ceil(count * 0.95) - 1] ?? null;
 }
 
 function nearestWalkable(

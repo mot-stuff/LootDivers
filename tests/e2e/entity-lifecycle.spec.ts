@@ -45,7 +45,14 @@ test("runs exact P0-002 populations, queries, paths, culling, and pools", async 
   expect(diagnostics?.presentationObjects).toBe(1_800);
   expect(diagnostics?.terrainChunks).toBe(320);
   expect(diagnostics?.foregroundCells).toBe(1_639);
-  expect((diagnostics?.visible ?? 0) + (diagnostics?.culled ?? 0)).toBe(1_800);
+  expect(diagnostics?.visible).toBe(1_800);
+  expect(diagnostics?.culled).toBe(0);
+  expect(diagnostics?.visibility).toEqual({
+    actors: { visible: 200, culled: 0 },
+    projectiles: { visible: 500, culled: 0 },
+    particles: { visible: 1_000, culled: 0 },
+    loot: { visible: 100, culled: 0 },
+  });
   expect(diagnostics?.listenerCount).toBe(4);
   expect(diagnostics?.pools).toEqual({
     actors: {
@@ -103,6 +110,31 @@ test("runs exact P0-002 populations, queries, paths, culling, and pools", async 
   expect(
     diagnostics?.simulation?.projectAllocations.structuralAfterWarmup,
   ).toBe(0);
+});
+
+test("culls an off-camera presentation without changing populations", async ({
+  page,
+}) => {
+  await page.evaluate(() =>
+    window.__RARPG_FIXTURE_TEST__?.setCullingProbe(true),
+  );
+  const culled = await page.evaluate(() =>
+    window.__RARPG_FIXTURE_TEST__?.diagnostics(),
+  );
+  expect(culled?.visibility.actors).toEqual({ visible: 199, culled: 1 });
+  expect(culled?.visible).toBe(1_799);
+  expect(culled?.culled).toBe(1);
+  expect(culled?.simulation?.populations.total).toBe(1_800);
+
+  await page.evaluate(() =>
+    window.__RARPG_FIXTURE_TEST__?.setCullingProbe(false),
+  );
+  const restored = await page.evaluate(() =>
+    window.__RARPG_FIXTURE_TEST__?.diagnostics(),
+  );
+  expect(restored?.visibility.actors).toEqual({ visible: 200, culled: 0 });
+  expect(restored?.visible).toBe(1_800);
+  expect(restored?.culled).toBe(0);
 });
 
 test("releases every owned object and remains flat across lifecycle cycles", async ({
@@ -197,9 +229,33 @@ test("samples allocation and frame diagnostics", async ({ page }) => {
   const diagnostics = await page.evaluate(() =>
     window.__RARPG_FIXTURE_TEST__?.diagnostics(),
   );
+  const raw = await page.evaluate(() =>
+    window.__RARPG_FIXTURE_TEST__?.rawSamples(),
+  );
   expect(summary?.sampleCount).toBeGreaterThan(10);
   expect(summary?.p95FrameIntervalMilliseconds).not.toBeNull();
-  expect(summary?.p95MainThreadWorkMilliseconds).not.toBeNull();
+  expect(summary?.simulationStepTolerance).toBe(6);
+  expect(
+    Math.abs(summary?.simulationStepDelta ?? Infinity),
+  ).toBeLessThanOrEqual(summary?.simulationStepTolerance ?? -1);
+  expect(diagnostics?.stageTimings.combined.p95Milliseconds).not.toBeNull();
+  expect(diagnostics?.stageTimings.simulation.sampleCount).toBe(
+    summary?.simulationSteps,
+  );
+  expect(raw?.simulationMilliseconds).toHaveLength(
+    summary?.simulationSteps ?? 0,
+  );
+  expect(raw?.spatialMilliseconds).toHaveLength(summary?.simulationSteps ?? 0);
+  expect(raw?.pathfindingMilliseconds).toHaveLength(
+    summary?.simulationSteps ?? 0,
+  );
+  expect(raw?.presentationMilliseconds.length).toBeGreaterThan(10);
+  expect(raw?.renderSubmissionMilliseconds).toHaveLength(
+    raw?.presentationMilliseconds.length ?? 0,
+  );
+  expect(raw?.combinedMilliseconds).toHaveLength(
+    raw?.presentationMilliseconds.length ?? 0,
+  );
   expect(
     diagnostics?.simulation?.projectAllocations.structuralAfterWarmup,
   ).toBe(0);

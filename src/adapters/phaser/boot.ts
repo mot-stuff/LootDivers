@@ -150,6 +150,10 @@ class TechnicalWorldScene extends Phaser.Scene {
     return this.#fixture.cycleActor(actor);
   }
 
+  public setFixtureCullingProbe(enabled: boolean): void {
+    this.#fixture?.setCullingProbe(enabled);
+  }
+
   public invalidateFixtureSample(reason: string): void {
     this.#fixture?.invalidateSample(reason);
   }
@@ -178,6 +182,7 @@ export interface PhaserBootResult {
       readonly destroyed: number;
       readonly created: number;
     };
+    setCullingProbe(enabled: boolean): void;
   };
   resize(viewport: CanvasViewportReadModel): void;
 }
@@ -222,6 +227,9 @@ export function bootPhaser(
                 resetAtStep: (steps) => scene.resetFixtureAtStep(steps),
                 rawSamples: () => scene.fixtureRawSamples(),
                 cycleActor: (actor) => scene.cycleFixtureActor(actor),
+                setCullingProbe: (enabled) => {
+                  scene.setFixtureCullingProbe(enabled);
+                },
               },
               resize(viewport) {
                 scene.invalidateFixtureSample("viewport-resized");

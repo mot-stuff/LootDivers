@@ -95,6 +95,7 @@ export {
   type SpatialRecord,
 } from "./spatial";
 export {
+  FIXTURE_STAGE_SAMPLE_CAPACITY,
   SYNTHETIC_ACTOR_COUNT,
   SYNTHETIC_CAMERA_HEIGHT,
   SYNTHETIC_CAMERA_WIDTH,
@@ -107,7 +108,10 @@ export {
   SYNTHETIC_WORLD_SIZE,
   SyntheticLifecycleFixture,
   type FixturePathDiagnostics,
+  type FixtureStageSampleSummary,
   type FixtureStageTimings,
   type FixtureTimer,
+  type RawFixtureStageSamples,
   type SyntheticFixtureDiagnostics,
+  type TimingSampleSummary,
 } from "./synthetic-lifecycle-fixture";
