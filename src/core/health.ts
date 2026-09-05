@@ -88,6 +88,21 @@ export class HealthPool implements Damageable {
     };
   }
 
+  /**
+   * Restores health, clamped at maximum (overflow is lost). Dead pools are
+   * never healed — revival goes through `reset()`. Returns the amount
+   * actually applied (TASK-711 flask recovery).
+   */
+  public heal(amount: number): number {
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new RangeError("Healing must be finite and non-negative.");
+    }
+    if (this.#health.dead || amount === 0) return 0;
+    const applied = Math.min(amount, this.#health.max - this.#health.current);
+    this.#health.current += applied;
+    return applied;
+  }
+
   public reset(): void {
     this.#health.current = this.#health.max;
     this.#health.dead = false;

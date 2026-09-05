@@ -49,6 +49,10 @@ export {
   type CraftResult,
   type GatheringReadModel,
   type InteractFailure,
+  type FlaskDrinkFailure,
+  type FlaskDrinkResult,
+  type FlaskRecoveryDiagnostics,
+  type FlaskSlotDiagnostics,
   type InteractResult,
   type LootPickupFailure,
   type LootPickupResult,
@@ -67,6 +71,15 @@ export {
   type CharacterSave,
   type CharacterSaveGenerators,
 } from "./character-save";
+export {
+  FLASK_BASE_CHARGES_GAINED_ON_KILL,
+  FLASK_DRINK_SHARED_COOLDOWN_TICKS,
+  FLASK_MINIMUM_CHARGES_USED,
+  flaskEffectiveStats,
+  flaskResourceOf,
+  type FlaskEffectiveStats,
+  type FlaskResource,
+} from "./flasks";
 export {
   HealthPool,
   type Damageable,

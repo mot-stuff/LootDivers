@@ -18,6 +18,7 @@ import type {
 } from "../persistence";
 import type {
   CharacterHudReadModel,
+  CombatFlaskHudReadModel,
   CombatHudReadModel,
   ShellPhase,
   MinimapHudMarkerReadModel,
@@ -91,6 +92,24 @@ export interface AppProps {
 interface CombatVitalsProps {
   readonly model: CombatHudReadModel;
 }
+
+const EMPTY_FLASK_HUD: readonly CombatFlaskHudReadModel[] = [
+  "flask-1",
+  "flask-2",
+  "flask-3",
+  "flask-4",
+].map((slot, index) => ({
+  slot,
+  keyLabel: `${index + 1}`,
+  displayName: null,
+  rarity: null,
+  resource: null,
+  chargesCurrent: 0,
+  chargesMaximum: 0,
+  chargesUsedPerDrink: 0,
+  cooldownRemainingSeconds: 0,
+  state: "empty" as const,
+}));
 
 const EMPTY_MINIMAP: MinimapHudReadModel = {
   width: 1_200,
@@ -1186,12 +1205,36 @@ function formatSeconds(seconds: number): string {
   return `${Math.ceil(seconds * 10) / 10}s`;
 }
 
-function CombatActionBar({
-  model,
-  flasks,
-}: CombatVitalsProps & {
-  readonly flasks: InventoryHudReadModel["flaskSlots"];
-}) {
+const FLASK_FEEDBACK_MESSAGES: Readonly<Record<string, string>> = {
+  "player-defeated": "You cannot drink while fallen",
+  "slot-empty": "No flask in that slot",
+  "shared-cooldown": "Flasks are still settling",
+  "insufficient-charges": "Not enough flask charges",
+  "resource-full": "Nothing to restore",
+};
+
+function flaskSlotAriaLabel(
+  flask: CombatFlaskHudReadModel,
+  index: number,
+): string {
+  if (flask.displayName === null) {
+    return `Flask slot ${index + 1}, empty`;
+  }
+  const stateText =
+    flask.state === "cooldown"
+      ? "recovering"
+      : flask.state === "depleted"
+        ? "out of charges"
+        : "ready";
+  return `Flask slot ${index + 1}, ${flask.displayName}, ${flask.chargesCurrent} of ${flask.chargesMaximum} charges, ${stateText}`;
+}
+
+function CombatActionBar({ model }: CombatVitalsProps) {
+  const feedback = model.flaskFeedback;
+  const feedbackMessage =
+    feedback !== null && !feedback.accepted && feedback.reason !== null
+      ? FLASK_FEEDBACK_MESSAGES[feedback.reason]
+      : null;
   return (
     <section
       class="combat-action-hud"
@@ -1203,22 +1246,37 @@ function CombatActionBar({
         aria-label="Flask slots"
         data-testid="combat-flask-slots"
       >
-        {flasks.map((slot, index) => (
+        {model.flasks.map((flask, index) => (
           <li
-            key={slot.slot}
+            key={flask.slot}
             class="combat-flask-slot"
-            data-rarity={slot.item?.rarity}
-            aria-label={
-              slot.item === null
-                ? `Flask slot ${index + 1}, empty`
-                : `Flask slot ${index + 1}, ${slot.item.displayName}`
-            }
+            data-rarity={flask.rarity ?? undefined}
+            data-state={flask.state}
+            data-charges={flask.chargesCurrent}
+            aria-label={flaskSlotAriaLabel(flask, index)}
           >
-            <kbd>{index + 1}</kbd>
-            <span>{slot.item?.displayName ?? ""}</span>
+            <kbd>{flask.keyLabel}</kbd>
+            <span class="combat-flask-name">{flask.displayName ?? ""}</span>
+            {flask.displayName !== null && (
+              <span class="combat-flask-charges" aria-hidden="true">
+                {flask.chargesCurrent}/{flask.chargesMaximum}
+              </span>
+            )}
           </li>
         ))}
       </ol>
+      {feedbackMessage !== undefined && feedbackMessage !== null && (
+        <p
+          class="combat-flask-feedback"
+          data-testid="combat-flask-feedback"
+          data-reason={feedback?.reason}
+          role="status"
+          aria-live="polite"
+          key={`${feedback?.slot}:${feedback?.tick}`}
+        >
+          {feedbackMessage}
+        </p>
+      )}
       <ol class="combat-ability-list">
         {model.abilities.map((ability) => {
           const cooldownPercent =
@@ -1583,6 +1641,8 @@ export function App({
     zoneId: "zone:hearthmere",
     zoneName: "Hearthmere",
     respawnZoneName: "Hearthmere",
+    flasks: EMPTY_FLASK_HUD,
+    flaskFeedback: null,
     questLabel: null,
     tutorial: null,
     minimap: EMPTY_MINIMAP,
@@ -1939,9 +1999,7 @@ export function App({
         </div>
       </section>
 
-      {showCombatPrototype && (
-        <CombatActionBar model={combatHud} flasks={itemHud.flaskSlots} />
-      )}
+      {showCombatPrototype && <CombatActionBar model={combatHud} />}
       {showCombatPrototype && <CombatMinimap model={combatHud.minimap} />}
       {showCombatPrototype && combatHud.tutorial !== null && (
         <section

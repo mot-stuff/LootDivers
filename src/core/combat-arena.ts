@@ -91,7 +91,19 @@ import {
   type ZoneDefinition,
   type ZoneId,
 } from "./world-zones";
-import type { EquipmentSlot, FlaskSlot, WearableSlot } from "./item-catalog";
+import {
+  FLASK_SLOTS,
+  equipmentBaseById,
+  type EquipmentSlot,
+  type FlaskSlot,
+  type WearableSlot,
+} from "./item-catalog";
+import {
+  FLASK_DRINK_SHARED_COOLDOWN_TICKS,
+  flaskEffectiveStats,
+  type FlaskEffectiveStats,
+  type FlaskResource,
+} from "./flasks";
 import {
   createMaterialStack,
   generateEquipmentItem,
@@ -372,6 +384,47 @@ export type RespawnResult =
   | { readonly accepted: true; readonly zoneId: ZoneId }
   | { readonly accepted: false; readonly reason: "player-alive" };
 
+export type FlaskDrinkFailure =
+  | "player-defeated"
+  | "slot-empty"
+  | "shared-cooldown"
+  | "insufficient-charges"
+  | "resource-full";
+
+export type FlaskDrinkResult =
+  | {
+      readonly accepted: true;
+      readonly slot: FlaskSlot;
+      readonly resource: FlaskResource;
+      readonly instantApplied: number;
+      readonly overTimeAmount: number;
+      readonly durationTicks: number;
+      readonly chargesSpent: number;
+    }
+  | {
+      readonly accepted: false;
+      readonly slot: FlaskSlot;
+      readonly reason: FlaskDrinkFailure;
+    };
+
+/** Per-slot flask state for the HUD flask row (TASK-711, DEC-038). */
+export interface FlaskSlotDiagnostics {
+  readonly slot: FlaskSlot;
+  readonly displayName: string | null;
+  readonly rarity: string | null;
+  readonly resource: FlaskResource | null;
+  readonly chargesCurrent: number;
+  readonly chargesMaximum: number;
+  readonly chargesUsedPerDrink: number;
+}
+
+export interface FlaskRecoveryDiagnostics {
+  readonly resource: FlaskResource;
+  readonly remainingTicks: number;
+  /** Health points or mana points (not subunits) still to be applied. */
+  readonly remainingAmount: number;
+}
+
 export type VendorTradeFailure =
   | "vendor-closed"
   | "unknown-offer"
@@ -472,6 +525,12 @@ export interface CombatArenaDiagnostics {
   /** Where dying in the current zone respawns the player (DEC-037). */
   readonly respawnZoneId: ZoneId;
   readonly respawnZoneName: string;
+  /** The four flask slots with transient charge state (TASK-711, DEC-038). */
+  readonly flasks: readonly FlaskSlotDiagnostics[];
+  readonly flaskCooldownTicksRemaining: number;
+  readonly flaskRecoveries: readonly FlaskRecoveryDiagnostics[];
+  readonly lastFlaskResult:
+    (FlaskDrinkResult & { readonly tick: number }) | null;
   readonly quest: QuestReadModel;
   readonly tutorial: TutorialReadModel;
 }
@@ -579,6 +638,34 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   #nextFeedbackId = 1;
   #nextLootDropId = 1;
   #lastAbilityResult: CombatArenaDiagnostics["lastAbilityResult"] = null;
+  /**
+   * Transient flask state (TASK-711, DEC-038): never serialized, refilled
+   * or cleared on zone entry, respawn, and reset (DEC-034 rule). Charges
+   * are keyed by slot and reconciled against the equipped item's instance
+   * ID, so a newly equipped flask starts full.
+   */
+  readonly #flaskCharges = new Map<
+    FlaskSlot,
+    { instanceId: string; charges: number }
+  >();
+  #flaskCooldownTicksRemaining = 0;
+  /**
+   * Active restore-over-time effects, at most one per resource (memo §1.2
+   * no-stacking rule). Amounts are tracked in application units — health
+   * points for life flasks, mana subunits (10 per point) for mana flasks —
+   * and applied by cumulative rounding so the applied total is exactly the
+   * planned amount.
+   */
+  readonly #flaskRecoveries = new Map<
+    FlaskResource,
+    {
+      totalUnits: number;
+      appliedUnits: number;
+      elapsedTicks: number;
+      durationTicks: number;
+    }
+  >();
+  #lastFlaskResult: CombatArenaDiagnostics["lastFlaskResult"] = null;
   #pendingCleave:
     | {
         readonly damage: number;
@@ -676,6 +763,190 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       abilityId,
       this.resolveSlotTarget(abilityId, target),
     );
+  }
+
+  /**
+   * Drinks the flask equipped in `slot` (TASK-711, DEC-038, memo §1.2).
+   * Rejections spend nothing and change no state beyond recording the
+   * result for HUD feedback. An accepted drink spends the effective
+   * charges, starts the shared 0.3 s cooldown, applies the Sudden instant
+   * portion on this tick, and schedules the remainder linearly over the
+   * flask's effective duration. Drinking while a same-resource recovery is
+   * active replaces it; the unapplied remainder is discarded.
+   */
+  public useFlask(slot: FlaskSlot): FlaskDrinkResult {
+    const reject = (reason: FlaskDrinkFailure): FlaskDrinkResult => {
+      const result: FlaskDrinkResult = { accepted: false, slot, reason };
+      this.#lastFlaskResult = { ...result, tick: this.#tick };
+      return result;
+    };
+    if (this.#playerHealth.health.dead) return reject("player-defeated");
+    const item = this.#characterItems.flasks()[slot];
+    const stats = item === null ? null : flaskEffectiveStats(item);
+    if (item === null || stats === null) return reject("slot-empty");
+    if (this.#flaskCooldownTicksRemaining > 0) return reject("shared-cooldown");
+    const charge = this.flaskChargeState(slot, item, stats);
+    if (charge.charges < stats.chargesUsedPerDrink) {
+      return reject("insufficient-charges");
+    }
+    if (this.flaskResourceFull(stats.resource)) return reject("resource-full");
+
+    charge.charges -= stats.chargesUsedPerDrink;
+    this.#flaskCooldownTicksRemaining = FLASK_DRINK_SHARED_COOLDOWN_TICKS;
+    const instantApplied = this.applyFlaskRestore(
+      stats.resource,
+      stats.instantAmount,
+    );
+    if (stats.overTimeAmount > 0) {
+      this.#flaskRecoveries.set(stats.resource, {
+        totalUnits:
+          stats.resource === "mana"
+            ? stats.overTimeAmount * 10
+            : stats.overTimeAmount,
+        appliedUnits: 0,
+        elapsedTicks: 0,
+        durationTicks: stats.effectiveDurationTicks,
+      });
+    }
+    const result: FlaskDrinkResult = {
+      accepted: true,
+      slot,
+      resource: stats.resource,
+      instantApplied,
+      overTimeAmount: stats.overTimeAmount,
+      durationTicks: stats.effectiveDurationTicks,
+      chargesSpent: stats.chargesUsedPerDrink,
+    };
+    this.#lastFlaskResult = { ...result, tick: this.#tick };
+    return result;
+  }
+
+  /**
+   * Current charge state for the slot, reconciled against the equipped
+   * instance: an unseen or swapped-in flask starts at full charges (charges
+   * are transient per DEC-034 — refill triggers reset this map wholesale).
+   */
+  private flaskChargeState(
+    slot: FlaskSlot,
+    item: EquipmentItemInstance,
+    stats: FlaskEffectiveStats,
+  ): { instanceId: string; charges: number } {
+    const existing = this.#flaskCharges.get(slot);
+    if (existing !== undefined && existing.instanceId === item.instanceId) {
+      return existing;
+    }
+    const fresh = {
+      instanceId: item.instanceId,
+      charges: stats.maximumCharges,
+    };
+    this.#flaskCharges.set(slot, fresh);
+    return fresh;
+  }
+
+  private flaskResourceFull(resource: FlaskResource): boolean {
+    if (resource === "mana") {
+      return this.#manaSubunits >= this.#manaMaximumSubunits;
+    }
+    const health = this.#playerHealth.health;
+    return health.current >= health.max;
+  }
+
+  /** Applies points of the resource, clamped at maximum; returns applied. */
+  private applyFlaskRestore(resource: FlaskResource, points: number): number {
+    if (points <= 0) return 0;
+    if (resource === "health") return this.#playerHealth.heal(points);
+    const subunits = Math.min(
+      points * 10,
+      this.#manaMaximumSubunits - this.#manaSubunits,
+    );
+    this.#manaSubunits += subunits;
+    return subunits / 10;
+  }
+
+  /**
+   * Advances active flask recoveries one tick (memo §1.2 step 4): the
+   * cumulative-rounding schedule applies exactly `totalUnits` over
+   * `durationTicks`; restore clamps at maximum and overflow is lost.
+   */
+  private advanceFlaskRecoveries(): void {
+    for (const [resource, recovery] of this.#flaskRecoveries) {
+      recovery.elapsedTicks += 1;
+      const targetApplied = Math.round(
+        (recovery.totalUnits * recovery.elapsedTicks) / recovery.durationTicks,
+      );
+      const deltaUnits = targetApplied - recovery.appliedUnits;
+      if (deltaUnits > 0) {
+        if (resource === "health") {
+          this.#playerHealth.heal(deltaUnits);
+        } else {
+          this.#manaSubunits = Math.min(
+            this.#manaMaximumSubunits,
+            this.#manaSubunits + deltaUnits,
+          );
+        }
+        recovery.appliedUnits = targetApplied;
+      }
+      if (recovery.elapsedTicks >= recovery.durationTicks) {
+        this.#flaskRecoveries.delete(resource);
+      }
+    }
+  }
+
+  /**
+   * Grants each equipped flask its per-kill charges (memo §1.3), clamped
+   * at that flask's maximum. Fighting is the refill loop.
+   */
+  private feedFlasksOnKill(): void {
+    const flasks = this.#characterItems.flasks();
+    for (const slot of FLASK_SLOTS) {
+      const item = flasks[slot];
+      if (item === null) continue;
+      const stats = flaskEffectiveStats(item);
+      if (stats === null) continue;
+      const charge = this.flaskChargeState(slot, item, stats);
+      charge.charges = Math.min(
+        stats.maximumCharges,
+        charge.charges + stats.chargesGainedOnKill,
+      );
+    }
+  }
+
+  /**
+   * Zone entry, respawn, and reset refill every flask to full charges and
+   * clear active recoveries plus the shared cooldown (DEC-034 transience).
+   */
+  private refillFlasks(): void {
+    this.#flaskCharges.clear();
+    this.#flaskRecoveries.clear();
+    this.#flaskCooldownTicksRemaining = 0;
+  }
+
+  private flaskDiagnostics(): readonly FlaskSlotDiagnostics[] {
+    const flasks = this.#characterItems.flasks();
+    return FLASK_SLOTS.map((slot) => {
+      const item = flasks[slot];
+      const stats = item === null ? null : flaskEffectiveStats(item);
+      if (item === null || stats === null) {
+        return {
+          slot,
+          displayName: null,
+          rarity: null,
+          resource: null,
+          chargesCurrent: 0,
+          chargesMaximum: 0,
+          chargesUsedPerDrink: 0,
+        };
+      }
+      return {
+        slot,
+        displayName: equipmentBaseById(item.baseId)?.displayName ?? "Flask",
+        rarity: item.rarity,
+        resource: stats.resource,
+        chargesCurrent: this.flaskChargeState(slot, item, stats).charges,
+        chargesMaximum: stats.maximumCharges,
+        chargesUsedPerDrink: stats.chargesUsedPerDrink,
+      };
+    });
   }
 
   public addCharacterItem(item: ItemInstance): InventoryAddResult {
@@ -1136,6 +1407,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       this.#activeExecutions.clear();
       this.#projectiles.length = 0;
       this.#areaFeedback.length = 0;
+      // Dead players receive no pending recovery (memo §4 invariant 8).
+      this.#flaskRecoveries.clear();
     }
     return result;
   }
@@ -1156,6 +1429,10 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         this.#manaMaximumSubunits,
         this.#manaSubunits + 1,
       );
+      this.advanceFlaskRecoveries();
+    }
+    if (this.#flaskCooldownTicksRemaining > 0) {
+      this.#flaskCooldownTicksRemaining -= 1;
     }
     this.advanceProfessionWorld();
     for (let index = this.#areaFeedback.length - 1; index >= 0; index -= 1) {
@@ -1273,6 +1550,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#nextProjectileId = 1;
     this.#nextFeedbackId = 1;
     this.#lastAbilityResult = null;
+    this.refillFlasks();
+    this.#lastFlaskResult = null;
     this.#pendingCleave = undefined;
     this.#gathering = undefined;
     this.#forgeOpen = false;
@@ -1455,6 +1734,18 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       zoneName: this.currentZone().displayName,
       respawnZoneId: this.respawnZone().id,
       respawnZoneName: this.respawnZone().displayName,
+      flasks: this.flaskDiagnostics(),
+      flaskCooldownTicksRemaining: this.#flaskCooldownTicksRemaining,
+      flaskRecoveries: [...this.#flaskRecoveries.entries()].map(
+        ([resource, recovery]) => ({
+          resource,
+          remainingTicks: recovery.durationTicks - recovery.elapsedTicks,
+          remainingAmount:
+            (recovery.totalUnits - recovery.appliedUnits) /
+            (resource === "mana" ? 10 : 1),
+        }),
+      ),
+      lastFlaskResult: this.#lastFlaskResult,
       quest: this.quest(),
       tutorial: this.#tutorial.readModel(),
     };
@@ -1876,6 +2167,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       entityId: target.id,
     });
     this.#progression.grantExperience(target.experience);
+    this.feedFlasksOnKill();
     if (
       target.id === HOLLOWDEEP_BRUISER_ID &&
       this.#questStage === "accepted"
@@ -2351,6 +2643,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#pendingCleave = undefined;
     this.#activeExecutions.clear();
     this.#statuses.clear();
+    this.refillFlasks();
     this.#zoneId = zone.id;
     this.#tutorial.setInZone(zone.id === WAKESHORE_LANDING_ID);
     this.spawnEncounter(zone.enemies);

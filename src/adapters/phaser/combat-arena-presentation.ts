@@ -30,6 +30,7 @@ import {
   type EquipmentItemInstance,
   type EquipmentSlot,
   type EquipmentSlotKind,
+  type FlaskDrinkResult,
   type FlaskSlot,
   type ItemInstance,
   type LoadoutSlot,
@@ -321,6 +322,9 @@ export class CombatArenaPresentation {
           y: player.y + aim.y,
         });
       }
+      for (const slot of input.flaskSlotsRequested) {
+        this.#simulation.useFlask(slot);
+      }
     }
 
     const result = this.#runner.advance();
@@ -460,6 +464,29 @@ export class CombatArenaPresentation {
 
   public requestDefiantSignal(): void {
     this.#simulation.requestAbility(DEFIANT_SIGNAL_ID);
+  }
+
+  /** Drinks the flask in the given slot (TASK-711 automation hook). */
+  public useFlask(slot: FlaskSlot): FlaskDrinkResult {
+    return this.#simulation.useFlask(slot);
+  }
+
+  /**
+   * Adds an item to the character inventory and, for flask items, equips it
+   * into the requested flask slot (TASK-711 deterministic e2e hook).
+   */
+  public grantAndEquipFlask(item: ItemInstance, slot: FlaskSlot): boolean {
+    const added = this.#simulation.addCharacterItem(item);
+    if (!added.accepted) return false;
+    const index = this.#simulation
+      .characterItemLoadout()
+      .inventory.findIndex(
+        (candidate) => candidate?.instanceId === item.instanceId,
+      );
+    if (index < 0) return false;
+    const equipped = this.#simulation.equipCharacterItem(index, slot);
+    if (equipped.accepted) this.publishItemHud();
+    return equipped.accepted;
   }
 
   public advancePaused(steps: number): void {
@@ -1236,6 +1263,37 @@ export class CombatArenaPresentation {
       zoneId: state.zoneId,
       zoneName: state.zoneName,
       respawnZoneName: state.respawnZoneName,
+      flasks: state.flasks.map((flask, index) => ({
+        slot: flask.slot,
+        keyLabel: `${index + 1}`,
+        displayName: flask.displayName,
+        rarity: flask.rarity,
+        resource: flask.resource,
+        chargesCurrent: flask.chargesCurrent,
+        chargesMaximum: flask.chargesMaximum,
+        chargesUsedPerDrink: flask.chargesUsedPerDrink,
+        cooldownRemainingSeconds:
+          state.flaskCooldownTicksRemaining / FIXED_TICKS_PER_SECOND,
+        state:
+          flask.displayName === null
+            ? ("empty" as const)
+            : state.flaskCooldownTicksRemaining > 0
+              ? ("cooldown" as const)
+              : flask.chargesCurrent < flask.chargesUsedPerDrink
+                ? ("depleted" as const)
+                : ("ready" as const),
+      })),
+      flaskFeedback:
+        state.lastFlaskResult === null
+          ? null
+          : {
+              slot: state.lastFlaskResult.slot,
+              accepted: state.lastFlaskResult.accepted,
+              reason: state.lastFlaskResult.accepted
+                ? null
+                : state.lastFlaskResult.reason,
+              tick: state.lastFlaskResult.tick,
+            },
       questLabel:
         state.quest.stage === "inactive"
           ? null

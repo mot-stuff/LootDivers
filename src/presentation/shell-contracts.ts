@@ -87,6 +87,41 @@ export interface TutorialHudReadModel {
   readonly totalSteps: number;
 }
 
+/**
+ * One flask slot on the combat action bar (TASK-711, DEC-038): transient
+ * charge state plus the shared drink cooldown, all core-owned.
+ */
+export interface CombatFlaskHudReadModel {
+  /** "flask-1" through "flask-4". */
+  readonly slot: string;
+  /** Keybind label: "1" through "4". */
+  readonly keyLabel: string;
+  readonly displayName: string | null;
+  readonly rarity: string | null;
+  readonly resource: "health" | "mana" | null;
+  readonly chargesCurrent: number;
+  readonly chargesMaximum: number;
+  readonly chargesUsedPerDrink: number;
+  /** Shared across all four slots (0.3 s per DEC-038). */
+  readonly cooldownRemainingSeconds: number;
+  readonly state: "empty" | "ready" | "cooldown" | "depleted";
+}
+
+/** The most recent drink attempt, for HUD feedback on rejections. */
+export interface CombatFlaskFeedbackReadModel {
+  readonly slot: string;
+  readonly accepted: boolean;
+  readonly reason:
+    | "player-defeated"
+    | "slot-empty"
+    | "shared-cooldown"
+    | "insufficient-charges"
+    | "resource-full"
+    | null;
+  /** Simulation tick of the attempt, so repeats re-announce. */
+  readonly tick: number;
+}
+
 export interface CombatHudReadModel {
   readonly paused: boolean;
   readonly playerHealth: number;
@@ -109,6 +144,9 @@ export interface CombatHudReadModel {
    * DEC-037); the death overlay names the destination on its confirm.
    */
   readonly respawnZoneName: string;
+  /** The four flask slots with charge and cooldown state (TASK-711). */
+  readonly flasks: readonly CombatFlaskHudReadModel[];
+  readonly flaskFeedback: CombatFlaskFeedbackReadModel | null;
   readonly questLabel: string | null;
   /** Active tutorial prompt; null outside the tutorial or once completed. */
   readonly tutorial: TutorialHudReadModel | null;

@@ -106,6 +106,57 @@ const combatHudModel: CombatHudReadModel = {
   zoneId: "zone:ashtrail-expanse",
   zoneName: "Ashtrail Expanse",
   respawnZoneName: "Hearthmere",
+  flasks: [
+    {
+      slot: "flask-1",
+      keyLabel: "1",
+      displayName: "Heartwell Flask",
+      rarity: "common",
+      resource: "health",
+      chargesCurrent: 30,
+      chargesMaximum: 30,
+      chargesUsedPerDrink: 20,
+      cooldownRemainingSeconds: 0,
+      state: "ready",
+    },
+    {
+      slot: "flask-2",
+      keyLabel: "2",
+      displayName: "Mindwell Flask",
+      rarity: "magic",
+      resource: "mana",
+      chargesCurrent: 12,
+      chargesMaximum: 30,
+      chargesUsedPerDrink: 20,
+      cooldownRemainingSeconds: 0,
+      state: "depleted",
+    },
+    {
+      slot: "flask-3",
+      keyLabel: "3",
+      displayName: null,
+      rarity: null,
+      resource: null,
+      chargesCurrent: 0,
+      chargesMaximum: 0,
+      chargesUsedPerDrink: 0,
+      cooldownRemainingSeconds: 0,
+      state: "empty",
+    },
+    {
+      slot: "flask-4",
+      keyLabel: "4",
+      displayName: null,
+      rarity: null,
+      resource: null,
+      chargesCurrent: 0,
+      chargesMaximum: 0,
+      chargesUsedPerDrink: 0,
+      cooldownRemainingSeconds: 0,
+      state: "empty",
+    },
+  ],
+  flaskFeedback: null,
   questLabel: null,
   tutorial: null,
   minimap: {
@@ -795,6 +846,97 @@ describe("technical UI shell component", () => {
     expect(
       container.querySelector(".combat-paused-hud")?.contains(hud as Node),
     ).toBe(false);
+  });
+
+  it("renders flask charges, slot states, and drink feedback (TASK-711)", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+        />,
+        container,
+      );
+    });
+
+    await publishCombatHud(combatHudModel);
+
+    const flaskHud = container.querySelector(
+      '[data-testid="combat-flask-slots"]',
+    );
+    const slots = Array.from(
+      flaskHud?.querySelectorAll(".combat-flask-slot") ?? [],
+    );
+    expect(slots).toHaveLength(4);
+    expect(slots[0]?.getAttribute("data-state")).toBe("ready");
+    expect(slots[0]?.getAttribute("data-charges")).toBe("30");
+    expect(slots[0]?.getAttribute("aria-label")).toBe(
+      "Flask slot 1, Heartwell Flask, 30 of 30 charges, ready",
+    );
+    expect(slots[0]?.querySelector(".combat-flask-charges")?.textContent).toBe(
+      "30/30",
+    );
+    expect(slots[1]?.getAttribute("data-state")).toBe("depleted");
+    expect(slots[1]?.getAttribute("aria-label")).toBe(
+      "Flask slot 2, Mindwell Flask, 12 of 30 charges, out of charges",
+    );
+    expect(slots[2]?.getAttribute("data-state")).toBe("empty");
+    expect(slots[2]?.getAttribute("aria-label")).toBe("Flask slot 3, empty");
+    expect(slots[2]?.querySelector(".combat-flask-charges")).toBeNull();
+    // No feedback rendered until a drink attempt is reported.
+    expect(
+      container.querySelector('[data-testid="combat-flask-feedback"]'),
+    ).toBeNull();
+
+    await publishCombatHud({
+      ...combatHudModel,
+      flaskFeedback: {
+        slot: "flask-2",
+        accepted: false,
+        reason: "insufficient-charges",
+        tick: 120,
+      },
+    });
+    const feedback = container.querySelector(
+      '[data-testid="combat-flask-feedback"]',
+    );
+    expect(feedback?.textContent).toBe("Not enough flask charges");
+    expect(feedback?.getAttribute("data-reason")).toBe("insufficient-charges");
+
+    // Accepted drinks render no rejection toast.
+    await publishCombatHud({
+      ...combatHudModel,
+      flaskFeedback: {
+        slot: "flask-1",
+        accepted: true,
+        reason: null,
+        tick: 140,
+      },
+    });
+    expect(
+      container.querySelector('[data-testid="combat-flask-feedback"]'),
+    ).toBeNull();
+
+    // The shared cooldown marks every occupied slot.
+    await publishCombatHud({
+      ...combatHudModel,
+      flasks: combatHudModel.flasks.map((slot) =>
+        slot.displayName === null
+          ? slot
+          : { ...slot, cooldownRemainingSeconds: 0.2, state: "cooldown" },
+      ),
+    });
+    expect(
+      Array.from(
+        container.querySelectorAll(
+          '[data-testid="combat-flask-slots"] .combat-flask-slot',
+        ),
+        (slot) => slot.getAttribute("data-state"),
+      ),
+    ).toEqual(["cooldown", "cooldown", "empty", "empty"]);
   });
 
   it("shows the death screen only while dead and Respawn emits world.respawn", async () => {

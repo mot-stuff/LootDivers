@@ -1,6 +1,13 @@
 import Phaser from "phaser";
 
-import type { CharacterSave, DamageResult, LoadoutSlot } from "../../core";
+import type {
+  CharacterSave,
+  DamageResult,
+  FlaskDrinkResult,
+  FlaskSlot,
+  ItemInstance,
+  LoadoutSlot,
+} from "../../core";
 import type {
   CanvasViewportReadModel,
   CharacterHudReadModel,
@@ -247,6 +254,20 @@ class TechnicalWorldScene extends Phaser.Scene {
     this.#combat?.requestDefiantSignal();
   }
 
+  public useCombatFlask(slot: FlaskSlot): FlaskDrinkResult {
+    if (this.#combat === null) {
+      throw new Error("Combat prototype is not active.");
+    }
+    return this.#combat.useFlask(slot);
+  }
+
+  public grantCombatFlask(item: ItemInstance, slot: FlaskSlot): boolean {
+    if (this.#combat === null) {
+      throw new Error("Combat prototype is not active.");
+    }
+    return this.#combat.grantAndEquipFlask(item, slot);
+  }
+
   public advanceCombatPaused(steps: number): void {
     this.#combat?.advancePaused(steps);
   }
@@ -336,6 +357,8 @@ export interface PhaserBootResult {
     requestCinderDart(): void;
     requestWinterPulse(x: number, y: number): void;
     requestDefiantSignal(): void;
+    useFlask(slot: FlaskSlot): FlaskDrinkResult;
+    grantAndEquipFlask(item: ItemInstance, slot: FlaskSlot): boolean;
     advancePaused(steps: number): void;
     itemHud(): InventoryHudReadModel | null;
     characterHud(): CharacterHudReadModel | null;
@@ -433,6 +456,9 @@ export function bootPhaser(
                 requestDefiantSignal: () => {
                   scene.requestCombatDefiantSignal();
                 },
+                useFlask: (slot) => scene.useCombatFlask(slot),
+                grantAndEquipFlask: (item, slot) =>
+                  scene.grantCombatFlask(item, slot),
                 advancePaused: (steps) => {
                   scene.advanceCombatPaused(steps);
                 },
