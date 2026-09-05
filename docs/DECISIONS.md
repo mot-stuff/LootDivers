@@ -1134,3 +1134,82 @@ automatic Phase 1 authorization rules remain active.
 See `docs/PHASE_0_ARCHITECTURE.md`, `docs/PROJECT_BASELINE.md`,
 `docs/ROADMAP.md`, and
 `reports/TASK-P0-008/local-browser-ineligible.json`.
+
+---
+
+# DEC-018
+
+### Status
+
+Accepted for the Phase 2 playable ability framework.
+
+### Date
+
+2026-09-04
+
+### Decision
+
+Integrate the existing staged ability runtime into the fixed-step combat arena
+through typed combat definitions and a small registered executor boundary.
+Represent mana, cooldowns, projectiles, area effects, and refreshing statuses in
+the framework-independent simulation; keep Phaser and Preact as presentation
+adapters.
+
+### Context
+
+Phase 2 must prove four configurable abilities spanning melee, projectile, area,
+buff, debuff, costs, cooldowns, and tags without creating bespoke execution
+architectures or a production-scale effect graph. The former P0-009 runtime
+already provides validated staged execution, resource/cooldown ports, typed
+targets, tag-bearing definitions, and bounded custom executors.
+
+### Options Considered
+
+1. Replace P0-009 with direct combat-arena conditionals.
+2. Expand P0-009 into a fully generic combat graph before gameplay integration.
+3. Retain the staged runtime and connect it to lean combat-specific primitives.
+
+### Chosen Approach
+
+Choose option 3. Four immutable TypeScript definitions share the existing
+request, validation, payment, startup, active, recovery, and completion
+pipeline. A registered combat executor maps active-stage effects to deterministic
+cone damage, swept projectiles, point areas, and refreshing statuses. The arena
+owns current prototype state and exposes read models/events to Phaser and
+Preact. Novel future mechanics may add narrow executor kinds when shared
+primitives cannot express them clearly.
+
+The Phase 2 set is Basic Cleave (left click), Cinder Dart (Q), Winter Pulse (E),
+and Defiant Signal (F). Mana is stored in integer tenths, statuses refresh
+without stacking, and damage multipliers floor the final result. Dodge remains
+cooldown-only and has no stamina dependency.
+
+### Why
+
+This reuses the tested P0-009 contracts, preserves deterministic core rules, and
+proves meaningful gameplay paths with a small implementation surface. Ability
+timing, costs, cooldowns, targeting, tags, and effect selection are configured
+in shared definitions rather than separate ability classes.
+
+### Tradeoffs
+
+- The playable arena still has one enemy and one combat-specific executor.
+- Definitions are typed source data for this prototype rather than canonical
+  compiled JSON content.
+- Status stacking, resistances, critical strikes, interruption, and advanced
+  targeting are deferred.
+- Presentation feedback is intentionally simple and is not final art or VFX.
+
+### Systems Affected
+
+- Ability runtime and combat simulation
+- Mana, cooldowns, projectiles, areas, and statuses
+- Phaser input/rendering and browser automation
+- Preact combat HUD
+- Unit, component, and browser tests
+
+### Relationship to Earlier Decisions
+
+DEC-010 and DEC-013 remain active. This decision records their first playable
+combat integration and does not change the framework-independent simulation
+boundary.

@@ -64,8 +64,10 @@ Exit criteria:
 - dodge and deaths work;
 - no major runtime errors.
 
-**Status:** Authorized to start by the P0-G07 PASS. No Phase 1 implementation
-was included in the Phase 0 closure.
+**Status:** Complete at `e6be497`. The playable prototype includes responsive
+WASD movement, independent mouse aim, left-click melee, cooldown-only dodge,
+health/damage/death feedback, a compact HP/MP/XP HUD, and one approved weak,
+small common melee enemy.
 
 ---
 
@@ -89,6 +91,11 @@ Exit criteria:
 
 The former P0-009 contract implementation is available as completed-early
 infrastructure, but Phase 2 owns its gameplay integration and fitness.
+
+**Status:** Implementation complete and awaiting independent Phase 2 QA. The
+candidate includes shared-runtime Basic Cleave, Cinder Dart, Winter Pulse, and
+Defiant Signal with real Mana, cooldowns, projectile/area behavior, refreshing
+buffs/debuffs, tags, Phaser feedback, and a Preact action bar.
 
 ---
 

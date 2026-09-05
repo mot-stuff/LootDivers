@@ -190,14 +190,12 @@ Not every hit should stun enemies.
 
 # Combat Resources
 
-Potential resources:
+Phase 2 uses Mana as the only combat resource. The prototype starts at 100 Mana
+and regenerates 6 Mana per second in the fixed-step simulation. Stamina is not a
+combat resource; dodge remains cooldown-only.
 
-- Mana
-- Rage
-- Energy
-- Class-specific resources later
-
-Start with one simple resource unless the character design requires otherwise.
+Rage, Energy, and class-specific resources remain possible later, but are not
+part of the vertical-slice ability framework.
 
 ---
 
@@ -232,6 +230,28 @@ Tags should allow other systems to modify abilities without hardcoding each abil
 
 ---
 
+# Phase 2 Playable Ability Set
+
+All four abilities use the shared framework-independent staged runtime. Ability
+definitions provide targeting, startup/active/recovery timing, Mana cost,
+cooldown, tags, and an ordered combat effect.
+
+- **Basic Cleave — Left click:** directional physical melee cone; 25 damage,
+  110 range, 55-degree half-angle, no Mana cost.
+- **Cinder Dart — Q:** directional fire projectile; 30 damage, 15 Mana,
+  0.5-second cooldown.
+- **Winter Pulse — E:** point-targeted cold area; 20 damage, 25 Mana,
+  2.5-second cooldown, and a 30% enemy movement slow for 2 seconds.
+- **Defiant Signal — F:** self-centered area; 20 Mana, 5-second cooldown,
+  +20% player ability damage and -20% nearby enemy damage for 3 seconds.
+
+Statuses use target-and-status identity, refresh duration without stacking,
+expire before effects on their expiry tick, and clear on death or arena reset.
+Phase 2 intentionally defers critical strikes, resistances, status chance,
+stacking rules, damage over time, advanced interruption, and final VFX.
+
+---
+
 # Initial Combat Prototype
 
 The first prototype should include:
@@ -245,4 +265,5 @@ The first prototype should include:
 - death
 - one melee enemy
 
-Only after these feel good should more abilities be added.
+Phase 1 proved this baseline. Phase 2 retains it and adds the four-ability set
+above without changing the approved weak, small common-enemy tuning.
