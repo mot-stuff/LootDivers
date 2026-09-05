@@ -41,6 +41,25 @@ export class Mulberry32 implements StatefulRandomSource {
     this.state = requireUint32(seed, "Seed");
   }
 
+  /**
+   * Constructs a generator positioned as if `drawsConsumed` calls to
+   * `nextUint32` had already happened (TASK-712 gold stream). Mulberry32's
+   * state advances by a fixed constant per draw, so the fast-forward is a
+   * single modular multiply-add rather than a loop — callers may pass any
+   * uint32 draw count (e.g. a persisted kill counter) without a
+   * denial-of-service risk from hostile saves.
+   */
+  static atDraw(seed: number, drawsConsumed: number): Mulberry32 {
+    requireUint32(seed, "Seed");
+    requireUint32(drawsConsumed, "Draw count");
+    const generator = new Mulberry32(seed);
+    // Math.imul yields the low 32 bits of the product exactly, matching
+    // `drawsConsumed` sequential `+ STATE_INCREMENT` steps modulo 2^32.
+    generator.state =
+      (seed + (Math.imul(drawsConsumed, STATE_INCREMENT) >>> 0)) % UINT32_RANGE;
+    return generator;
+  }
+
   static fromState(snapshot: RandomState): Mulberry32 {
     if (
       typeof snapshot !== "object" ||

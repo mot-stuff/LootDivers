@@ -31,6 +31,33 @@ describe("Mulberry32", () => {
     );
   });
 
+  it("fast-forwards to any draw position in constant time (TASK-712)", () => {
+    for (const seed of [0, 1, 0x9e37_79b9, 0xffff_ffff]) {
+      for (const draws of [0, 1, 7, 1_000, 0xffff_ffff]) {
+        const walked = new Mulberry32(seed);
+        // Walk only small counts; huge counts are verified against the
+        // closed-form state via a single subsequent step from draws - 1.
+        if (draws <= 1_000) {
+          for (let index = 0; index < draws; index += 1) {
+            walked.nextUint32();
+          }
+          expect(Mulberry32.atDraw(seed, draws).saveState()).toEqual(
+            walked.saveState(),
+          );
+        } else {
+          const before = Mulberry32.atDraw(seed, draws - 1);
+          before.nextUint32();
+          expect(Mulberry32.atDraw(seed, draws).saveState()).toEqual(
+            before.saveState(),
+          );
+        }
+      }
+    }
+    expect(() => Mulberry32.atDraw(1, -1)).toThrow(RangeError);
+    expect(() => Mulberry32.atDraw(1, 1.5)).toThrow(RangeError);
+    expect(() => Mulberry32.atDraw(1, 2 ** 32)).toThrow(RangeError);
+  });
+
   it("produces repeatable bounded values across representative seeds", () => {
     const seeds = [0, 1, 2, 0x7fff_ffff, 0x8000_0000, 0xffff_ffff, 0x1234_5678];
 

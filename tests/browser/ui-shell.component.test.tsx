@@ -137,6 +137,7 @@ const combatHudModel: CombatHudReadModel = {
 
 const itemHudModel: InventoryHudReadModel = {
   revision: 3,
+  gold: 0,
   inventorySlots: Array.from({ length: 12 }, (_, index) => ({
     index,
     item:
@@ -1173,6 +1174,49 @@ describe("technical UI shell component", () => {
     } finally {
       window.removeEventListener(ITEM_COMMAND_EVENT, captureCommand);
     }
+  });
+
+  it("shows a locale-formatted gold counter in the inventory panel", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+        />,
+        container,
+      );
+    });
+    await publishItemHud({ ...itemHudModel, gold: 1_234 });
+    await act(() => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent?.includes("Inventory"))
+        ?.click();
+    });
+
+    // One gold line (TASK-712, memo §2.5): coin glyph + locale-formatted
+    // integer, no decimals ever.
+    const goldLine = container.querySelector('[data-testid="inventory-gold"]');
+    expect(goldLine).not.toBeNull();
+    expect(goldLine?.querySelector(".inventory-gold-coin")).not.toBeNull();
+    expect(
+      goldLine?.querySelector('[data-testid="gold-amount"]')?.textContent,
+    ).toBe("1,234");
+
+    // The counter tracks subsequent read-model publishes (walk-over grants).
+    await publishItemHud({ ...itemHudModel, gold: 1_241, revision: 4 });
+    expect(
+      container.querySelector('[data-testid="gold-amount"]')?.textContent,
+    ).toBe("1,241");
+
+    // A broke character shows a plain zero, never blanks the line.
+    await publishItemHud({ ...itemHudModel, gold: 0, revision: 5 });
+    expect(
+      container.querySelector('[data-testid="gold-amount"]')?.textContent,
+    ).toBe("0");
   });
 
   it("drag-equips, rejects incompatible drops, and drag-unequips items", async () => {
