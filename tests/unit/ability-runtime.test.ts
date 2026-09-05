@@ -58,6 +58,7 @@ function definition(
 class ResourceFixture implements AbilityResourcePort {
   public balance = 100;
   public readonly operations: string[] = [];
+  public operationHook: ((operation: string) => void) | undefined;
   private nextToken = 1;
   private readonly amounts = new Map<number, number>();
 
@@ -74,6 +75,7 @@ class ResourceFixture implements AbilityResourcePort {
     this.balance -= amount;
     this.amounts.set(handle.token, amount);
     this.operations.push(`pay:${handle.token}:${amount}`);
+    this.operationHook?.("pay");
     return handle;
   }
 
@@ -86,22 +88,26 @@ class ResourceFixture implements AbilityResourcePort {
     this.balance -= amount;
     this.amounts.set(handle.token, amount);
     this.operations.push(`reserve:${handle.token}:${amount}`);
+    this.operationHook?.("reserve");
     return handle;
   }
 
   refund(handle: ResourcePaymentHandle) {
     this.balance += this.requireAmount(handle.token);
     this.operations.push(`refund:${handle.token}`);
+    this.operationHook?.("refund");
   }
 
   commit(handle: ResourceReservationHandle) {
     this.requireAmount(handle.token);
     this.operations.push(`commit:${handle.token}`);
+    this.operationHook?.("commit");
   }
 
   release(handle: ResourceReservationHandle) {
     this.balance += this.requireAmount(handle.token);
     this.operations.push(`release:${handle.token}`);
+    this.operationHook?.("release");
   }
 
   private requireAmount(token: number) {
@@ -113,6 +119,7 @@ class ResourceFixture implements AbilityResourcePort {
 }
 
 class CooldownFixture implements AbilityCooldownPort {
+  public operationHook: ((operation: "start" | "clear") => void) | undefined;
   private nextToken = 1;
   private readonly active = new Map<
     string,
@@ -145,6 +152,7 @@ class CooldownFixture implements AbilityCooldownPort {
       handle,
       endTick: atTick + durationTicks,
     });
+    this.operationHook?.("start");
     return handle;
   }
 
@@ -152,6 +160,7 @@ class CooldownFixture implements AbilityCooldownPort {
     const key = `${handle.entityId}:${handle.abilityId}`;
     if (this.active.get(key)?.handle.token !== handle.token) return false;
     this.active.delete(key);
+    this.operationHook?.("clear");
     return true;
   }
 }
@@ -250,6 +259,59 @@ describe("ability runtime remediation contracts", () => {
     expect(result).toMatchObject({ accepted: true });
     expect(operationsAtComplete).toEqual(["reserve:1:10", "commit:1"]);
     expect(fixture.resources.balance).toBe(90);
+  });
+
+  it("terminalizes completion before settlement callbacks can reenter", () => {
+    const ability = definition("fixture:complete-settlement-reentry", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [{ resourceId: mana, amount: 10, settlement: "reserve" }],
+      cooldown: { durationTicks: 4, startsOn: "complete" },
+      effects: [],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([ability]);
+    const observedStages: string[] = [];
+    const reentrantRequests: unknown[] = [];
+    const reenter = () => {
+      observedStages.push(fixture.engine.cancel(1, 0).stage);
+      reentrantRequests.push(
+        fixture.engine.request(selfRequest(ability.id, source)),
+      );
+    };
+    fixture.resources.operationHook = (operation) => {
+      if (operation === "commit") reenter();
+    };
+    fixture.cooldowns.operationHook = (operation) => {
+      if (operation === "start") reenter();
+    };
+
+    const result = fixture.engine.request(selfRequest(ability.id, source));
+
+    expect(result).toMatchObject({
+      accepted: true,
+      execution: { stage: "complete" },
+    });
+    expect(observedStages).toEqual(["complete", "complete"]);
+    expect(reentrantRequests).toEqual([
+      expect.objectContaining({
+        accepted: false,
+        reason: "reentrant-mutation",
+      }),
+      expect.objectContaining({
+        accepted: false,
+        reason: "reentrant-mutation",
+      }),
+    ]);
+    expect(
+      fixture.events.filter(
+        (event) => event.abilityId === ability.id && event.stage === "complete",
+      ),
+    ).toHaveLength(1);
+    expect(
+      fixture.events.some(
+        (event) => event.abilityId === ability.id && event.stage === "cancel",
+      ),
+    ).toBe(false);
   });
 
   it("rejects an unavailable executor before resource settlement", () => {
@@ -781,6 +843,49 @@ describe("ability runtime remediation contracts", () => {
       "release:2",
     ]);
     expect(fixture.resources.balance).toBe(100);
+  });
+
+  it("terminalizes cancellation before settlement callbacks can reenter", () => {
+    const ability = definition("fixture:cancel-settlement-reentry", {
+      cooldown: { durationTicks: 4, startsOn: "pay" },
+      cancellation: {
+        allowedDuring: ["startup"],
+        refund: "all",
+        cooldown: "clear",
+      },
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([ability]);
+    const result = fixture.engine.request(selfRequest(ability.id, source));
+    if (!result.accepted) throw new Error("fixture rejected");
+    const observedStages: string[] = [];
+    const reenter = () => {
+      observedStages.push(
+        fixture.engine.cancel(result.execution.executionId, 0).stage,
+      );
+    };
+    fixture.resources.operationHook = (operation) => {
+      if (operation === "refund") reenter();
+    };
+    fixture.cooldowns.operationHook = (operation) => {
+      if (operation === "clear") reenter();
+    };
+
+    const cancelled = fixture.engine.cancel(result.execution.executionId, 0);
+
+    expect(cancelled.stage).toBe("cancel");
+    expect(observedStages).toEqual(["cancel", "cancel"]);
+    expect(fixture.resources.operations).toEqual(["pay:1:10", "refund:1"]);
+    expect(
+      fixture.events.filter(
+        (event) => event.abilityId === ability.id && event.stage === "cancel",
+      ),
+    ).toHaveLength(1);
+    expect(
+      fixture.events.some(
+        (event) => event.abilityId === ability.id && event.stage === "complete",
+      ),
+    ).toBe(false);
   });
 
   it("combines snapshot source offense with live source and target reads", () => {

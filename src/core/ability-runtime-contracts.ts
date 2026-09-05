@@ -116,6 +116,7 @@ export type AbilityRejectionReason =
   | "cooldown-active"
   | "executor-unavailable"
   | "insufficient-resource"
+  | "reentrant-mutation"
   | "target-invalid"
   | "trigger-budget-exhausted"
   | "trigger-cycle";

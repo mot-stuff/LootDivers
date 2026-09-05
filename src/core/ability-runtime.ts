@@ -45,6 +45,7 @@ interface ExecutionRecord {
   cooldown: AbilityCooldownHandle | undefined;
   workReserved: boolean;
   settlementState: "open" | "settled";
+  terminalizationState: "open" | "terminalizing" | "terminal";
 }
 
 interface QueuedTrigger {
@@ -98,6 +99,7 @@ export class AbilityExecutionEngine {
   private remainingEffects = 0;
   private flushingTriggers = false;
   private dispatchDepth = 0;
+  private criticalCallbackDepth = 0;
 
   public constructor(
     private readonly dependencies: AbilityExecutionDependencies,
@@ -106,6 +108,18 @@ export class AbilityExecutionEngine {
   }
 
   public request(request: AbilityRequest): AbilityRequestResult {
+    if (this.criticalCallbackDepth > 0) {
+      requireTick(request.requestedAtTick);
+      return {
+        accepted: false,
+        reason: "reentrant-mutation",
+        history: [
+          { stage: "request", tick: request.requestedAtTick },
+          { stage: "validate", tick: request.requestedAtTick },
+          { stage: "reject", tick: request.requestedAtTick },
+        ],
+      };
+    }
     return this.dispatch(() => {
       this.enterTick(request.requestedAtTick);
       return this.requestQueued(request, []);
@@ -113,6 +127,12 @@ export class AbilityExecutionEngine {
   }
 
   public advance(executionId: number, tick: number): AbilityExecutionSnapshot {
+    if (this.criticalCallbackDepth > 0) {
+      requireTick(tick);
+      throw new Error(
+        `Execution ${executionId} cannot be advanced during resource or cooldown settlement.`,
+      );
+    }
     return this.dispatch(() => {
       this.enterTick(tick);
       const record = this.requireExecution(executionId);
@@ -130,10 +150,20 @@ export class AbilityExecutionEngine {
   }
 
   public cancel(executionId: number, tick: number): AbilityExecutionSnapshot {
+    if (this.criticalCallbackDepth > 0) {
+      requireTick(tick);
+      const record = this.requireExecution(executionId);
+      if (record.stage === "cancel" || record.stage === "complete") {
+        return this.snapshot(record);
+      }
+      throw new Error(
+        `Execution ${executionId} cannot be cancelled during resource or cooldown settlement.`,
+      );
+    }
     return this.dispatch(() => {
       this.enterTick(tick);
       const record = this.requireExecution(executionId);
-      if (record.stage === "cancel") {
+      if (record.stage === "cancel" || record.stage === "complete") {
         return this.snapshot(record);
       }
       if (record.lastTick === tick - 1) {
@@ -161,15 +191,18 @@ export class AbilityExecutionEngine {
         );
       }
 
+      this.beginTerminal(record, "cancel", tick);
       this.settleCancellation(record);
       if (
         record.cooldown !== undefined &&
         record.definition.cancellation.cooldown === "clear"
       ) {
-        this.dependencies.cooldowns.clear(record.cooldown);
+        this.invokeCritical(() =>
+          this.dependencies.cooldowns.clear(record.cooldown!),
+        );
         record.cooldown = undefined;
       }
-      this.transition(record, "cancel", tick);
+      this.finishTerminal(record, "cancel", tick);
       return this.snapshot(record);
     });
   }
@@ -283,19 +316,23 @@ export class AbilityExecutionEngine {
       if (cost.settlement === "reserve") {
         return {
           kind: "reservation",
-          handle: this.dependencies.resources.reserve(
-            request.sourceId,
-            cost.resourceId,
-            cost.amount,
+          handle: this.invokeCritical(() =>
+            this.dependencies.resources.reserve(
+              request.sourceId,
+              cost.resourceId,
+              cost.amount,
+            ),
           ),
         };
       }
       return {
         kind: "payment",
-        handle: this.dependencies.resources.pay(
-          request.sourceId,
-          cost.resourceId,
-          cost.amount,
+        handle: this.invokeCritical(() =>
+          this.dependencies.resources.pay(
+            request.sourceId,
+            cost.resourceId,
+            cost.amount,
+          ),
         ),
       };
     });
@@ -315,6 +352,7 @@ export class AbilityExecutionEngine {
       cooldown: undefined,
       workReserved,
       settlementState: "open",
+      terminalizationState: "open",
     };
     this.executions.set(executionId, record);
     if (definition.cooldown.startsOn === "pay") {
@@ -365,12 +403,13 @@ export class AbilityExecutionEngine {
         record.stage === "recovery" &&
         record.stageElapsedTicks >= record.definition.timing.recoveryTicks
       ) {
+        this.beginTerminal(record, "complete", tick);
         this.commitReservations(record);
         if (record.definition.cooldown.startsOn === "complete") {
           this.startCooldown(record, tick);
         }
-        this.transition(record, "complete", tick);
-        changed = true;
+        this.finishTerminal(record, "complete", tick);
+        return;
       }
     }
   }
@@ -419,19 +458,26 @@ export class AbilityExecutionEngine {
   }
 
   private abortForBudget(record: ExecutionRecord, tick: number): void {
-    this.setStage(record, "cancel", tick);
+    this.beginTerminal(record, "cancel", tick);
     this.markSettled(record);
     for (const settled of record.settledCosts) {
       if (settled.kind === "reservation") {
-        this.dependencies.resources.release(settled.handle);
+        this.invokeCritical(() =>
+          this.dependencies.resources.release(settled.handle),
+        );
       } else {
-        this.dependencies.resources.refund(settled.handle);
+        this.invokeCritical(() =>
+          this.dependencies.resources.refund(settled.handle),
+        );
       }
     }
     if (record.cooldown !== undefined) {
-      this.dependencies.cooldowns.clear(record.cooldown);
+      this.invokeCritical(() =>
+        this.dependencies.cooldowns.clear(record.cooldown!),
+      );
       record.cooldown = undefined;
     }
+    record.terminalizationState = "terminal";
     this.publishRejection(record, tick, "trigger-budget-exhausted");
     this.publishStage(record, "cancel", tick);
   }
@@ -506,12 +552,18 @@ export class AbilityExecutionEngine {
           record.definition.cancellation.refund === "reserved" ||
           record.definition.cancellation.refund === "all"
         ) {
-          this.dependencies.resources.release(settled.handle);
+          this.invokeCritical(() =>
+            this.dependencies.resources.release(settled.handle),
+          );
         } else {
-          this.dependencies.resources.commit(settled.handle);
+          this.invokeCritical(() =>
+            this.dependencies.resources.commit(settled.handle),
+          );
         }
       } else if (record.definition.cancellation.refund === "all") {
-        this.dependencies.resources.refund(settled.handle);
+        this.invokeCritical(() =>
+          this.dependencies.resources.refund(settled.handle),
+        );
       }
     }
   }
@@ -520,9 +572,42 @@ export class AbilityExecutionEngine {
     if (!this.markSettled(record)) return;
     for (const settled of record.settledCosts) {
       if (settled.kind === "reservation") {
-        this.dependencies.resources.commit(settled.handle);
+        this.invokeCritical(() =>
+          this.dependencies.resources.commit(settled.handle),
+        );
       }
     }
+  }
+
+  private beginTerminal(
+    record: ExecutionRecord,
+    stage: "cancel" | "complete",
+    tick: number,
+  ): void {
+    if (record.terminalizationState !== "open") {
+      throw new Error(
+        `Execution ${record.executionId} is already ${record.terminalizationState}.`,
+      );
+    }
+    record.terminalizationState = "terminalizing";
+    this.setStage(record, stage, tick);
+  }
+
+  private finishTerminal(
+    record: ExecutionRecord,
+    stage: "cancel" | "complete",
+    tick: number,
+  ): void {
+    if (
+      record.terminalizationState !== "terminalizing" ||
+      record.stage !== stage
+    ) {
+      throw new Error(
+        `Execution ${record.executionId} cannot finish terminal stage "${stage}".`,
+      );
+    }
+    record.terminalizationState = "terminal";
+    this.publishStage(record, stage, tick);
   }
 
   private transition(
@@ -564,12 +649,23 @@ export class AbilityExecutionEngine {
   }
 
   private startCooldown(record: ExecutionRecord, tick: number): void {
-    record.cooldown = this.dependencies.cooldowns.start(
-      record.request.sourceId,
-      record.definition.id,
-      tick,
-      record.definition.cooldown.durationTicks,
+    record.cooldown = this.invokeCritical(() =>
+      this.dependencies.cooldowns.start(
+        record.request.sourceId,
+        record.definition.id,
+        tick,
+        record.definition.cooldown.durationTicks,
+      ),
     );
+  }
+
+  private invokeCritical<T>(callback: () => T): T {
+    this.criticalCallbackDepth += 1;
+    try {
+      return callback();
+    } finally {
+      this.criticalCallbackDepth -= 1;
+    }
   }
 
   private reject(
