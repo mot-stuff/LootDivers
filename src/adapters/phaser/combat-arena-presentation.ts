@@ -66,9 +66,9 @@ const HUD_SLOTS: readonly {
     accessibleKeyLabel: "E",
   },
   {
-    slot: "f",
-    keyLabel: "F",
-    accessibleKeyLabel: "F",
+    slot: "r",
+    keyLabel: "R",
+    accessibleKeyLabel: "R",
   },
 ];
 
@@ -196,12 +196,12 @@ export class CombatArenaPresentation {
     }
     this.#pausedForUi = !focused;
 
-    if (input.resetRequested) {
-      this.reset();
-    }
     this.#simulation.setMovement(input.movementX, input.movementY);
     if (input.dodgeRequested) {
       this.#simulation.requestDodge();
+    }
+    if (input.lootPickupRequested) {
+      this.#simulation.requestLootPickup();
     }
     if (input.hasPointer) {
       this.#lastPointerX = input.pointerX;

@@ -147,8 +147,8 @@ describe("CombatArenaSimulation", () => {
     });
   });
 
-  it("automatically picks nearby drops after movement", () => {
-    const simulation = lootArena();
+  it("never picks up loot by walking over it", () => {
+    const simulation = lootArena(123, 60);
     killArenaEnemy(simulation);
     const dropped = simulation
       .drainEvents()
@@ -158,16 +158,80 @@ describe("CombatArenaSimulation", () => {
     simulation.setMovement(1, 0);
     step(simulation, 30);
 
-    expect(simulation.diagnostics().worldLoot).toEqual([]);
+    expect(simulation.diagnostics().worldLoot).toHaveLength(2);
     expect(
       simulation.characterItemLoadout().inventory.filter(Boolean),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
     expect(
       simulation.drainEvents().filter((event) => event.type === "loot-picked"),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
   });
 
-  it("retains nearby world loot when inventory is full", () => {
+  it("picks up the nearest in-range drop on an explicit pickup request", () => {
+    const simulation = lootArena(123, 400);
+    killArenaEnemy(simulation);
+    const firstCluster = simulation.diagnostics().worldLoot;
+    expect(firstCluster).toHaveLength(2);
+
+    simulation.reset();
+    simulation.setMovement(0, 1);
+    step(simulation, 45);
+    simulation.setMovement(0, 0);
+    for (let index = 0; index < 600; index += 1) {
+      const state = simulation.diagnostics();
+      if (Math.hypot(state.enemy.x - state.x, state.enemy.y - state.y) <= 90) {
+        break;
+      }
+      step(simulation, 1);
+    }
+    const beforeKill = simulation.diagnostics();
+    simulation.setAim(
+      beforeKill.enemy.x - beforeKill.x,
+      beforeKill.enemy.y - beforeKill.y,
+    );
+    killArenaEnemy(simulation);
+
+    const state = simulation.diagnostics();
+    const distances = state.worldLoot.map((drop) => ({
+      dropId: drop.dropId,
+      distance: Math.hypot(drop.x - state.x, drop.y - state.y),
+    }));
+    const nearest = distances.reduce((best, candidate) =>
+      candidate.distance < best.distance ? candidate : best,
+    );
+    expect(nearest.dropId).toBe("loot:drop-3");
+    expect(distances.every(({ distance }) => distance <= 400)).toBe(true);
+
+    const result = simulation.requestLootPickup();
+    expect(result).toMatchObject({ pickedUp: true, dropId: "loot:drop-3" });
+    expect(
+      simulation.diagnostics().worldLoot.map(({ dropId }) => dropId),
+    ).toEqual(["loot:drop-1", "loot:drop-2"]);
+    expect(
+      simulation.characterItemLoadout().inventory.filter(Boolean),
+    ).toHaveLength(1);
+    expect(
+      simulation.drainEvents().filter((event) => event.type === "loot-picked"),
+    ).toEqual([expect.objectContaining({ dropId: "loot:drop-3" })]);
+  });
+
+  it("rejects an out-of-range pickup request without touching the world", () => {
+    const simulation = lootArena();
+    killArenaEnemy(simulation);
+    simulation.drainEvents();
+
+    expect(simulation.requestLootPickup()).toEqual({
+      pickedUp: false,
+      reason: "no-drop-in-range",
+    });
+    expect(simulation.diagnostics().worldLoot).toHaveLength(2);
+    expect(
+      simulation.characterItemLoadout().inventory.filter(Boolean),
+    ).toHaveLength(0);
+    expect(simulation.drainEvents()).toEqual([]);
+  });
+
+  it("retains the world drop when a pickup is rejected by a full inventory", () => {
     const simulation = lootArena(123, 200);
     for (let index = 0; index < INVENTORY_SLOT_COUNT; index += 1) {
       expect(
@@ -183,10 +247,64 @@ describe("CombatArenaSimulation", () => {
     }
 
     killArenaEnemy(simulation);
+    simulation.drainEvents();
+    expect(simulation.requestLootPickup()).toEqual({
+      pickedUp: false,
+      reason: "inventory-rejected",
+    });
     expect(simulation.diagnostics().worldLoot).toHaveLength(2);
     expect(
       simulation.drainEvents().filter((event) => event.type === "loot-picked"),
     ).toHaveLength(0);
+  });
+
+  it("picks a specific drop by id with the shared range rules", () => {
+    const inRange = lootArena(123, 200);
+    killArenaEnemy(inRange);
+    expect(inRange.pickUpDropById("loot:drop-404")).toEqual({
+      pickedUp: false,
+      reason: "unknown-drop",
+    });
+    expect(inRange.pickUpDropById("loot:drop-2")).toMatchObject({
+      pickedUp: true,
+      dropId: "loot:drop-2",
+    });
+    expect(inRange.diagnostics().worldLoot.map(({ dropId }) => dropId)).toEqual(
+      ["loot:drop-1"],
+    );
+    expect(inRange.pickUpDropById("loot:drop-2")).toEqual({
+      pickedUp: false,
+      reason: "unknown-drop",
+    });
+
+    const outOfRange = lootArena();
+    killArenaEnemy(outOfRange);
+    expect(outOfRange.pickUpDropById("loot:drop-1")).toEqual({
+      pickedUp: false,
+      reason: "out-of-range",
+    });
+    expect(outOfRange.diagnostics().worldLoot).toHaveLength(2);
+  });
+
+  it("blocks every pickup command while the player is dead", () => {
+    const simulation = lootArena(123, 200);
+    killArenaEnemy(simulation);
+    simulation.applyPlayerDamage({ amount: 1_000, sourceId: "enemy" });
+    simulation.drainEvents();
+
+    expect(simulation.requestLootPickup()).toEqual({
+      pickedUp: false,
+      reason: "player-defeated",
+    });
+    expect(simulation.pickUpDropById("loot:drop-1")).toEqual({
+      pickedUp: false,
+      reason: "player-defeated",
+    });
+    expect(simulation.diagnostics().worldLoot).toHaveLength(2);
+    expect(
+      simulation.characterItemLoadout().inventory.filter(Boolean),
+    ).toHaveLength(0);
+    expect(simulation.drainEvents()).toEqual([]);
   });
 
   it("retains unpicked loot and character loadout across combat reset", () => {
@@ -564,7 +682,7 @@ describe("CombatArenaSimulation", () => {
         lmb: BASIC_CLEAVE_ID,
         q: CINDER_DART_ID,
         e: WINTER_PULSE_ID,
-        f: DEFIANT_SIGNAL_ID,
+        r: DEFIANT_SIGNAL_ID,
       },
     });
 
@@ -593,7 +711,7 @@ describe("CombatArenaSimulation", () => {
 
     simulation.reset();
     expect(
-      simulation.requestAbilitySlot("f", {
+      simulation.requestAbilitySlot("r", {
         kind: "point",
         x: 700,
         y: 400,

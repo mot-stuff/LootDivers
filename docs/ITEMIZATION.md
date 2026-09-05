@@ -20,8 +20,8 @@ Phase 3 proves a focused loot loop rather than the final item model:
   and Rare equipment with three or four distinct legal affixes;
 - one deterministic equipment drop per enemy kill and one guaranteed Ability
   Stone on the first kill of a run;
-- automatic pickup within a short radius, with drops retained when inventory is
-  full;
+- manual pickup with the F key of the nearest drop within a short radius, with
+  drops retained in the world when inventory is full;
 - equipment modifiers for maximum health and outgoing ability damage; and
 - readable inventory, equipment, affix, stat, and Ability Stone UI.
 
@@ -95,7 +95,7 @@ Not every field must exist initially.
 
 Abilities will be obtained through lootable Ability Stones. Using a stone lets
 the player choose an ability to create; the resulting ability can later be
-assigned to the left-click, Q, E, or F combat slot through inventory or menu UI.
+assigned to the left-click, Q, E, or R combat slot through inventory or menu UI.
 
 Phase 3 keeps the four Phase 2 assignments as borrowed prototype defaults so
 existing controls continue to work. Basic Cleave is initially owned. A consumed

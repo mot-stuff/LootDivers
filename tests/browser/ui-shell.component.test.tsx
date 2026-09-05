@@ -74,8 +74,8 @@ const combatHudModel: CombatHudReadModel = {
     },
     {
       id: "ability:defiant-signal",
-      keyLabel: "F",
-      accessibleKeyLabel: "F",
+      keyLabel: "R",
+      accessibleKeyLabel: "R",
       name: "Defiant Signal",
       manaCost: 20,
       cooldownRemainingSeconds: 0,
@@ -213,9 +213,9 @@ const itemHudModel: InventoryHudReadModel = {
       borrowedDefault: true,
     },
     {
-      slot: "f",
-      keyLabel: "F",
-      accessibleKeyLabel: "F",
+      slot: "r",
+      keyLabel: "R",
+      accessibleKeyLabel: "R",
       abilityId: "ability:defiant-signal",
       displayName: "Defiant Signal",
       borrowedDefault: false,
@@ -491,7 +491,7 @@ describe("technical UI shell component", () => {
         actionHud?.querySelectorAll(".combat-ability kbd") ?? [],
         (key) => key.textContent?.trim(),
       ),
-    ).toEqual(["LMB", "Q", "E", "F"]);
+    ).toEqual(["LMB", "Q", "E", "R"]);
     expect(
       actionHud
         ?.querySelector('[data-ability-id="ability:cinder-dart"]')

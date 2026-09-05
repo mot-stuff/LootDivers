@@ -10,7 +10,7 @@ export interface CombatInputSnapshot {
   readonly hasPointer: boolean;
   readonly dodgeRequested: boolean;
   readonly abilitySlotsRequested: readonly LoadoutSlot[];
-  readonly resetRequested: boolean;
+  readonly lootPickupRequested: boolean;
 }
 
 export class CombatInputAdapter {
@@ -20,7 +20,7 @@ export class CombatInputAdapter {
   #hasPointer = false;
   #dodgeRequested = false;
   readonly #abilitySlotsRequested: LoadoutSlot[] = [];
-  #resetRequested = false;
+  #lootPickupRequested = false;
   readonly #keyDown = (event: KeyboardEvent): void => {
     if (!this.isGameplayFocused(event)) {
       return;
@@ -33,19 +33,19 @@ export class CombatInputAdapter {
         this.#dodgeRequested = true;
       }
       event.preventDefault();
-    } else if (event.code === "KeyR") {
+    } else if (event.code === "KeyF") {
       if (!event.repeat) {
-        this.#resetRequested = true;
+        this.#lootPickupRequested = true;
       }
       event.preventDefault();
     } else if (
       event.code === "KeyQ" ||
       event.code === "KeyE" ||
-      event.code === "KeyF"
+      event.code === "KeyR"
     ) {
       if (!event.repeat) {
         this.#abilitySlotsRequested.push(
-          event.code === "KeyQ" ? "q" : event.code === "KeyE" ? "e" : "f",
+          event.code === "KeyQ" ? "q" : event.code === "KeyE" ? "e" : "r",
         );
       }
       event.preventDefault();
@@ -117,11 +117,11 @@ export class CombatInputAdapter {
       hasPointer: this.#hasPointer,
       dodgeRequested: this.#dodgeRequested,
       abilitySlotsRequested: [...this.#abilitySlotsRequested],
-      resetRequested: this.#resetRequested,
+      lootPickupRequested: this.#lootPickupRequested,
     };
     this.#dodgeRequested = false;
     this.#abilitySlotsRequested.length = 0;
-    this.#resetRequested = false;
+    this.#lootPickupRequested = false;
     return snapshot;
   }
 
@@ -138,6 +138,7 @@ export class CombatInputAdapter {
     this.#held.clear();
     this.#dodgeRequested = false;
     this.#abilitySlotsRequested.length = 0;
+    this.#lootPickupRequested = false;
   }
 
   private isGameplayFocused(event: KeyboardEvent): boolean {

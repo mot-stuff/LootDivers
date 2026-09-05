@@ -81,7 +81,7 @@ export type ItemEquipmentSlotKind =
   | "offhand"
   | "ring";
 export type ItemRarityHud = "common" | "magic" | "rare" | "unique";
-export type ItemLoadoutSlot = "lmb" | "q" | "e" | "f";
+export type ItemLoadoutSlot = "lmb" | "q" | "e" | "r";
 
 export interface ItemModifierHudReadModel {
   readonly id: string;

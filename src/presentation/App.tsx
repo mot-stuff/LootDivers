@@ -81,9 +81,9 @@ const EMPTY_ITEM_HUD: InventoryHudReadModel = {
       borrowedDefault: true,
     },
     {
-      slot: "f",
-      keyLabel: "F",
-      accessibleKeyLabel: "F",
+      slot: "r",
+      keyLabel: "R",
+      accessibleKeyLabel: "R",
       abilityId: "ability:defiant-signal",
       displayName: "Defiant Signal",
       borrowedDefault: true,
@@ -636,8 +636,8 @@ export function App({
       },
       {
         id: "ability:defiant-signal",
-        keyLabel: "F",
-        accessibleKeyLabel: "F",
+        keyLabel: "R",
+        accessibleKeyLabel: "R",
         name: "Defiant Signal",
         manaCost: 20,
         cooldownRemainingSeconds: 0,
@@ -885,7 +885,7 @@ export function App({
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
           {showCombatPrototype
-            ? "Click the arena to play. Use left-click, Q, E, and F for assigned abilities. Press I while the arena is focused to open Inventory; Escape closes it. Input pauses when interface controls have focus."
+            ? "Click the arena to play. Use left-click, Q, E, and R for assigned abilities. Press F near a drop to pick up loot. Press I while the arena is focused to open Inventory; Escape closes it. Input pauses when interface controls have focus."
             : "Focus the canvas before using keyboard input. Tab away to keep keyboard input in the interface."}
         </p>
         <button

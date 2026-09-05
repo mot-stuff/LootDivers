@@ -269,7 +269,7 @@ test("ability automation exposes projectile, area, and status presentation paths
     "LMB",
     "Q",
     "E",
-    "F",
+    "R",
   ]);
   await expect(
     page.getByLabel(/Left click, Basic Cleave, Free, No cooldown/),
@@ -277,7 +277,7 @@ test("ability automation exposes projectile, area, and status presentation paths
   expect(failures).toEqual([]);
 });
 
-test("focused canvas Q, E, and F drive authoritative ability presentation", async ({
+test("focused canvas Q, E, and R drive authoritative ability presentation", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
@@ -352,7 +352,7 @@ test("focused canvas Q, E, and F drive authoritative ability presentation", asyn
 
   await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
   await canvas.focus();
-  await page.keyboard.press("f");
+  await page.keyboard.press("r");
   await expect
     .poll(async () => {
       const state = await diagnostics(page);
@@ -393,7 +393,7 @@ test("focused canvas ability keys are rejected after player death", async ({
 
   await page.keyboard.press("q");
   await page.keyboard.press("e");
-  await page.keyboard.press("f");
+  await page.keyboard.press("r");
   await expect
     .poll(async () => {
       const state = await diagnostics(page);
@@ -630,7 +630,7 @@ for (const viewport of [
       "LMB",
       "Q",
       "E",
-      "F",
+      "R",
     ]);
     const flaskSlots = page.getByTestId("combat-flask-slots");
     await expect(flaskSlots.locator(".combat-flask-slot")).toHaveCount(4);

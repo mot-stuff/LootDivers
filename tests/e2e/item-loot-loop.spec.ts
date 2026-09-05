@@ -76,16 +76,21 @@ test("enemy loot can be picked, equipped, and used to reassign combat", async ({
   await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;
     combat?.setMovement(1, 0);
-    combat?.advancePaused(30);
+    combat?.advancePaused(10);
     combat?.setMovement(0, 0);
   });
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => window.__RARPG_COMBAT_TEST__?.diagnostics()?.worldLoot.length,
-      ),
-    )
-    .toBe(0);
+  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
+  await canvas.focus();
+  for (let remaining = 4; remaining > 0; remaining -= 1) {
+    await page.keyboard.press("f");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.__RARPG_COMBAT_TEST__?.diagnostics()?.worldLoot.length,
+        ),
+      )
+      .toBe(remaining - 1);
+  }
   expect(
     await page.evaluate(
       () => window.__RARPG_COMBAT_TEST__?.diagnostics()?.renderedLoot.length,
@@ -108,7 +113,6 @@ test("enemy loot can be picked, equipped, and used to reassign combat", async ({
     throw new Error("Deterministic equipment and Ability Stone were missing.");
   }
 
-  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
   await page.getByRole("button", { name: /Inventory/ }).click();
   const menu = page.getByTestId("inventory-menu");
   await expect(menu).toBeVisible();
@@ -222,9 +226,20 @@ test("rejected final Basic Cleave replacement resyncs the controlled loadout", a
     combat?.requestAbilitySlot("lmb");
     combat?.advancePaused(15);
     combat?.setMovement(1, 0);
-    combat?.advancePaused(30);
+    combat?.advancePaused(10);
     combat?.setMovement(0, 0);
   });
+  await page.getByLabel("RARPG Phaser diagnostic canvas").focus();
+  for (let remaining = 2; remaining > 0; remaining -= 1) {
+    await page.keyboard.press("f");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.__RARPG_COMBAT_TEST__?.diagnostics()?.worldLoot.length,
+        ),
+      )
+      .toBe(remaining - 1);
+  }
 
   const itemHud = await page.evaluate(
     () => window.__RARPG_COMBAT_TEST__?.itemHud() ?? null,

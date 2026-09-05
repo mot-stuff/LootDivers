@@ -40,6 +40,8 @@ export {
   type CombatSlotRequestResult,
   type CombatTargetReadModel,
   type CharacterItemLoadoutReadModel,
+  type LootPickupFailure,
+  type LootPickupResult,
 } from "./combat-arena";
 export {
   HealthPool,

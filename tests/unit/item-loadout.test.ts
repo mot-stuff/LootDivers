@@ -363,7 +363,7 @@ describe("Phase 3 Ability Stone and loadout ownership", () => {
       lmb: BASIC_CLEAVE_ID,
       q: CINDER_DART_ID,
       e: WINTER_PULSE_ID,
-      f: DEFIANT_SIGNAL_ID,
+      r: DEFIANT_SIGNAL_ID,
     });
     expect(character.ownedAbilities()).toEqual([BASIC_CLEAVE_ID]);
 

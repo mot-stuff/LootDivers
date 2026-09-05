@@ -20,7 +20,7 @@ import {
 } from "./item-generation";
 import { Inventory, type InventoryAddResult } from "./inventory";
 
-export type LoadoutSlot = "lmb" | "q" | "e" | "f";
+export type LoadoutSlot = "lmb" | "q" | "e" | "r";
 
 export interface EquipmentStats {
   readonly maximumHealth: number;
@@ -61,7 +61,7 @@ export interface StoneConsumptionResult {
   readonly reason?: StoneConsumptionFailure;
 }
 
-const LOADOUT_SLOTS: readonly LoadoutSlot[] = ["lmb", "q", "e", "f"];
+const LOADOUT_SLOTS: readonly LoadoutSlot[] = ["lmb", "q", "e", "r"];
 
 function emptyEquipment(): Record<EquipmentSlot, EquipmentItemInstance | null> {
   const equipment = {} as Record<EquipmentSlot, EquipmentItemInstance | null>;
@@ -74,7 +74,7 @@ function initialLoadout(): Record<LoadoutSlot, CombatAbilityId | null> {
     lmb: BASIC_CLEAVE_ID,
     q: CINDER_DART_ID,
     e: WINTER_PULSE_ID,
-    f: DEFIANT_SIGNAL_ID,
+    r: DEFIANT_SIGNAL_ID,
   };
 }
 

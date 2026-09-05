@@ -191,6 +191,21 @@ export type CombatSlotRequestResult =
       readonly history: readonly [];
     };
 
+export type LootPickupFailure =
+  | "player-defeated"
+  | "no-drop-in-range"
+  | "unknown-drop"
+  | "out-of-range"
+  | "inventory-rejected";
+
+export type LootPickupResult =
+  | {
+      readonly pickedUp: true;
+      readonly dropId: string;
+      readonly item: ItemInstance;
+    }
+  | { readonly pickedUp: false; readonly reason: LootPickupFailure };
+
 export interface CombatArenaDiagnostics {
   readonly tick: number;
   readonly x: number;
@@ -253,7 +268,7 @@ export const DEFAULT_COMBAT_ARENA_CONFIG: CombatArenaConfig = {
   dodgeCooldownSeconds: 0.8,
   loot: {
     seed: 0x10_07_5eed,
-    pickupRadius: 36,
+    pickupRadius: 72,
     rarityWeights: DEFAULT_ENEMY_LOOT_WEIGHTS,
   },
   abilityDefinitions: COMBAT_ABILITY_DEFINITIONS,
@@ -692,7 +707,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         ),
       },
     );
-    this.pickUpNearbyLoot();
     if (this.#dodgeTicksRemaining > 0) {
       this.#dodgeTicksRemaining -= 1;
     }
@@ -1257,27 +1271,74 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     }
   }
 
-  private pickUpNearbyLoot(): void {
-    const player = this.playerPosition();
-    for (let index = this.#worldLoot.length - 1; index >= 0; index -= 1) {
-      const drop = this.#worldLoot[index];
-      if (
-        drop === undefined ||
-        Math.hypot(drop.x - player.x, drop.y - player.y) >
-          this.config.loot.pickupRadius
-      ) {
-        continue;
-      }
-      const result = this.#characterItems.addItem(drop.item);
-      if (!result.accepted) continue;
-      this.#worldLoot.splice(index, 1);
-      this.#events.push({
-        type: "loot-picked",
-        tick: this.#tick,
-        dropId: drop.dropId,
-        item: drop.item,
-      });
+  /**
+   * Attempts to pick up the nearest world drop within the configured pickup
+   * radius of the player. The inventory add is atomic: a rejected drop stays
+   * in the world untouched.
+   */
+  public requestLootPickup(): LootPickupResult {
+    if (this.#playerHealth.health.dead) {
+      return { pickedUp: false, reason: "player-defeated" };
     }
+    const player = this.playerPosition();
+    let nearestIndex = -1;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < this.#worldLoot.length; index += 1) {
+      const drop = this.#worldLoot[index];
+      if (drop === undefined) continue;
+      const distance = Math.hypot(drop.x - player.x, drop.y - player.y);
+      if (
+        distance <= this.config.loot.pickupRadius &&
+        distance < nearestDistance
+      ) {
+        nearestIndex = index;
+        nearestDistance = distance;
+      }
+    }
+    if (nearestIndex < 0) {
+      return { pickedUp: false, reason: "no-drop-in-range" };
+    }
+    return this.pickUpDropAtIndex(nearestIndex);
+  }
+
+  /**
+   * Picks up one specific world drop by identity with the same range and
+   * inventory rules as {@link requestLootPickup}. Intended for pointer-driven
+   * pickup such as clicking a ground-loot label.
+   */
+  public pickUpDropById(dropId: string): LootPickupResult {
+    if (this.#playerHealth.health.dead) {
+      return { pickedUp: false, reason: "player-defeated" };
+    }
+    const index = this.#worldLoot.findIndex((drop) => drop.dropId === dropId);
+    if (index < 0) {
+      return { pickedUp: false, reason: "unknown-drop" };
+    }
+    const drop = this.#worldLoot[index]!;
+    const player = this.playerPosition();
+    if (
+      Math.hypot(drop.x - player.x, drop.y - player.y) >
+      this.config.loot.pickupRadius
+    ) {
+      return { pickedUp: false, reason: "out-of-range" };
+    }
+    return this.pickUpDropAtIndex(index);
+  }
+
+  private pickUpDropAtIndex(index: number): LootPickupResult {
+    const drop = this.#worldLoot[index]!;
+    const result = this.#characterItems.addItem(drop.item);
+    if (!result.accepted) {
+      return { pickedUp: false, reason: "inventory-rejected" };
+    }
+    this.#worldLoot.splice(index, 1);
+    this.#events.push({
+      type: "loot-picked",
+      tick: this.#tick,
+      dropId: drop.dropId,
+      item: drop.item,
+    });
+    return { pickedUp: true, dropId: drop.dropId, item: drop.item };
   }
 
   private takePayment(token: number): number {

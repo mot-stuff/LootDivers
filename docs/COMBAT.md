@@ -10,15 +10,20 @@ The player should have meaningful positioning and timing decisions.
 
 # Player Controls
 
-Preferred baseline:
+Current bindings:
 
 - WASD movement
 - mouse aiming
-- left click primary action
-- right click secondary action
-- ability hotkeys
-- dodge hotkey
+- left click primary action (assigned LMB ability)
+- Q, E, and R ability slots
+- Space dodge
+- F picks up the nearest ground loot in range
+- I opens the inventory; Esc closes the open menu
+- right click secondary action reserved for later
 - optional controller support later
+
+Arena reset is automation-only (exposed to tests and tooling); it has no
+keyboard binding.
 
 Movement and aiming should be independent when technically practical.
 
@@ -242,7 +247,7 @@ cooldown, tags, and an ordered combat effect.
   0.5-second cooldown.
 - **Winter Pulse — E:** point-targeted cold area; 20 damage, 25 Mana,
   2.5-second cooldown, and a 30% enemy movement slow for 2 seconds.
-- **Defiant Signal — F:** self-centered area; 20 Mana, 5-second cooldown,
+- **Defiant Signal — R:** self-centered area; 20 Mana, 5-second cooldown,
   +20% player ability damage and -20% nearby enemy damage for 3 seconds.
 
 Statuses use target-and-status identity, refresh duration without stacking,
@@ -256,10 +261,10 @@ stacking rules, damage over time, advanced interruption, and final VFX.
 
 Abilities will be acquired through lootable Ability Stones. An Ability Stone
 lets the player choose which ability to create, after which that ability can be
-assigned to any of the four combat slots: left click, Q, E, or F.
+assigned to any of the four combat slots: left click, Q, E, or R.
 
 The framework-independent character loadout owns creation and slot assignment.
-Phaser routes LMB/Q/E/F intents by slot and resolves each assigned ability's
+Phaser routes LMB/Q/E/R intents by slot and resolves each assigned ability's
 targeting mode; Preact only presents inventory and loadout commands.
 
 The Phase 2 assignments remain as borrowed defaults to preserve existing
