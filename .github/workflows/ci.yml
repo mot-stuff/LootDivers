@@ -195,7 +195,9 @@ jobs:
     needs: [gates, server-gates]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The FIRST deploy builds every docker layer on a small droplet and can
+    # exceed 15 minutes; later deploys reuse cached layers and are fast.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -222,7 +224,13 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${DROPLET_SSH_KEY}" > ~/.ssh/lootdivers_deploy
           chmod 600 ~/.ssh/lootdivers_deploy
+          # ServerAlive keepalives: the docker build on the droplet is
+          # silent for minutes (BuildKit buffers output) and idle SSH
+          # connections from GitHub runners get dropped by intermediate
+          # NAT (observed 2026-09-05: "Broken pipe" mid-build, exit 255).
           ssh -i ~/.ssh/lootdivers_deploy \
             -o StrictHostKeyChecking=accept-new \
             -o ConnectTimeout=15 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=6 \
             "${DROPLET_SSH_USER}@${DROPLET_HOST}" "bash -s" < server/deploy.sh
