@@ -113,6 +113,9 @@ export default tseslint.config(
       "node_modules/**",
       "playwright-report/**",
       "test-results/**",
+      // The server workspace lints itself (server/eslint.config.mjs) with
+      // its own installed dependencies; the root install does not have them.
+      "server/**",
     ],
   },
   eslint.configs.recommended,

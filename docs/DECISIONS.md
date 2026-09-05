@@ -2299,7 +2299,16 @@ Cloudflare Pages project on green main pushes, with `public/_headers`
 cache policy (immutable hashed assets; 4-hour revalidation for unhashed
 art — a refinement of the blanket-immutable wording above) and a
 pixel-verified lossless PNG pass that halved `public/assets/` (7.81 MB →
-3.91 MB). The backend half (TASK-707) remains unstarted pending TASK-705.
+3.91 MB). The backend half is implemented by TASK-707 (pending Director
+architecture review): `server/` workspace (Fastify + Postgres + Caddy in
+Docker Compose, ordered SQL migrations at startup, argon2id + hashed
+opaque session cookies, the Phase 8 kickoff §2 contract verbatim), the
+client `HttpSaveRepository` adapter behind the DEC-014 `SaveRepository`
+port with a custom-domain-only boot session probe, a CI server gate
+(typecheck/lint/contract tests against MemoryStore and a real Postgres
+service container) and an SSH pull-and-restart deploy job. Everything
+domain-shaped is parameterized on `APP_DOMAIN` (still an owner input);
+DEC-036 is recorded at acceptance per the packet.
 
 ### Date
 

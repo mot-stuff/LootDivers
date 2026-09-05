@@ -1,0 +1,20 @@
+# TLS termination for api.<APP_DOMAIN> (TASK-707, DEC-032).
+#
+# The only client that ever connects here directly is the Cloudflare proxy
+# (Full strict mode), so the staged Cloudflare Origin CA certificate from
+# runbook Part A step 9 is the correct certificate — no ACME, no renewal.
+
+{
+	auto_https off
+}
+
+https://api.{$APP_DOMAIN}:443 {
+	tls /certs/origin.pem /certs/origin-key.pem
+	reverse_proxy api:3000
+}
+
+# Cloudflare "Always Use HTTPS" makes this nearly unreachable, but answer
+# plain HTTP with a redirect rather than a connection reset.
+http://api.{$APP_DOMAIN}:80 {
+	redir https://api.{$APP_DOMAIN}{uri} permanent
+}
