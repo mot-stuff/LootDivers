@@ -795,8 +795,14 @@ describe("technical UI shell component", () => {
         "ring-2",
       ]);
       expect(container.textContent).not.toContain("Character");
+      expect(container.textContent).not.toContain("Combat loadout");
       expect(container.textContent).not.toContain("Maximum health");
       expect(container.textContent).not.toContain("Outgoing damage");
+      expect(
+        container.querySelectorAll(
+          "[data-testid='inventory-flask-slots'] .paper-doll-flask",
+        ),
+      ).toHaveLength(4);
 
       const cleaver = container.querySelector<HTMLButtonElement>(
         '[aria-label*="Tempered Worn Cleaver"]',
@@ -1000,7 +1006,7 @@ describe("technical UI shell component", () => {
     }
   });
 
-  it("emits stone creation and owned-only loadout assignment commands", async () => {
+  it("emits stone creation commands and keeps flask slots reserved", async () => {
     const channel = createReadModelChannel(readyModel);
     const container = document.createElement("div");
     const commands = vi.fn<(command: ItemUiCommand) => void>();
@@ -1050,43 +1056,31 @@ describe("technical UI shell component", () => {
           ?.click();
       });
 
-      const qAssignment = container.querySelector<HTMLSelectElement>(
-        '[aria-label="Assign Q ability"]',
-      );
-      expect(
-        qAssignment?.querySelector(
-          'option[value="ability:cinder-dart"][disabled]',
-        ),
-      ).not.toBeNull();
-      expect(
-        qAssignment?.querySelector('option[value="ability:winter-pulse"]'),
-      ).toBeNull();
-      if (qAssignment !== null) {
-        qAssignment.value = "ability:defiant-signal";
-        await act(() => {
-          qAssignment.dispatchEvent(new Event("change", { bubbles: true }));
-        });
-      }
-
-      expect(commands).toHaveBeenNthCalledWith(1, {
+      expect(commands).toHaveBeenCalledExactlyOnceWith({
         type: "item.consume-ability-stone",
         inventoryIndex: 1,
         abilityId: "ability:cinder-dart",
       });
-      expect(commands).toHaveBeenNthCalledWith(2, {
-        type: "item.assign-ability",
-        loadoutSlot: "q",
-        abilityId: "ability:defiant-signal",
-      });
-      expect(container.textContent).toContain("Borrowed default");
+      expect(container.textContent).not.toContain("Combat loadout");
+      expect(
+        container.querySelector('[aria-label="Assign Q ability"]'),
+      ).toBeNull();
       expect(
         container.querySelectorAll(
           '[data-testid="combat-flask-slots"] .combat-flask-slot',
         ),
       ).toHaveLength(4);
       expect(
-        Array.from(container.querySelectorAll(".combat-flask-slot"), (slot) =>
-          slot.getAttribute("aria-label"),
+        container.querySelectorAll(
+          "[data-testid='inventory-flask-slots'] .paper-doll-flask",
+        ),
+      ).toHaveLength(4);
+      expect(
+        Array.from(
+          container.querySelectorAll(
+            "[data-testid='inventory-flask-slots'] .paper-doll-flask",
+          ),
+          (slot) => slot.getAttribute("aria-label"),
         ),
       ).toEqual([
         "Flask slot 1, not implemented",

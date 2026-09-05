@@ -127,7 +127,8 @@ inventory toggle, and LMB/Q/E/R ability keys.
 ## Phase 4 — Character Progression
 
 Owner-requested UX for this phase: pressing C opens the character screen, with
-an on-screen button placed to the right of the inventory button.
+an on-screen button placed to the right of the inventory button. Combat
+loadout assignment (LMB/Q/E/R) belongs on that screen.
 
 Features include XP, levels, attributes, a small passive/mastery system, level
 requirements, and a respec prototype.

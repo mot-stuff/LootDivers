@@ -505,7 +505,8 @@ body.combat-mode #app,
     ".        helmet amulet"
     "mainhand chest  offhand"
     "ring1    belt   ring2"
-    ".        boots  .";
+    ".        boots  ."
+    "flasks   flasks flasks";
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.45rem;
 }
@@ -545,6 +546,52 @@ body.combat-mode #app,
 
 .doll-ring-2 {
   grid-area: ring2;
+}
+
+.paper-doll-flasks {
+  grid-area: flasks;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.paper-doll-flask {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 3.4rem;
+  padding: 0.3rem;
+  border: 1px dashed #52677f;
+  border-radius: 0.35rem;
+  background: #0d1726;
+}
+
+.paper-doll-flask kbd {
+  justify-self: start;
+  min-width: 1.2rem;
+  padding: 0.12rem 0.28rem;
+  border: 1px solid #7893b2;
+  border-radius: 0.25rem;
+  color: #f4f8ff;
+  background: #182940;
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.paper-doll-flask strong {
+  color: #91a8c6;
+  font-size: 0.58rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.paper-doll-flask span {
+  color: #6f82a1;
+  font-size: 0.68rem;
 }
 
 .equipment-slot {
@@ -747,6 +794,7 @@ body.combat-mode #app,
 }
 
 .stone-choice {
+  grid-column: 1 / -1;
   padding: 0.75rem;
   border: 1px solid #7c6bb0;
   border-radius: 0.45rem;
@@ -758,58 +806,6 @@ body.combat-mode #app,
   min-height: 2.3rem;
   padding: 0.4rem 0.55rem;
   text-align: left;
-}
-
-.loadout-editor {
-  grid-column: 1 / -1;
-}
-
-.loadout-controls {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.loadout-controls label {
-  display: grid;
-  gap: 0.45rem;
-  min-width: 0;
-  padding: 0.6rem;
-  border: 1px solid #29405e;
-  border-radius: 0.4rem;
-  background: #101a2b;
-}
-
-.loadout-controls label > span {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.loadout-controls strong {
-  overflow: hidden;
-  font-size: 0.75rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.loadout-controls small {
-  grid-column: 1 / -1;
-  color: #ffd27d;
-  font-size: 0.65rem;
-}
-
-.loadout-controls select {
-  width: 100%;
-  min-height: 2.4rem;
-  padding: 0.35rem;
-  border: 1px solid #52677f;
-  border-radius: 0.3rem;
-  color: #e8f1ff;
-  background: #08111f;
-  font: inherit;
-  font-size: 0.72rem;
 }
 
 @media (max-width: 700px) {
@@ -859,12 +855,8 @@ body.combat-mode #app,
   }
 
   .item-tooltip,
-  .loadout-editor {
+  .stone-choice {
     grid-column: 1 / -1;
-  }
-
-  .loadout-controls {
-    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -878,12 +870,8 @@ body.combat-mode #app,
   }
 
   .item-tooltip,
-  .loadout-editor {
+  .stone-choice {
     grid-column: auto;
-  }
-
-  .loadout-controls {
-    grid-template-columns: 1fr;
   }
 }
 

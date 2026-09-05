@@ -248,7 +248,6 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
   const stoneChoices = model.abilityChoices.filter(
     ({ selectableFromStone }) => selectableFromStone,
   );
-  const ownedChoices = model.abilityChoices.filter(({ owned }) => owned);
 
   useEffect(() => {
     if (drag === null) return;
@@ -502,6 +501,23 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
                 <span>{slot.item?.displayName ?? "Empty"}</span>
               </button>
             ))}
+            <ol
+              class="paper-doll-flasks"
+              aria-label="Reserved flask slots"
+              data-testid="inventory-flask-slots"
+            >
+              {[1, 2, 3, 4].map((slot) => (
+                <li
+                  key={slot}
+                  class="paper-doll-flask"
+                  aria-label={`Flask slot ${slot}, not implemented`}
+                >
+                  <kbd>{slot}</kbd>
+                  <strong>Flask</strong>
+                  <span>Empty</span>
+                </li>
+              ))}
+            </ol>
           </div>
           {selection?.kind === "equipment" && item !== null && (
             <div class="item-actions">
@@ -553,54 +569,6 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
             )}
           </section>
         )}
-
-        <section class="loadout-editor" aria-labelledby="loadout-title">
-          <h3 id="loadout-title">Combat loadout</h3>
-          <div class="loadout-controls">
-            {model.loadout.map((assignment) => (
-              <label key={assignment.slot}>
-                <span>
-                  <kbd>{assignment.keyLabel}</kbd>{" "}
-                  <strong>{assignment.displayName}</strong>
-                  {assignment.borrowedDefault && (
-                    <small>Borrowed default</small>
-                  )}
-                </span>
-                <select
-                  aria-label={`Assign ${assignment.accessibleKeyLabel} ability`}
-                  value={assignment.abilityId ?? ""}
-                  onChange={(event) => {
-                    const abilityId = event.currentTarget.value;
-                    if (
-                      abilityId !== "" &&
-                      ownedChoices.some((choice) => choice.id === abilityId)
-                    ) {
-                      onCommand({
-                        type: "item.assign-ability",
-                        loadoutSlot: assignment.slot,
-                        abilityId,
-                      });
-                    }
-                  }}
-                >
-                  {assignment.abilityId !== null &&
-                    !ownedChoices.some(
-                      ({ id }) => id === assignment.abilityId,
-                    ) && (
-                      <option value={assignment.abilityId} disabled>
-                        {assignment.displayName} (borrowed)
-                      </option>
-                    )}
-                  {ownedChoices.map((ability) => (
-                    <option key={ability.id} value={ability.id}>
-                      {ability.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-        </section>
       </div>
 
       {drag !== null && drag.active && (

@@ -14,7 +14,8 @@ Phase 3 proves a focused loot loop rather than the final item model:
 
 - a 48-slot scrollable inventory;
 - nine equipment slots: Helmet, Chest, Amulet, Belt, Boots, Main Hand,
-  Offhand, Ring 1, and Ring 2;
+  Offhand, Ring 1, and Ring 2, plus four reserved flask slots below the
+  boots;
 - non-stackable equipment and Ability Stone stacks of up to nine;
 - Common equipment with one affix, Magic equipment with one or two affixes,
   and Rare equipment with three or four distinct legal affixes;
@@ -23,7 +24,11 @@ Phase 3 proves a focused loot loop rather than the final item model:
 - manual pickup with the F key of the nearest drop within a short radius, with
   drops retained in the world when inventory is full;
 - equipment modifiers for maximum health and outgoing ability damage; and
-- readable inventory, equipment, affix, stat, and Ability Stone UI.
+- readable inventory, equipment, affix, and Ability Stone UI.
+
+Combat loadout assignment is not shown in the inventory menu. Ability Stones
+can still create owned abilities; slotting them onto LMB/Q/E/R moves to the
+Phase 4 character screen.
 
 Base items declare a slot kind rather than a concrete character slot. Every
 kind maps to one slot except rings: a ring-kind item may occupy Ring 1 or
