@@ -32,6 +32,8 @@ const STEP_EPSILON_MILLISECONDS = 1e-9;
  * spent paused. While running, one advance() executes at most maxCatchUpSteps;
  * elapsed time beyond that window is explicitly discarded. A partial step is
  * retained across pause/resume, but paused wall time never enters it.
+ * Callback and advance-result records are reused; consumers must copy values
+ * they need to retain across calls.
  */
 export class FixedStepRunner {
   private readonly maxCatchUpSteps: number;
@@ -39,6 +41,16 @@ export class FixedStepRunner {
   private lastClockMilliseconds = 0;
   private nextTick = 0;
   private running = false;
+  private readonly stepValue = {
+    tick: 0,
+    deltaSeconds: FIXED_STEP_SECONDS,
+  };
+  private readonly resultValue = {
+    stepsRun: 0,
+    tick: 0,
+    interpolationAlpha: 0,
+    droppedMilliseconds: 0,
+  };
 
   constructor(
     private readonly clock: Clock,
@@ -114,10 +126,8 @@ export class FixedStepRunner {
         this.accumulatorMilliseconds = 0;
       }
 
-      this.runStep({
-        tick: this.nextTick,
-        deltaSeconds: FIXED_STEP_SECONDS,
-      });
+      this.stepValue.tick = this.nextTick;
+      this.runStep(this.stepValue);
       this.nextTick += 1;
       stepsRun += 1;
     }
@@ -136,12 +146,11 @@ export class FixedStepRunner {
   }
 
   private result(stepsRun: number, droppedMilliseconds: number): AdvanceResult {
-    return {
-      stepsRun,
-      tick: this.nextTick,
-      interpolationAlpha:
-        this.accumulatorMilliseconds / FIXED_STEP_MILLISECONDS,
-      droppedMilliseconds,
-    };
+    this.resultValue.stepsRun = stepsRun;
+    this.resultValue.tick = this.nextTick;
+    this.resultValue.interpolationAlpha =
+      this.accumulatorMilliseconds / FIXED_STEP_MILLISECONDS;
+    this.resultValue.droppedMilliseconds = droppedMilliseconds;
+    return this.resultValue;
   }
 }

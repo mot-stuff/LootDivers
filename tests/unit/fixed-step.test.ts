@@ -103,4 +103,19 @@ describe("FixedStepRunner", () => {
     clock.milliseconds = Number.NaN;
     expect(() => runner.advance()).toThrow(/finite/);
   });
+
+  it("reuses callback and result records without hot-loop allocation", () => {
+    const clock = new ManualClock();
+    const steps: object[] = [];
+    const runner = new FixedStepRunner(clock, (step) => steps.push(step));
+    runner.resume();
+    clock.advance(FIXED_STEP_MILLISECONDS);
+    const first = runner.advance();
+    clock.advance(FIXED_STEP_MILLISECONDS);
+    const second = runner.advance();
+
+    expect(first).toBe(second);
+    expect(steps[0]).toBe(steps[1]);
+    expect(second).toMatchObject({ stepsRun: 1, tick: 2 });
+  });
 });

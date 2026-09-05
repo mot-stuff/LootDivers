@@ -1,0 +1,101 @@
+{
+  "task": "TASK-P0-008",
+  "command": "node scripts/report-fixture-budget.mjs",
+  "files": [
+    {
+      "path": "assets/technical-entities.svg",
+      "initiators": ["synthetic-lifecycle-presentation"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 2280,
+      "brotliBytes": 469,
+      "sha256": "0345926f4d4bb4b4d4c0b8384f3e1dfc546e1a61956286a30d542cfceefdfb8a"
+    },
+    {
+      "path": "zones/technical-isometric.zone.json",
+      "initiators": ["synthetic-lifecycle-presentation"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 10139,
+      "brotliBytes": 648,
+      "sha256": "836fe1b01659874d7a589bde79128b3900f1d03e3c3e8de2cd6b8edb5336fb8b"
+    },
+    {
+      "path": "zones/technical-navigation.grid.json",
+      "initiators": ["synthetic-lifecycle-presentation"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 65817,
+      "brotliBytes": 268,
+      "sha256": "e2caa1d3d25939d433cd4dc3df4aa38ab557879ed691eca70a2e46f8af9e7921"
+    }
+  ],
+  "exactBuiltProductionRequestGraph": [
+    {
+      "path": "assets/index-CjSSm4o1.css",
+      "initiators": ["index.html"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 3498,
+      "brotliBytes": 1099,
+      "sha256": "d345688b1e5b0d9c9b43c8fd80fac80d8111eb8152c77fc3f0db36760c354b71"
+    },
+    {
+      "path": "assets/index-CxKNURVq.js",
+      "initiators": ["index.html"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 1469259,
+      "brotliBytes": 309453,
+      "sha256": "5553c7b97ee042dbd45e861877661591a104f36a0eaad906164d344200e482aa"
+    },
+    {
+      "path": "fixture-icon.svg",
+      "initiators": ["index.html"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 182,
+      "brotliBytes": 136,
+      "sha256": "d7db21bd2de91ecc15ee73782c0357c31b1fe0df2fc0ab14443866e77719a5f1"
+    },
+    {
+      "path": "index.html",
+      "initiators": ["navigation"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 626,
+      "brotliBytes": 257,
+      "sha256": "b8f7e6a724fd1773cd631c292da2ff1e026abb95a533670ca5256e03e0277f3a"
+    },
+    {
+      "path": "assets/technical-entities.svg",
+      "initiators": ["synthetic-lifecycle-presentation"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 2280,
+      "brotliBytes": 469,
+      "sha256": "0345926f4d4bb4b4d4c0b8384f3e1dfc546e1a61956286a30d542cfceefdfb8a"
+    },
+    {
+      "path": "zones/technical-isometric.zone.json",
+      "initiators": ["synthetic-lifecycle-presentation"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 10139,
+      "brotliBytes": 648,
+      "sha256": "836fe1b01659874d7a589bde79128b3900f1d03e3c3e8de2cd6b8edb5336fb8b"
+    },
+    {
+      "path": "zones/technical-navigation.grid.json",
+      "initiators": ["synthetic-lifecycle-presentation"],
+      "cacheStatus": "not-measured-static-artifact",
+      "rawBytes": 65817,
+      "brotliBytes": 268,
+      "sha256": "e2caa1d3d25939d433cd4dc3df4aa38ab557879ed691eca70a2e46f8af9e7921"
+    }
+  ],
+  "selectedFixtureAssetsInInitialGraph": [],
+  "unselectedZoneArtifacts": [],
+  "duplicatePayloads": [],
+  "fixtureBrotliBytes": 1385,
+  "shellBrotliBytes": 310945,
+  "combinedBrotliBytes": 312330,
+  "gates": {
+    "fixtureAtMost8MiB": "PASS",
+    "combinedAtMost10MiB": "PASS",
+    "fixtureLazyAtStartup": "PASS",
+    "noDuplicatePayloads": "PASS",
+    "unselectedZonesNotRequested": "PASS"
+  }
+}

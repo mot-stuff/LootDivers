@@ -16,8 +16,13 @@ import {
   WebCryptoSha256,
 } from "./adapters/browser/persistence-platform";
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
-import { bootPhaser } from "./adapters/phaser/boot";
+import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
+import type {
+  FrameSampleSummary,
+  RawFrameSamples,
+  SyntheticPresentationDiagnostics,
+} from "./adapters/phaser/synthetic-lifecycle-presentation";
 import { createReadModelChannel } from "./adapters/ui/read-model-channel";
 import {
   PersistenceFixtureService,
@@ -34,6 +39,9 @@ import type {
 import "./presentation/styles.css";
 
 declare global {
+  const __RARPG_BUILD_COMMIT__: string;
+  const __RARPG_BUILD_DIRTY__: boolean;
+
   interface Window {
     __RARPG_WORLD_TEST__?: {
       diagnostics: () => ZoneLifecycleDiagnostics;
@@ -41,6 +49,23 @@ declare global {
       pick: (screenX: number, screenY: number) => void;
       unload: () => void;
     };
+    __RARPG_FIXTURE_TEST__?: {
+      readonly buildCommit: string;
+      readonly buildDirty: boolean;
+      diagnostics: () => SyntheticPresentationDiagnostics | null;
+      beginSample: () => void;
+      endSample: () => FrameSampleSummary;
+      dispose: () => void;
+      reset: () => Promise<void>;
+      resetAtStep: (steps: number) => Promise<void>;
+      rawSamples: () => RawFrameSamples;
+      cycleActor: (actor: number) => {
+        readonly destroyed: number;
+        readonly created: number;
+      };
+      setCullingProbe: (enabled: boolean) => void;
+    };
+    __RARPG_FIXTURE_FAILURE__?: SyntheticPresentationDiagnostics | null;
   }
 }
 
@@ -56,6 +81,7 @@ function requireElement<T extends Element>(selector: string): T {
 
 const fixtureParameters = new URLSearchParams(window.location.search);
 const worldAutomation = fixtureParameters.has("automation");
+const fullFixture = fixtureParameters.has("fullFixture");
 const persistenceAutomation = fixtureParameters.has("persistenceTest");
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,
@@ -175,7 +201,7 @@ const support = preflightWebGL2(canvas);
 if (!support.supported) {
   fail(support.reason);
 } else {
-  void bootPhaser(canvas, support.context)
+  void bootPhaser(canvas, support.context, { fullFixture })
     .then((renderer) => {
       const diagnostics = renderer.world.diagnostics();
       if (diagnostics.zoneId === null) {
@@ -197,6 +223,27 @@ if (!support.supported) {
           },
         };
       }
+      if (fullFixture) {
+        window.__RARPG_FIXTURE_TEST__ = {
+          buildCommit: __RARPG_BUILD_COMMIT__,
+          buildDirty: __RARPG_BUILD_DIRTY__,
+          diagnostics: () => renderer.fixture.diagnostics(),
+          beginSample: () => {
+            renderer.fixture.beginSample();
+          },
+          endSample: () => renderer.fixture.endSample(),
+          dispose: () => {
+            renderer.fixture.dispose();
+          },
+          reset: () => renderer.fixture.reset(),
+          resetAtStep: (steps) => renderer.fixture.resetAtStep(steps),
+          rawSamples: () => renderer.fixture.rawSamples(),
+          cycleActor: (actor) => renderer.fixture.cycleActor(actor),
+          setCullingProbe: (enabled) => {
+            renderer.fixture.setCullingProbe(enabled);
+          },
+        };
+      }
       document.body.dataset.appState = "ready";
       publish({
         phase: {
@@ -207,6 +254,7 @@ if (!support.supported) {
       });
     })
     .catch((error: unknown) => {
+      window.__RARPG_FIXTURE_FAILURE__ = fixtureFailureDiagnostics();
       const detail = error instanceof Error ? error.message : String(error);
       fail(`Renderer startup failed: ${detail}`);
     });

@@ -434,7 +434,8 @@ describe("fair path scheduler and local separation", () => {
       computeLocalSeparation(
         spatial,
         1,
-        { x: 0, y: 0 },
+        0,
+        0,
         0,
         10,
         0.25,

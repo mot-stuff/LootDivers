@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="160" viewBox="0 0 256 160">
+  <rect width="256" height="160" fill="#000" fill-opacity="0"/>
+  <defs>
+    <g id="actor">
+      <ellipse cx="16" cy="27" rx="10" ry="4" fill="#10212d" fill-opacity=".55"/>
+      <circle cx="16" cy="14" r="9" fill="#79d6d0" stroke="#e8f1ff" stroke-width="2"/>
+      <path d="M12 17l4-9 4 9z" fill="#244d5a"/>
+    </g>
+  </defs>
+  <g fill="#20394e">
+    <rect y="0" width="256" height="32"/><rect y="32" width="256" height="32"/>
+    <rect y="64" width="256" height="32"/><rect y="96" width="256" height="32"/>
+  </g>
+  <g>
+    <use href="#actor" x="0" y="0"/><use href="#actor" x="32" y="-1"/>
+    <use href="#actor" x="64" y="-2"/><use href="#actor" x="96" y="-1"/>
+    <use href="#actor" x="128" y="0"/><use href="#actor" x="160" y="-1"/>
+    <use href="#actor" x="192" y="-2"/><use href="#actor" x="224" y="-1"/>
+    <use href="#actor" x="0" y="32"/><use href="#actor" x="32" y="31"/>
+    <use href="#actor" x="64" y="30"/><use href="#actor" x="96" y="31"/>
+    <use href="#actor" x="128" y="32"/><use href="#actor" x="160" y="31"/>
+    <use href="#actor" x="192" y="30"/><use href="#actor" x="224" y="31"/>
+    <use href="#actor" x="0" y="64"/><use href="#actor" x="32" y="63"/>
+    <use href="#actor" x="64" y="62"/><use href="#actor" x="96" y="63"/>
+    <use href="#actor" x="128" y="64"/><use href="#actor" x="160" y="63"/>
+    <use href="#actor" x="192" y="62"/><use href="#actor" x="224" y="63"/>
+    <use href="#actor" x="0" y="96"/><use href="#actor" x="32" y="95"/>
+    <use href="#actor" x="64" y="94"/><use href="#actor" x="96" y="95"/>
+    <use href="#actor" x="128" y="96"/><use href="#actor" x="160" y="95"/>
+    <use href="#actor" x="192" y="94"/><use href="#actor" x="224" y="95"/>
+  </g>
+  <rect x="0" y="128" width="32" height="32" fill="#172b3d"/>
+  <circle cx="16" cy="144" r="6" fill="#f4ca64" stroke="#fff4c7" stroke-width="2"/>
+  <rect x="32" y="128" width="32" height="32" fill="#172b3d"/>
+  <circle cx="48" cy="144" r="3" fill="#b9f1ef"/>
+  <rect x="64" y="128" width="32" height="32" fill="#172b3d"/>
+  <path d="M80 133l10 11-10 11-10-11z" fill="#d49b68" stroke="#fff0d8" stroke-width="2"/>
+  <rect x="96" y="128" width="160" height="32" fill="#172b3d"/>
+</svg>

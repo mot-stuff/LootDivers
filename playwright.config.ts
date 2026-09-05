@@ -30,7 +30,8 @@ const previewUrl = `http://127.0.0.1:${previewPort}`;
 export default defineConfig({
   testDir: "./tests/e2e",
   outputDir: `./test-results/${previewPort}`,
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 2,
   forbidOnly: true,
   retries: 0,
   reporter: "list",

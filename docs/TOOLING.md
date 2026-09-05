@@ -79,7 +79,9 @@ $npm = & .\scripts\bootstrap-toolchain.ps1
 & $npm run test:smoke
 & $npm run test:visual
 & $npm run budget:world
+& $npm run budget:fixture
 & $npm run timing:navigation
+& $npm run timing:fixture
 ```
 
 The bootstrap downloads Node.js `24.20.0` from `nodejs.org`, verifies the
@@ -189,3 +191,9 @@ invocation and shares it with every worker. Browser artifacts are isolated
 under that port's test-results directory. Direct `playwright test` remains
 available for debugging and uses port 4174 unless `RARPG_PLAYWRIGHT_PORT` is
 provided.
+
+TASK-P0-008 lifecycle stores, pooled Phaser adapters, deterministic populations,
+allocation diagnostics, and full-fixture timing are documented in
+[`ENTITY_LIFECYCLE.md`](ENTITY_LIFECYCLE.md). `budget:fixture` follows `budget`
+and checks the shell plus complete synthetic fixture payload. Current-machine
+timings are explicitly `INELIGIBLE`.

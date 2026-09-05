@@ -2,7 +2,6 @@ import {
   SpatialQueryBuffer,
   UniformSpatialHash,
   type MutableCircleQuery,
-  type Point2,
 } from "./spatial.ts";
 
 export interface MutableVector2 {
@@ -13,7 +12,8 @@ export interface MutableVector2 {
 export function computeLocalSeparation(
   spatial: UniformSpatialHash,
   selfId: number,
-  position: Point2,
+  positionX: number,
+  positionY: number,
   elevation: number,
   radius: number,
   maximumMagnitude: number,
@@ -34,8 +34,8 @@ export function computeLocalSeparation(
 
   output.x = 0;
   output.y = 0;
-  circleQuery.x = position.x;
-  circleQuery.y = position.y;
+  circleQuery.x = positionX;
+  circleQuery.y = positionY;
   circleQuery.radius = radius;
   circleQuery.elevation = elevation;
   spatial.queryCircle(circleQuery, queryBuffer);
@@ -48,8 +48,8 @@ export function computeLocalSeparation(
     }
     const otherX = (record.bounds.minX + record.bounds.maxX) * 0.5;
     const otherY = (record.bounds.minY + record.bounds.maxY) * 0.5;
-    let dx = position.x - otherX;
-    let dy = position.y - otherY;
+    let dx = positionX - otherX;
+    let dy = positionY - otherY;
     let distance = Math.hypot(dx, dy);
     if (distance >= radius) {
       continue;
