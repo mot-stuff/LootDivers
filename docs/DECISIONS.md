@@ -2124,6 +2124,41 @@ still starts in Hearthmere (DEC-025/026/027 unchanged). Consumes the
 DEC-029 design tokens. Second accepted packet of the Phase 7 kickoff
 (TASK-702); TASK-703's New Game flow will travel into this zone.
 
+### Amended 2026-09-05 (TASK-702B, owner-directed)
+
+The owner ruled that the exit portal must not appear until the tutorial
+is effectively complete, which supersedes the "always-open portal is
+the skip mechanism" paragraph above and the strict-ordering strand
+tradeoff:
+
+- **Gated portal.** The Hearthmere Road portal in Wakeshore Landing is
+  hidden and non-interactable — absent from the interactables read
+  model, the minimap, and F-interaction — until the five non-travel
+  steps (move, attack, dodge, loot, gather) are all complete. It
+  appears exactly when `travel` becomes the active prompt, and
+  immediately on re-entry after full completion. Other zones' portals
+  are untouched (one `visiblePortals` filter in the combat arena).
+- **Banked completion.** Because the portal no longer offers an escape
+  from a stranded state, `TutorialTracker` now banks every verb the
+  moment it is performed in-zone, regardless of order; the prompt
+  always shows the first incomplete step in the canonical order. There
+  is no dedicated skip anymore — the tutorial is short enough that
+  finishing it IS the exit.
+- **Strand-proofing.** No action sequence can strand a step: move and
+  dodge are always available; the scuttler's death banks attack at the
+  instant it dies (the player is its only damage source) and every
+  kill drops at least one item through the deterministic loot
+  generator, so a pickup (which banks loot) is always available in the
+  visit where the kill happened; the ore node self-respawns its
+  charges; and each zone entry respawns the scuttler and clears stale
+  ground loot, so progress banked across visits can always be resumed.
+  No enemy-respawn timer was needed.
+- The read model gained `stepNumber` (canonical position of the
+  displayed step, which the HUD heading now uses) and `exitUnlocked`;
+  `stepsCompleted` now counts banked steps. All other TASK-702
+  semantics (activation only in-zone, `reset()` clearing, core-owned
+  copy, TASK-703's New Game flow) are unchanged.
+
 ---
 
 # DEC-031

@@ -1832,7 +1832,7 @@ export function App({
           data-step-id={combatHud.tutorial.stepId}
         >
           <p class="combat-tutorial-heading">
-            Tutorial · Step {combatHud.tutorial.stepsCompleted + 1} of{" "}
+            Tutorial · Step {combatHud.tutorial.stepNumber} of{" "}
             {combatHud.tutorial.totalSteps}
           </p>
           <p

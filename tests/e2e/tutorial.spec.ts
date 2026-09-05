@@ -2,6 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { WAKESHORE_LANDING_ID } from "../../src/core";
 
+const PORTAL_X = 1_080;
+const PORTAL_Y = 400;
+
 function collectRuntimeFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("console", (message) => {
@@ -9,6 +12,17 @@ function collectRuntimeFailures(page: Page): string[] {
   });
   page.on("pageerror", (error) => failures.push(`page: ${error.message}`));
   return failures;
+}
+
+/** Portal count as the simulation reports it (interactables read model). */
+async function interactablePortalCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      window.__RARPG_COMBAT_TEST__
+        ?.diagnostics()
+        ?.interactables.filter((interactable) => interactable.kind === "portal")
+        .length ?? -1,
+  );
 }
 
 test("the tutorial guides move, attack, dodge, loot, gather, and travel in order", async ({
@@ -35,6 +49,10 @@ test("the tutorial guides move, attack, dodge, loot, gather, and travel in order
   await expect(tutorial).toHaveAttribute("data-step-id", "move");
   await expect(tutorial).toContainText("Step 1 of 6");
   await expect(prompt).toHaveText("Move with W, A, S, and D.");
+  // The gated exit portal is absent from the world and the minimap until
+  // the first five steps are done.
+  expect(await interactablePortalCount(page)).toBe(0);
+  await expect(page.locator(".combat-minimap-marker-portal")).toHaveCount(0);
   await page.screenshot({
     path: `test-results/tutorial/tutorial-prompt-${testInfo.project.name}.png`,
   });
@@ -136,6 +154,9 @@ test("the tutorial guides move, attack, dodge, loot, gather, and travel in order
   });
   expect(gathered, "one ore gather must complete").toBe(true);
   await expect(tutorial).toHaveAttribute("data-step-id", "travel");
+  // The portal appears exactly when travel becomes the active prompt.
+  expect(await interactablePortalCount(page)).toBe(1);
+  await expect(page.locator(".combat-minimap-marker-portal")).toHaveCount(1);
 
   const traveled = await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;
@@ -171,7 +192,7 @@ test("the tutorial guides move, attack, dodge, loot, gather, and travel in order
   expect(failures, failures.join("\n")).toEqual([]);
 });
 
-test("the exit portal skips the tutorial at any step and re-entry resumes it", async ({
+test("the exit portal is absent until the first five steps are banked", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
@@ -183,46 +204,84 @@ test("the exit portal skips the tutorial at any step and re-entry resumes it", a
     combat?.setAutomationPaused(true);
     combat?.travelTo(zoneId);
   }, WAKESHORE_LANDING_ID);
-  await expect(page.getByTestId("combat-tutorial")).toBeVisible();
+  const tutorial = page.getByTestId("combat-tutorial");
+  await expect(tutorial).toBeVisible();
+  await expect(tutorial).toHaveAttribute("data-step-id", "move");
+  expect(await interactablePortalCount(page)).toBe(0);
+  await expect(page.locator(".combat-minimap-marker-portal")).toHaveCount(0);
 
-  const skipped = await page.evaluate(() => {
+  // Dodging during the move step banks dodge without changing the prompt.
+  await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;
-    if (combat === undefined) return false;
-    for (let index = 0; index < 600; index += 1) {
-      const state = combat.diagnostics();
-      const portal = state?.interactables.find(
-        (interactable) => interactable.kind === "portal",
-      );
-      if (state === null || portal === undefined) return false;
-      const deltaX = portal.x - state.x;
-      const deltaY = portal.y - state.y;
-      if (Math.hypot(deltaX, deltaY) <= 36) {
-        combat.setMovement(0, 0);
-        combat.requestInteract();
-        return true;
-      }
-      combat.setMovement(deltaX, deltaY);
-      combat.advancePaused(1);
-    }
-    return false;
+    combat?.requestDodge();
+    combat?.advancePaused(2);
   });
-  expect(skipped, "the exit portal must always work").toBe(true);
-
-  await expect(page.getByTestId("combat-zone")).toContainText("Hearthmere");
-  await expect(page.getByTestId("combat-tutorial")).toHaveCount(0);
-  const afterSkip = await page.evaluate(
+  await expect(tutorial).toHaveAttribute("data-step-id", "move");
+  const banked = await page.evaluate(
     () => window.__RARPG_COMBAT_TEST__?.diagnostics()?.tutorial ?? null,
   );
-  expect(afterSkip?.completed).toBe(false);
+  expect(banked?.stepsCompleted).toBe(1);
 
+  // Walk to where the portal will eventually stand and press F: nothing is
+  // there, and the player stays in the tutorial zone.
+  const reached = await page.evaluate(
+    (target) => {
+      const combat = window.__RARPG_COMBAT_TEST__;
+      if (combat === undefined) return false;
+      combat.advancePaused(60);
+      for (let index = 0; index < 900; index += 1) {
+        const state = combat.diagnostics();
+        if (state === null) return false;
+        const deltaX = target.x - state.x;
+        const deltaY = target.y - state.y;
+        if (Math.hypot(deltaX, deltaY) <= 10) {
+          combat.setMovement(0, 0);
+          combat.requestInteract();
+          combat.advancePaused(2);
+          return true;
+        }
+        combat.setMovement(deltaX, deltaY);
+        combat.advancePaused(1);
+      }
+      return false;
+    },
+    { x: PORTAL_X, y: PORTAL_Y },
+  );
+  expect(reached, "the portal spot must be reachable on foot").toBe(true);
+  await expect(page.getByTestId("combat-zone")).toContainText(
+    "Wakeshore Landing",
+  );
+  // Walking banked move, so the prompt is now attack (dodge already done).
+  await expect(tutorial).toHaveAttribute("data-step-id", "attack");
+  expect(await interactablePortalCount(page)).toBe(0);
+
+  // Leaving through the automation hook and returning keeps progress,
+  // respawns the scuttler, and keeps the portal hidden.
+  await page.evaluate((zoneId) => {
+    window.__RARPG_COMBAT_TEST__?.travelTo(zoneId);
+  }, "zone:hearthmere");
+  await expect(page.getByTestId("combat-tutorial")).toHaveCount(0);
   await page.evaluate((zoneId) => {
     window.__RARPG_COMBAT_TEST__?.travelTo(zoneId);
   }, WAKESHORE_LANDING_ID);
-  await expect(page.getByTestId("combat-tutorial")).toBeVisible();
-  await expect(page.getByTestId("combat-tutorial")).toHaveAttribute(
-    "data-step-id",
-    "attack",
-  );
+  await expect(tutorial).toBeVisible();
+  await expect(tutorial).toHaveAttribute("data-step-id", "attack");
+  const revisit = await page.evaluate(() => {
+    const state = window.__RARPG_COMBAT_TEST__?.diagnostics() ?? null;
+    return state === null
+      ? null
+      : {
+          stepsCompleted: state.tutorial.stepsCompleted,
+          scuttlerAlive:
+            state.enemies.find(
+              (enemy) => enemy.id === "enemy:wakeshore-scuttler",
+            )?.dead === false,
+        };
+  });
+  expect(revisit?.stepsCompleted).toBe(2);
+  expect(revisit?.scuttlerAlive).toBe(true);
+  expect(await interactablePortalCount(page)).toBe(0);
+  await expect(page.locator(".combat-minimap-marker-portal")).toHaveCount(0);
 
   expect(failures, failures.join("\n")).toEqual([]);
 });

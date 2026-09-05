@@ -1,12 +1,16 @@
 /**
- * Core-owned tutorial progression for Wakeshore Landing (TASK-702, DEC-030).
+ * Core-owned tutorial progression for Wakeshore Landing (TASK-702, DEC-030
+ * as amended by TASK-702B).
  *
  * Follows the quest-stage pattern: the step list is plain core data (prompt
  * copy included, like `QuestDefinition.summary`), and a small tracker owns
- * the mutable stage. Steps advance strictly in order; actions performed out
- * of order neither advance nor break the sequence. The exit portal always
- * works — walking out IS the skip mechanism — so the tracker never gates
- * any simulation behavior; it only observes it.
+ * the mutable stage. Completion is BANKED: every verb checks off its own
+ * step whenever it is performed, regardless of order, while the prompt
+ * always displays the first incomplete step in the canonical order
+ * (move → attack → dodge → loot → gather → travel). The Hearthmere exit
+ * portal is hidden and non-interactable until the five non-travel steps are
+ * banked (`exitUnlocked`); it appears exactly when `travel` becomes the
+ * active prompt, and immediately on re-entry after full completion.
  */
 
 export const TUTORIAL_STEP_IDS = [
@@ -50,18 +54,24 @@ export interface TutorialReadModel {
   readonly completed: boolean;
   readonly stepId: TutorialStepId | null;
   readonly prompt: string | null;
+  /** Canonical 1-based position of the displayed step; null when inactive. */
+  readonly stepNumber: number | null;
+  /** Count of banked steps (order-independent). */
   readonly stepsCompleted: number;
   readonly totalSteps: number;
+  /** True once move/attack/dodge/loot/gather are all banked. */
+  readonly exitUnlocked: boolean;
 }
 
 /**
- * Observes simulation verbs and advances the ordered step list. The tracker
- * is only receptive while the tutorial zone is the current zone; leaving the
- * zone hides prompts but keeps progress, and re-entry after completion shows
- * nothing.
+ * Observes simulation verbs and banks completed steps. The tracker is only
+ * receptive while the tutorial zone is the current zone: entering shows the
+ * first incomplete step, leaving hides prompts but keeps progress, and
+ * re-entry after completion shows nothing. Because completion is banked,
+ * no sequence of in-zone actions can strand a step (see DEC-030 amendment).
  */
 export class TutorialTracker {
-  #stepsCompleted = 0;
+  readonly #banked = new Set<TutorialStepId>();
   #inZone = false;
 
   public setInZone(inZone: boolean): void {
@@ -69,42 +79,59 @@ export class TutorialTracker {
   }
 
   public completed(): boolean {
-    return this.#stepsCompleted >= TUTORIAL_STEPS.length;
+    return this.#banked.size >= TUTORIAL_STEPS.length;
   }
 
   /**
-   * Reports a performed verb. Advances only when the tracker is receptive
-   * and the verb matches the current step; anything else is a silent no-op.
+   * True once every non-travel step is banked. The combat arena hides the
+   * tutorial zone's exit portal (interactables, minimap, and F-interaction)
+   * until this is true.
+   */
+  public exitUnlocked(): boolean {
+    return TUTORIAL_STEPS.every(
+      (step) => step.id === "travel" || this.#banked.has(step.id),
+    );
+  }
+
+  /**
+   * Reports a performed verb. Banks the matching step whenever the tracker
+   * is receptive, regardless of prompt order; repeats are silent no-ops.
+   * `travel` additionally requires the exit to be unlocked, mirroring the
+   * gated portal (unreachable otherwise, kept as a core invariant).
    */
   public notify(action: TutorialStepId): boolean {
-    if (!this.#inZone || this.completed()) {
+    if (!this.#inZone || this.#banked.has(action)) {
       return false;
     }
-    const current = TUTORIAL_STEPS[this.#stepsCompleted];
-    if (current === undefined || current.id !== action) {
+    if (action === "travel" && !this.exitUnlocked()) {
       return false;
     }
-    this.#stepsCompleted += 1;
+    this.#banked.add(action);
     return true;
   }
 
   public reset(): void {
-    this.#stepsCompleted = 0;
+    this.#banked.clear();
     this.#inZone = false;
   }
 
   public readModel(): TutorialReadModel {
+    const currentIndex = TUTORIAL_STEPS.findIndex(
+      (step) => !this.#banked.has(step.id),
+    );
     const current =
-      this.#inZone && !this.completed()
-        ? TUTORIAL_STEPS[this.#stepsCompleted]
+      this.#inZone && currentIndex >= 0
+        ? TUTORIAL_STEPS[currentIndex]
         : undefined;
     return {
       active: current !== undefined,
       completed: this.completed(),
       stepId: current?.id ?? null,
       prompt: current?.prompt ?? null,
-      stepsCompleted: this.#stepsCompleted,
+      stepNumber: current === undefined ? null : currentIndex + 1,
+      stepsCompleted: this.#banked.size,
       totalSteps: TUTORIAL_STEPS.length,
+      exitUnlocked: this.exitUnlocked(),
     };
   }
 }

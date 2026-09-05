@@ -621,6 +621,7 @@ describe("technical UI shell component", () => {
       tutorial: {
         stepId: "move",
         prompt: "Move with W, A, S, and D.",
+        stepNumber: 1,
         stepsCompleted: 0,
         totalSteps: 6,
       },
@@ -634,6 +635,22 @@ describe("technical UI shell component", () => {
       container.querySelector('[data-testid="combat-tutorial-prompt"]')
         ?.textContent,
     ).toBe("Move with W, A, S, and D.");
+
+    // Banked completion: the heading shows the canonical position of the
+    // displayed step, not the banked count (here 3 steps are already done).
+    await publishCombatHud({
+      ...combatHudModel,
+      tutorial: {
+        stepId: "attack",
+        prompt: "Slay the Wakeshore Scuttler with Left Click.",
+        stepNumber: 2,
+        stepsCompleted: 3,
+        totalSteps: 6,
+      },
+    });
+    expect(
+      container.querySelector('[data-testid="combat-tutorial"]')?.textContent,
+    ).toContain("Step 2 of 6");
 
     await publishCombatHud({ ...combatHudModel, tutorial: null });
     expect(

@@ -80,6 +80,7 @@ import {
   ZONE_CATALOG,
   vendorOfferById,
   zoneById,
+  type PortalDefinition,
   type QuestStage,
   type ZoneDefinition,
   type ZoneId,
@@ -1939,7 +1940,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
           forge.radius,
         ),
       ),
-      ...zone.portals.map((portal) =>
+      ...this.visiblePortals(zone).map((portal) =>
         landmark(
           portal.id,
           "portal",
@@ -1983,6 +1984,20 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
    */
   private zoneNodeById(nodeId: ContentId): OreNodeDefinition | undefined {
     return this.currentZone().nodes.find((node) => node.id === nodeId);
+  }
+
+  /**
+   * The tutorial zone's exit portal is hidden and non-interactable (absent
+   * from the interactables read model, the minimap, and F-interaction) until
+   * the five non-travel tutorial steps are banked. It appears exactly when
+   * `travel` becomes the active prompt and immediately on re-entry after
+   * full completion. Every other zone's portals are always visible.
+   */
+  private visiblePortals(zone: ZoneDefinition): readonly PortalDefinition[] {
+    if (zone.id === WAKESHORE_LANDING_ID && !this.#tutorial.exitUnlocked()) {
+      return [];
+    }
+    return zone.portals;
   }
 
   private gatheringReadModel(): GatheringReadModel | null {
@@ -2146,15 +2161,15 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   private usePortal(portalId: ContentId): InteractResult {
-    const portal = this.currentZone().portals.find(
+    const portal = this.visiblePortals(this.currentZone()).find(
       (entry) => entry.id === portalId,
     );
     if (portal === undefined) {
       return { kind: "rejected", reason: "nothing-in-range" };
     }
-    // The tutorial exit portal doubles as the final step AND the skip path:
-    // it always works, and the tracker only advances when `travel` is the
-    // current step. Notify before traveling so the tracker is still in-zone.
+    // The tutorial exit portal only exists once the first five steps are
+    // banked (visiblePortals), so using it completes `travel`. Notify before
+    // traveling so the tracker is still in-zone.
     this.#tutorial.notify("travel");
     const traveled = this.travelTo(
       portal.destinationZoneId,
@@ -2311,7 +2326,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         });
       }
     }
-    for (const portal of zone.portals) {
+    for (const portal of this.visiblePortals(zone)) {
       markers.push({
         id: portal.id,
         kind: "portal",

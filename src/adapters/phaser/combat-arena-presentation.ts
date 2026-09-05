@@ -1113,10 +1113,12 @@ export class CombatArenaPresentation {
       tutorial:
         state.tutorial.active &&
         state.tutorial.stepId !== null &&
-        state.tutorial.prompt !== null
+        state.tutorial.prompt !== null &&
+        state.tutorial.stepNumber !== null
           ? {
               stepId: state.tutorial.stepId,
               prompt: state.tutorial.prompt,
+              stepNumber: state.tutorial.stepNumber,
               stepsCompleted: state.tutorial.stepsCompleted,
               totalSteps: state.tutorial.totalSteps,
             }

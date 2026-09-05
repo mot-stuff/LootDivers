@@ -80,6 +80,9 @@ export interface MinimapHudReadModel {
 export interface TutorialHudReadModel {
   readonly stepId: string;
   readonly prompt: string;
+  /** Canonical 1-based position of the displayed step. */
+  readonly stepNumber: number;
+  /** Count of banked steps (order-independent). */
   readonly stepsCompleted: number;
   readonly totalSteps: number;
 }
