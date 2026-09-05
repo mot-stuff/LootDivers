@@ -1,5 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { equipmentBaseById, type ItemRarity } from "../../src/core";
+
+const RARITY_LABEL_COLORS: Readonly<Record<ItemRarity, string>> = {
+  common: "#ffffff",
+  magic: "#60a5fa",
+  rare: "#ffd166",
+  unique: "#ff8000",
+};
+const ABILITY_STONE_LABEL_COLOR = "#c084fc";
+
 function collectRuntimeFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("console", (message) => {
@@ -72,6 +82,34 @@ test("enemy loot can be picked, equipped, and used to reassign combat", async ({
       expect.objectContaining({ itemKind: "equipment" }),
     ],
   });
+  if (dropped === null) {
+    throw new Error("Combat loot diagnostics were unavailable.");
+  }
+
+  // Every drop shows a floating ground label with the compact base display
+  // name (never the affix-decorated name) in its rarity color.
+  const expectedLabels = dropped.worldLoot.map(({ item }) =>
+    item.kind === "ability-stone"
+      ? { labelText: "Ability Stone", labelColor: ABILITY_STONE_LABEL_COLOR }
+      : {
+          labelText: equipmentBaseById(item.baseId)?.displayName ?? "",
+          labelColor: RARITY_LABEL_COLORS[item.rarity],
+        },
+  );
+  expect(
+    dropped.renderedLoot.map(({ labelText, labelColor }) => ({
+      labelText,
+      labelColor,
+    })),
+  ).toEqual(expectedLabels);
+  // All four drops land on the same deterministic kill spot, so their labels
+  // must stack upward instead of overlapping: each successive label sits
+  // strictly above the previous one.
+  for (let index = 1; index < dropped.renderedLoot.length; index += 1) {
+    expect(dropped.renderedLoot[index]!.labelCanvasY).toBeLessThan(
+      dropped.renderedLoot[index - 1]!.labelCanvasY - 4,
+    );
+  }
 
   await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;

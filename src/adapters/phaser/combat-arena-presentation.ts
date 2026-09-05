@@ -38,12 +38,17 @@ import {
   type ItemUiCommand,
 } from "../../presentation/shell-contracts";
 import { CombatInputAdapter } from "./combat-input";
+import { worldLootLabel } from "./loot-label";
 
 const ORIGIN_X = 480;
 const ORIGIN_Y = 72;
 const ISO_X_SCALE = 0.65;
 const ISO_Y_SCALE = 0.34;
 const PRESENTATION_DEPTH = 3_500_000;
+/** Vertical distance from a drop's ground point to its label's bottom edge. */
+const LOOT_LABEL_BASE_LIFT = 18;
+/** Vertical spacing between stacked labels of overlapping drops. */
+const LOOT_LABEL_STACK_GAP = 2;
 
 const HUD_SLOTS: readonly {
   readonly slot: LoadoutSlot;
@@ -130,6 +135,10 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
     readonly itemKind: ItemInstance["kind"];
     readonly canvasX: number;
     readonly canvasY: number;
+    readonly labelText: string;
+    readonly labelColor: string;
+    readonly labelCanvasX: number;
+    readonly labelCanvasY: number;
   }[];
 }
 
@@ -161,6 +170,7 @@ export class CombatArenaPresentation {
   #renderedAreaCount = 0;
   #renderedStatusCount = 0;
   #renderedLoot: CombatPresentationDiagnostics["renderedLoot"] = [];
+  readonly #lootLabels = new Map<string, Phaser.GameObjects.Text>();
   readonly #itemCommand = (event: CustomEvent<ItemUiCommand>): void => {
     this.executeItemCommand(event.detail);
   };
@@ -384,6 +394,10 @@ export class CombatArenaPresentation {
     this.#arenaGraphics.destroy();
     this.#combatGraphics.destroy();
     this.#playerGraphics.destroy();
+    for (const label of this.#lootLabels.values()) {
+      label.destroy();
+    }
+    this.#lootLabels.clear();
   }
 
   private drawArena(): void {
@@ -633,6 +647,13 @@ export class CombatArenaPresentation {
     const rendered: Array<
       CombatPresentationDiagnostics["renderedLoot"][number]
     > = [];
+    const liveDropIds = new Set<string>();
+    const placedLabelBounds: Array<{
+      readonly left: number;
+      readonly right: number;
+      readonly top: number;
+      readonly bottom: number;
+    }> = [];
     for (const drop of drops) {
       const point = this.project(drop.x, drop.y);
       const color =
@@ -659,18 +680,86 @@ export class CombatArenaPresentation {
         this.#combatGraphics.lineStyle(2, 0xffffff, 0.9);
         this.#combatGraphics.strokeCircle(point.x, point.y - 4, 4);
       }
+      liveDropIds.add(drop.dropId);
+      const label = worldLootLabel(drop.item);
+      const text = this.ensureLootLabel(drop.dropId, label.text, label.color);
+      // Float the label above the marker tip; when labels from nearby drops
+      // would overlap, push this one upward until it sits in a free row.
+      let labelBottom = point.y - LOOT_LABEL_BASE_LIFT;
+      const halfWidth = text.width / 2;
+      const overlapsPlaced = (bottom: number): boolean =>
+        placedLabelBounds.some(
+          (bounds) =>
+            point.x - halfWidth < bounds.right &&
+            point.x + halfWidth > bounds.left &&
+            bottom - text.height < bounds.bottom &&
+            bottom > bounds.top,
+        );
+      while (overlapsPlaced(labelBottom)) {
+        labelBottom -= text.height + LOOT_LABEL_STACK_GAP;
+      }
+      text.setPosition(point.x, labelBottom);
+      placedLabelBounds.push({
+        left: point.x - halfWidth,
+        right: point.x + halfWidth,
+        top: labelBottom - text.height,
+        bottom: labelBottom,
+      });
       const canvasPoint = this.scene.cameras.main.matrixCombined.transformPoint(
         point.x,
         point.y - 4,
       );
+      const labelCanvasPoint =
+        this.scene.cameras.main.matrixCombined.transformPoint(
+          point.x,
+          labelBottom,
+        );
       rendered.push({
         dropId: drop.dropId,
         itemKind: drop.item.kind,
         canvasX: canvasPoint.x,
         canvasY: canvasPoint.y,
+        labelText: label.text,
+        labelColor: label.color,
+        labelCanvasX: labelCanvasPoint.x,
+        labelCanvasY: labelCanvasPoint.y,
       });
     }
+    for (const [dropId, text] of this.#lootLabels) {
+      if (!liveDropIds.has(dropId)) {
+        text.destroy();
+        this.#lootLabels.delete(dropId);
+      }
+    }
     this.#renderedLoot = rendered;
+  }
+
+  private ensureLootLabel(
+    dropId: string,
+    labelText: string,
+    labelColor: string,
+  ): Phaser.GameObjects.Text {
+    const existing = this.#lootLabels.get(dropId);
+    if (existing !== undefined) {
+      if (existing.text !== labelText) {
+        existing.setText(labelText);
+      }
+      return existing;
+    }
+    const created = this.scene.add
+      .text(0, 0, labelText, {
+        fontFamily: "monospace",
+        fontSize: "11px",
+        color: labelColor,
+        backgroundColor: "rgba(6, 16, 28, 0.8)",
+        padding: { x: 4, y: 1 },
+        stroke: "#06101c",
+        strokeThickness: 2,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(PRESENTATION_DEPTH + 3);
+    this.#lootLabels.set(dropId, created);
+    return created;
   }
 
   private consumeEvents(events: readonly CombatArenaEvent[]): void {
