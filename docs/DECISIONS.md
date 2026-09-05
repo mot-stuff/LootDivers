@@ -2734,6 +2734,40 @@ order can differ from merge order, as it did for this entry and DEC-037.)
   CORS/cookies (`APP_DOMAIN`); until Part B completes, merged code
   serves localhost development and CI only.
 
+## Amendment (TASK-709): menu composition for account play
+
+Date: 2026-09-05 (TASK-709; completes the "menu wiring is TASK-709"
+deferral in point 5 above)
+
+1. **The menu is session-composed, not routed.** When the boot probe
+   settles with a live session (custom-domain origin only), the `/play/`
+   main menu replaces New Game/Continue with **character select**: the
+   account's characters (name, class, level via GET /characters), typed
+   name confirmation before DELETE, and a create screen with the
+   barbarian class card - a pure CSS `steps()` flipbook of the
+   south-facing Idle sheet row (no Phaser on the menu), original flavor
+   text, and a name input enforcing the point-2 rule client-side before
+   any request. Server 409/422/403 messages surface inline; a session
+   with an unreachable character list falls back to the local menu with
+   a notice. Signed out on an API-bearing origin, the local menu gains
+   one "Log in" pointer to the homepage.
+2. **Selecting a character swaps the save repository, not the flow.**
+   `CharacterSaveService` is rebound to an `HttpSaveRepository` for the
+   selected row; every DEC-034 trigger (travel, death, respawn, page
+   hide) then persists to the server unchanged. A character whose
+   `envelope` is null starts exactly like New Game (tutorial travel); a
+   saved envelope is decoded and validated client-side and restored like
+   Continue. The shell (`main.tsx`) owns all API calls; the menu UI only
+   observes a model and invokes injected actions.
+3. **`?accountTest` is the automation affordance** (DEC-031 precedent:
+   explicit parameters over environment sniffing). It points the account
+   menu at a same-origin `/api` base so Playwright can route-mock the
+   section-2 contract on 127.0.0.1, where the real probe is skipped by
+   point 4 of this decision. Without the parameter, local origins and
+   `?autostart` remain byte-identical to pre-709 behavior, which
+   `tests/e2e/character-create.spec.ts` pins down alongside the mocked
+   list/create/select/delete, validation, slot-limit, and fallback flows.
+
 ---
 
 # DEC-037

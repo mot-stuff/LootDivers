@@ -4,11 +4,13 @@ import {
   ATTRIBUTE_IDS,
   ATTRIBUTE_LABELS,
   ATTRIBUTE_SUMMARIES,
+  CHARACTER_NAME_RULE_MESSAGE,
   FOUNDATION_ID,
   INVENTORY_SLOT_COUNT,
   PASSIVE_CATALOG,
   WAKESHORE_LANDING_ID,
   experienceToNextLevel,
+  normalizeCharacterName,
   slotAcceptsKind,
 } from "../core";
 import type {
@@ -62,6 +64,46 @@ export interface MainMenuCharacterSaveModel {
   readonly recovered: boolean;
 }
 
+/** One server character row as the menu presents it (TASK-709 / DEC-036). */
+export interface AccountCharacterModel {
+  readonly id: string;
+  readonly name: string;
+  readonly className: string;
+  readonly level: number;
+}
+
+/**
+ * Account-aware menu read model (TASK-709). Present only when a session
+ * exists; `phase: "unavailable"` means the session is live but the
+ * character list could not be fetched, so the menu falls back to local
+ * play with a notice.
+ */
+export interface AccountMenuModel {
+  readonly email: string;
+  readonly phase: "loading" | "ready" | "unavailable";
+  readonly characters: readonly AccountCharacterModel[];
+  readonly slotLimit: number;
+  /** True while a create/select/delete request is in flight. */
+  readonly busy: boolean;
+  /** Server-surfaced action error (409/422/403 message, or unreachable). */
+  readonly error: string | null;
+  /** Explanation line for the unavailable fallback. */
+  readonly notice: string | null;
+}
+
+/**
+ * Account actions owned by the shell (main.tsx): the UI never talks to the
+ * API directly. `select`/`create` resolve with how gameplay should start —
+ * "fresh" runs the New Game tutorial travel, "restored" means the saved
+ * character is already restored into the simulation — or null when the
+ * action failed (the error surfaces through the model).
+ */
+export interface AccountMenuActions {
+  select(id: string): Promise<"fresh" | "restored" | null>;
+  create(name: string): Promise<"fresh" | null>;
+  remove(id: string): Promise<boolean>;
+}
+
 export interface AppProps {
   readonly bindings: ShellBindings;
   readonly persistenceStatus?: PersistenceStatus;
@@ -87,6 +129,14 @@ export interface AppProps {
    * overwrite an existing save on tab close.
    */
   readonly onGameplayStarted?: () => void;
+  /** Account menu model; null/omitted keeps the local menu (TASK-709). */
+  readonly account?: AccountMenuModel | null;
+  readonly accountActions?: AccountMenuActions;
+  /**
+   * Homepage login pointer, shown only when signed out on an origin that
+   * has an accounts API (never on local/automation origins).
+   */
+  readonly accountLoginUrl?: string | null;
 }
 
 interface CombatVitalsProps {
@@ -1007,21 +1057,315 @@ interface MainMenuProps {
   readonly onNewGame: () => void;
   readonly characterSave: MainMenuCharacterSaveModel;
   readonly onContinue: () => void;
+  readonly account: AccountMenuModel | null;
+  readonly accountActions: AccountMenuActions | null;
+  readonly onServerEntry: (outcome: "fresh" | "restored") => void;
+  readonly loginUrl: string | null;
+}
+
+/**
+ * TASK-709 original barbarian class flavor for the create screen. Original
+ * writing for an original archetype — no copyrighted lore.
+ */
+const BARBARIAN_DESCRIPTION =
+  "Storm-bred and mountain-raised, the barbarian answers the deep places " +
+  "the old way: a wide cleave, a heavier temper, and the stubborn refusal " +
+  "to stay down. Shrugs off wounds, breaks packs apart at arm's length, " +
+  "and hauls home more loot than the rope was ever rated for.";
+
+function capitalizeClassName(className: string): string {
+  return className.length === 0
+    ? className
+    : className.charAt(0).toUpperCase() + className.slice(1);
+}
+
+interface AccountMenuSectionProps {
+  readonly ready: boolean;
+  readonly account: AccountMenuModel;
+  readonly actions: AccountMenuActions | null;
+  readonly onEnter: (outcome: "fresh" | "restored") => void;
+}
+
+/**
+ * TASK-709 account-aware menu body (DEC-036 menu composition): character
+ * select over GET /characters plus the barbarian create flow. The section
+ * is pure presentation — every API call goes through the injected actions,
+ * and the DEC-036 name rule is enforced client-side before any request.
+ */
+function AccountMenuSection({
+  ready,
+  account,
+  actions,
+  onEnter,
+}: AccountMenuSectionProps) {
+  const [screen, setScreen] = useState<"select" | "create">("select");
+  const [nameValue, setNameValue] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    typed: string;
+  } | null>(null);
+
+  const busy = account.busy || !ready;
+  const slotsFull = account.characters.length >= account.slotLimit;
+
+  function handleSelect(id: string): void {
+    void actions?.select(id).then((outcome) => {
+      if (outcome !== null) onEnter(outcome);
+    });
+  }
+
+  function handleCreateSubmit(event: Event): void {
+    event.preventDefault();
+    const name = normalizeCharacterName(nameValue);
+    if (name === null) {
+      setNameError(CHARACTER_NAME_RULE_MESSAGE);
+      return;
+    }
+    setNameError(null);
+    void actions?.create(name).then((outcome) => {
+      if (outcome !== null) onEnter(outcome);
+    });
+  }
+
+  function handleDelete(id: string): void {
+    void actions?.remove(id).then((removed) => {
+      if (removed) setDeleteTarget(null);
+    });
+  }
+
+  if (screen === "create") {
+    const createError = nameError ?? account.error;
+    return (
+      <section
+        class="account-menu account-create"
+        data-testid="account-create"
+        aria-label="Create character"
+      >
+        <h2 class="account-heading">Create Your Diver</h2>
+        <div class="account-class-card" data-testid="account-class-card">
+          <span
+            class="barbarian-idle-preview"
+            data-testid="account-create-preview"
+            role="img"
+            aria-label="Barbarian idle animation preview"
+          ></span>
+          <div class="account-class-copy">
+            <h3>Barbarian</h3>
+            <p>{BARBARIAN_DESCRIPTION}</p>
+          </div>
+        </div>
+        <form class="account-create-form" onSubmit={handleCreateSubmit}>
+          <label class="account-field-label" for="account-create-name">
+            Name your diver
+          </label>
+          <input
+            id="account-create-name"
+            class="account-name-input"
+            data-testid="account-create-name"
+            type="text"
+            maxLength={16}
+            autocomplete="off"
+            spellcheck={false}
+            value={nameValue}
+            disabled={busy}
+            onInput={(event) => {
+              setNameValue(event.currentTarget.value);
+            }}
+          />
+          <button
+            type="submit"
+            class="main-menu-button account-create-submit"
+            data-testid="account-create-submit"
+            disabled={busy}
+          >
+            Create Character
+          </button>
+        </form>
+        {createError !== null && (
+          <p
+            class="account-error"
+            data-testid="account-create-error"
+            role="alert"
+          >
+            {createError}
+          </p>
+        )}
+        <button
+          type="button"
+          class="account-back"
+          data-testid="account-create-back"
+          disabled={busy}
+          onClick={() => {
+            setScreen("select");
+            setNameError(null);
+          }}
+        >
+          Back to character select
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      class="account-menu account-select"
+      data-testid="account-select"
+      aria-label="Character select"
+    >
+      <h2 class="account-heading">Choose Your Diver</h2>
+      <p class="account-email" data-testid="account-email">
+        Signed in as {account.email}
+      </p>
+      {account.phase === "loading" && (
+        <p class="main-menu-note" data-testid="account-loading">
+          Fetching your heroes…
+        </p>
+      )}
+      {account.phase === "ready" && account.characters.length === 0 && (
+        <p class="main-menu-note" data-testid="account-empty">
+          No heroes yet — create your first diver.
+        </p>
+      )}
+      <ul class="account-character-list" data-testid="account-character-list">
+        {account.characters.map((character) => (
+          <li class="account-character" key={character.id}>
+            <button
+              type="button"
+              class="account-character-select"
+              data-testid="account-character-select"
+              disabled={busy}
+              onClick={() => {
+                handleSelect(character.id);
+              }}
+            >
+              <span class="account-character-name">{character.name}</span>
+              <span class="account-character-meta">
+                {capitalizeClassName(character.className)} · Level{" "}
+                {character.level}
+              </span>
+            </button>
+            <button
+              type="button"
+              class="account-character-delete"
+              data-testid="account-character-delete"
+              aria-label={`Delete ${character.name}`}
+              disabled={busy}
+              onClick={() => {
+                setDeleteTarget(
+                  deleteTarget?.id === character.id
+                    ? null
+                    : { id: character.id, typed: "" },
+                );
+              }}
+            >
+              Delete
+            </button>
+            {deleteTarget?.id === character.id && (
+              <div
+                class="account-delete-confirm"
+                data-testid="account-delete-confirm"
+              >
+                <label
+                  class="account-field-label"
+                  for={`account-delete-${character.id}`}
+                >
+                  Type {character.name} to confirm — this hero is gone forever.
+                </label>
+                <input
+                  id={`account-delete-${character.id}`}
+                  class="account-name-input"
+                  data-testid="account-delete-input"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck={false}
+                  value={deleteTarget.typed}
+                  disabled={busy}
+                  onInput={(event) => {
+                    setDeleteTarget({
+                      id: character.id,
+                      typed: event.currentTarget.value,
+                    });
+                  }}
+                />
+                <div class="account-delete-actions">
+                  <button
+                    type="button"
+                    class="account-delete-submit"
+                    data-testid="account-delete-submit"
+                    disabled={busy || deleteTarget.typed !== character.name}
+                    onClick={() => {
+                      handleDelete(character.id);
+                    }}
+                  >
+                    Delete forever
+                  </button>
+                  <button
+                    type="button"
+                    class="account-back"
+                    data-testid="account-delete-cancel"
+                    disabled={busy}
+                    onClick={() => {
+                      setDeleteTarget(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        class="main-menu-button account-create-open"
+        data-testid="account-create-open"
+        disabled={busy || slotsFull || account.phase !== "ready"}
+        onClick={() => {
+          setScreen("create");
+          setNameValue("");
+          setNameError(null);
+        }}
+      >
+        Create Character
+      </button>
+      {slotsFull && (
+        <p class="main-menu-note" data-testid="account-slot-note">
+          All {account.slotLimit} character slots are full — delete a hero to
+          make room.
+        </p>
+      )}
+      {account.error !== null && (
+        <p class="account-error" data-testid="account-error" role="alert">
+          {account.error}
+        </p>
+      )}
+    </section>
+  );
 }
 
 /**
  * TASK-703 boot-time main menu: a full-screen overlay above the paused
  * simulation. "New Game" travels to the tutorial zone; "Continue" (TASK-705)
  * restores the local character save and enables once a valid save exists.
+ * With a live session (TASK-709) the local actions are replaced by the
+ * account character select/create screens; an unreachable character list
+ * falls back to local play with a notice.
  */
 function MainMenu({
   phase,
   onNewGame,
   characterSave,
   onContinue,
+  account,
+  accountActions,
+  onServerEntry,
+  loginUrl,
 }: MainMenuProps) {
   const ready = phase.kind === "ready";
   const build = buildLabel();
+  const accountActive = account !== null && account.phase !== "unavailable";
   const continueNote = characterSave.available
     ? characterSave.recovered
       ? "Recovered from backup save"
@@ -1043,34 +1387,60 @@ function MainMenu({
           width="1983"
           height="793"
         />
-        <nav class="main-menu-actions" aria-label="Main menu actions">
-          <button
-            type="button"
-            class="main-menu-button main-menu-new-game"
-            data-testid="main-menu-new-game"
-            disabled={!ready}
-            onClick={onNewGame}
-          >
-            New Game
-          </button>
-          <button
-            type="button"
-            class="main-menu-button main-menu-continue"
-            data-testid="main-menu-continue"
-            disabled={!ready || !characterSave.available}
-            aria-describedby="main-menu-continue-note"
-            onClick={onContinue}
-          >
-            Continue
-          </button>
-          <p
-            id="main-menu-continue-note"
-            class="main-menu-note"
-            data-testid="main-menu-continue-note"
-          >
-            {continueNote}
-          </p>
-        </nav>
+        {accountActive ? (
+          <AccountMenuSection
+            ready={ready}
+            account={account}
+            actions={accountActions}
+            onEnter={onServerEntry}
+          />
+        ) : (
+          <nav class="main-menu-actions" aria-label="Main menu actions">
+            <button
+              type="button"
+              class="main-menu-button main-menu-new-game"
+              data-testid="main-menu-new-game"
+              disabled={!ready}
+              onClick={onNewGame}
+            >
+              New Game
+            </button>
+            <button
+              type="button"
+              class="main-menu-button main-menu-continue"
+              data-testid="main-menu-continue"
+              disabled={!ready || !characterSave.available}
+              aria-describedby="main-menu-continue-note"
+              onClick={onContinue}
+            >
+              Continue
+            </button>
+            <p
+              id="main-menu-continue-note"
+              class="main-menu-note"
+              data-testid="main-menu-continue-note"
+            >
+              {continueNote}
+            </p>
+            {account !== null && account.phase === "unavailable" && (
+              <p
+                class="main-menu-note account-unavailable"
+                data-testid="account-unavailable"
+              >
+                {account.notice ?? "The account service is unreachable."}
+              </p>
+            )}
+            {loginUrl !== null && (
+              <a
+                class="main-menu-login"
+                data-testid="main-menu-login"
+                href={loginUrl}
+              >
+                Log in on the homepage to play with server heroes
+              </a>
+            )}
+          </nav>
+        )}
         <p class="main-menu-build" data-testid="main-menu-build">
           build {build ?? "dev"} ·{" "}
           {ready ? phase.rendererVersion : "Preparing the shore…"}
@@ -1571,6 +1941,9 @@ export function App({
   characterSave,
   onContinue,
   onGameplayStarted,
+  account,
+  accountActions,
+  accountLoginUrl,
 }: AppProps) {
   const [model, setModel] = useState<ShellReadModel>(() =>
     bindings.models.getSnapshot(),
@@ -1790,6 +2163,21 @@ export function App({
     // Restore first; only a successful restore dismisses the menu.
     if (onContinue?.() !== true) return;
     onGameplayStarted?.();
+    setMainMenuOpen(false);
+    document
+      .querySelector<HTMLCanvasElement>("#game-canvas")
+      ?.focus({ preventScroll: true });
+  }
+
+  function enterServerGame(outcome: "fresh" | "restored"): void {
+    // TASK-709: a server character was selected/created and (for
+    // "restored") already restored into the simulation by the shell. Arm
+    // the save triggers first so a fresh character's tutorial travel
+    // writes the first server save, mirroring local New Game semantics.
+    onGameplayStarted?.();
+    if (outcome === "fresh") {
+      emitWorldCommand({ type: "world.travel", zoneId: WAKESHORE_LANDING_ID });
+    }
     setMainMenuOpen(false);
     document
       .querySelector<HTMLCanvasElement>("#game-canvas")
@@ -2108,6 +2496,10 @@ export function App({
             characterSave ?? { available: false, recovered: false }
           }
           onContinue={continueGame}
+          account={account ?? null}
+          accountActions={accountActions ?? null}
+          onServerEntry={enterServerGame}
+          loginUrl={accountLoginUrl ?? null}
         />
       )}
 
