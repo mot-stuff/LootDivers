@@ -730,6 +730,20 @@ triggers, mock executors, deterministic tests.
 cancellation, cooldown, and bounded trigger behavior without Phaser.
 **Testing:** Unit/contract tests and malformed-content tests.
 
+**Completion record (2026-09-04):** Implemented pending Systems Designer and
+independent QA review. The canonical content pipeline now validates and compiles
+typed synthetic ability definitions with explicit fixed-tick phases, registered
+tags/stats, costs, cooldown and cancellation/refund policies, snapshot/live stat
+semantics, ordered shared/custom effects, and acyclic trigger references. The
+framework-free executor uses explicit definition, resource, cooldown, target,
+stat, seeded-random, event, and effect-executor dependencies; runtime trigger
+depth/work is bounded and cycles are rejected. Deterministic mock tests cover
+success, invalid targeting, cancellation/refund, cooldown rejection,
+snapshot/live reads, cycle detection, work exhaustion, and fixed-step
+advancement. No playable ability, input, Phaser, animation/VFX, real damage,
+balance, production content, networking, or Phase 1 behavior was added. The
+implementation follows DEC-013 without requiring a new ADR.
+
 ### TASK-P0-010 — Establish persistence foundation
 
 **Owner:** Gameplay Engineer

@@ -104,3 +104,20 @@ new document kind. Add both positive and malformed-content tests. Keep semantic
 rules in project validation when JSON Schema cannot express cross-file
 identity, references, or registry-defined bounds. P0-006 owns zone/map schemas;
 do not add them here.
+
+## Ability contract fixture
+
+TASK-P0-009 adds the `ability-definition` document kind as a Phase 0 contract,
+not production combat content. Definitions use fixed-tick startup, active, and
+recovery durations; registered tags/stats; typed targeting, cost, cooldown,
+cancellation/refund, stat-capture, and ordered effect policies. Effect arrays
+are capped at 64 entries. Trigger references must exist and the content graph
+must be acyclic; runtime execution additionally enforces explicit depth and
+shared work budgets.
+
+The framework-free executor pays or reserves through injected resource ports,
+uses injected cooldown/stat/random/event dependencies, and only dispatches
+shared or stable registered custom executor kinds. Snapshot abilities capture
+only declared stats at payment; live abilities capture none and read at effect
+execution. The checked-in `fixture:` abilities and executors are contract
+evidence only and must not become gameplay content.
