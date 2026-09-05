@@ -1,5 +1,10 @@
 export const FOUNDATION_ID = "rarpg:browser-foundation";
 
+export * from "./ability-contracts";
+export {
+  AbilityExecutionEngine,
+  type AbilityExecutionDependencies,
+} from "./ability-execution";
 export type { Clock } from "./clock";
 export {
   createCoreRuntime,
