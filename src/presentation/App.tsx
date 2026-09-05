@@ -7,6 +7,7 @@ import {
   FOUNDATION_ID,
   INVENTORY_SLOT_COUNT,
   PASSIVE_CATALOG,
+  WAKESHORE_LANDING_ID,
   experienceToNextLevel,
   slotAcceptsKind,
 } from "../core";
@@ -18,6 +19,7 @@ import type {
 import type {
   CharacterHudReadModel,
   CombatHudReadModel,
+  ShellPhase,
   MinimapHudMarkerReadModel,
   MinimapHudReadModel,
   EquipmentItemHudReadModel,
@@ -54,6 +56,12 @@ export interface AppProps {
   readonly persistenceActions?: PersistenceFixtureActions;
   readonly showPersistence?: boolean;
   readonly showCombatPrototype?: boolean;
+  /**
+   * Boot the shell in the `menu` state (TASK-703): a full-screen main-menu
+   * overlay above the paused canvas. `?autostart` automation runs and the
+   * non-combat fixture modes never enable it.
+   */
+  readonly showMainMenu?: boolean;
 }
 
 interface CombatVitalsProps {
@@ -929,6 +937,79 @@ function CharacterMenu({
   );
 }
 
+/** Short human-readable build label from the compile-time git constants. */
+function buildLabel(): string | null {
+  if (typeof __RARPG_BUILD_COMMIT__ !== "string") return null;
+  const commit =
+    __RARPG_BUILD_COMMIT__.length >= 40
+      ? __RARPG_BUILD_COMMIT__.slice(0, 7)
+      : __RARPG_BUILD_COMMIT__;
+  const dirty =
+    typeof __RARPG_BUILD_DIRTY__ === "boolean" && __RARPG_BUILD_DIRTY__;
+  return `${commit}${dirty ? "-dirty" : ""}`;
+}
+
+interface MainMenuProps {
+  readonly phase: ShellPhase;
+  readonly onNewGame: () => void;
+}
+
+/**
+ * TASK-703 boot-time main menu: a full-screen overlay above the paused
+ * simulation. "New Game" travels to the tutorial zone; "Continue" reserves
+ * the TASK-705 local-save flow and stays disabled until that ships.
+ */
+function MainMenu({ phase, onNewGame }: MainMenuProps) {
+  const ready = phase.kind === "ready";
+  const build = buildLabel();
+  return (
+    <section
+      class="main-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Main menu"
+      data-testid="main-menu"
+    >
+      <div class="main-menu-panel">
+        <img
+          class="main-menu-logo"
+          src="/assets/branding/logo.png"
+          alt="Loot Divers"
+          width="1983"
+          height="793"
+        />
+        <nav class="main-menu-actions" aria-label="Main menu actions">
+          <button
+            type="button"
+            class="main-menu-button main-menu-new-game"
+            data-testid="main-menu-new-game"
+            disabled={!ready}
+            onClick={onNewGame}
+          >
+            New Game
+          </button>
+          <button
+            type="button"
+            class="main-menu-button main-menu-continue"
+            data-testid="main-menu-continue"
+            disabled
+            aria-describedby="main-menu-continue-note"
+          >
+            Continue
+          </button>
+          <p id="main-menu-continue-note" class="main-menu-note">
+            No saved hero yet
+          </p>
+        </nav>
+        <p class="main-menu-build" data-testid="main-menu-build">
+          build {build ?? "dev"} ·{" "}
+          {ready ? phase.rendererVersion : "Preparing the shore…"}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function CombatVitals({ model }: CombatVitalsProps) {
   const healthPercent =
     model.playerMaxHealth > 0
@@ -1337,10 +1418,12 @@ export function App({
   persistenceActions,
   showPersistence,
   showCombatPrototype,
+  showMainMenu,
 }: AppProps) {
   const [model, setModel] = useState<ShellReadModel>(() =>
     bindings.models.getSnapshot(),
   );
+  const [mainMenuOpen, setMainMenuOpen] = useState(showMainMenu === true);
   const [counter, setCounter] = useState(1);
   const [serialized, setSerialized] = useState("");
   const [itemHud, setItemHud] = useState<InventoryHudReadModel>(EMPTY_ITEM_HUD);
@@ -1450,12 +1533,14 @@ export function App({
     characterMenuOpen,
     forgeOpen: characterHud.forgeOpen,
     vendorOpen: characterHud.vendorOpen,
+    mainMenuOpen,
   });
   menuKeyStateRef.current = {
     itemMenuOpen,
     characterMenuOpen,
     forgeOpen: characterHud.forgeOpen,
     vendorOpen: characterHud.vendorOpen,
+    mainMenuOpen,
   };
   useEffect(() => {
     if (!showCombatPrototype) return;
@@ -1467,6 +1552,8 @@ export function App({
         target.isContentEditable);
     const handleMenuKey = (event: KeyboardEvent) => {
       const menus = menuKeyStateRef.current;
+      // Gameplay menu shortcuts are inert while the main menu gates entry.
+      if (menus.mainMenuOpen) return;
       if (event.code === "Escape") {
         if (menus.itemMenuOpen || menus.characterMenuOpen) {
           event.preventDefault();
@@ -1521,6 +1608,23 @@ export function App({
     characterMenuOpen,
     itemMenuOpen,
   ]);
+  useLayoutEffect(() => {
+    if (mainMenuOpen && model.phase.kind === "ready") {
+      document
+        .querySelector<HTMLButtonElement>(".main-menu-new-game")
+        ?.focus({ preventScroll: true });
+    }
+  }, [mainMenuOpen, model.phase.kind]);
+
+  function startNewGame(): void {
+    // A page load is already a fresh simulation; travel through the existing
+    // world-command path and hand input to the canvas so the runner resumes.
+    emitWorldCommand({ type: "world.travel", zoneId: WAKESHORE_LANDING_ID });
+    setMainMenuOpen(false);
+    document
+      .querySelector<HTMLCanvasElement>("#game-canvas")
+      ?.focus({ preventScroll: true });
+  }
 
   function closeMenus(): void {
     setItemMenuOpen(false);
@@ -1804,11 +1908,15 @@ export function App({
         />
       )}
 
-      {showCombatPrototype && combatHud.paused && (
+      {showCombatPrototype && combatHud.paused && !mainMenuOpen && (
         <section class="combat-paused-hud" role="status">
           <strong>PAUSED</strong>
           <span>Click the arena to resume</span>
         </section>
+      )}
+
+      {showCombatPrototype && mainMenuOpen && model.phase.kind !== "error" && (
+        <MainMenu phase={model.phase} onNewGame={startNewGame} />
       )}
 
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>

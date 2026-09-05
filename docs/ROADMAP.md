@@ -181,10 +181,11 @@ death across eight facings; the character faces the movement direction and
 attacks orient to the cursor) per DEC-028 (2026-09-05).
 
 Phase 7 kickoff in progress: fantasy UI restyle (DEC-029) shipped, tutorial
-level (DEC-030) shipped, and main menu with New Game flow (DEC-031) open. Local
-save/continue and accounts remain deferred (the menu reserves a disabled
-Continue slot); sound, VFX, enemy and world art, balance, and performance
-polish remain open.
+level (DEC-030) shipped, and main menu with New Game flow (DEC-031) shipped
+pending the TASK-704 QA gate. The menu carries the owner's "Loot Divers"
+branding (title logo, favicon, page title). Local save/continue and accounts
+remain deferred (the menu reserves a disabled Continue slot); sound, VFX,
+enemy and world art, balance, and performance polish remain open.
 
 ---
 

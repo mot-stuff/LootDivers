@@ -15,7 +15,7 @@ test("the playable session starts in Hearthmere and can travel to Ashtrail", asy
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(page.getByTestId("combat-zone")).toContainText("Hearthmere");
   await expect(page.getByTestId("combat-minimap")).toBeVisible();

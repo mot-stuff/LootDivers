@@ -116,6 +116,14 @@ const fullFixture = fixtureParameters.has("fullFixture");
 const persistenceAutomation = fixtureParameters.has("persistenceTest");
 const combatPrototype =
   !worldAutomation && !fullFixture && !persistenceAutomation;
+/**
+ * TASK-703 automation bypass: `?autostart` skips the main menu and boots
+ * straight into the pre-menu gameplay behavior (canvas focused, Hearthmere
+ * session live). Real players load without query parameters and always see
+ * the menu.
+ */
+const autostart = fixtureParameters.has("autostart");
+const showMainMenu = combatPrototype && !autostart;
 document.body.classList.toggle("combat-mode", combatPrototype);
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,
@@ -205,6 +213,7 @@ function renderApp(): void {
       persistenceActions={persistenceActions}
       showPersistence={!worldAutomation || persistenceAutomation}
       showCombatPrototype={combatPrototype}
+      showMainMenu={showMainMenu}
     />,
     mount,
   );
@@ -338,7 +347,11 @@ if (!support.supported) {
           applyPlayerDamage: (amount) =>
             renderer.combat.applyPlayerDamage(amount),
         };
-        canvas.focus({ preventScroll: true });
+        // While the main menu is up the canvas stays unfocused so the
+        // simulation remains paused; New Game focuses it after travel.
+        if (!showMainMenu) {
+          canvas.focus({ preventScroll: true });
+        }
       }
       document.body.dataset.appState = "ready";
       publish({

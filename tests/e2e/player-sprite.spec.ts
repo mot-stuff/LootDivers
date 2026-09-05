@@ -32,7 +32,7 @@ test("barbarian sprite drives idle, locomotion, roll, attack, and death animatio
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect.poll(() => diagnostics(page)).not.toBeNull();
 

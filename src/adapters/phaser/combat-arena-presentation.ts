@@ -498,6 +498,12 @@ export class CombatArenaPresentation {
   }
 
   public executeWorldCommand(command: WorldUiCommand): void {
+    if (command.type === "world.travel") {
+      // TASK-703 New Game flow: the menu overlay travels through the same
+      // validated path the automation hook uses (invalid ids are ignored).
+      this.travelTo(command.zoneId);
+      return;
+    }
     if (command.type === "world.vendor-buy") {
       this.#simulation.tradeVendorOffer(contentId(command.offerId));
     } else {

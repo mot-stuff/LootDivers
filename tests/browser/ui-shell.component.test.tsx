@@ -10,6 +10,7 @@ import {
   ATTRIBUTE_SUMMARIES,
   INVENTORY_SLOT_COUNT,
   PASSIVE_CATALOG,
+  WAKESHORE_LANDING_ID,
 } from "../../src/core";
 import { App } from "../../src/presentation/App";
 import type {
@@ -21,6 +22,7 @@ import type {
   ProgressionUiCommand,
   ShellBindings,
   ShellReadModel,
+  WorldUiCommand,
 } from "../../src/presentation/shell-contracts";
 import {
   CHARACTER_HUD_EVENT,
@@ -28,6 +30,7 @@ import {
   ITEM_HUD_EVENT,
   PROFESSION_COMMAND_EVENT,
   PROGRESSION_COMMAND_EVENT,
+  WORLD_COMMAND_EVENT,
 } from "../../src/presentation/shell-contracts";
 
 const readyModel: ShellReadModel = {
@@ -1494,6 +1497,122 @@ describe("technical UI shell component", () => {
       });
     } finally {
       window.removeEventListener(PROFESSION_COMMAND_EVENT, captureProfession);
+    }
+  });
+  it("boots into the menu shell state and New Game travels to the tutorial", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    const worldCommands = vi.fn<(command: WorldUiCommand) => void>();
+    const captureWorld = (event: CustomEvent<WorldUiCommand>) => {
+      worldCommands(event.detail);
+    };
+    window.addEventListener(WORLD_COMMAND_EVENT, captureWorld);
+    document.body.append(container);
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+            showMainMenu
+          />,
+          container,
+        );
+      });
+
+      const menu = container.querySelector('[data-testid="main-menu"]');
+      expect(menu).not.toBeNull();
+      expect(menu?.getAttribute("aria-modal")).toBe("true");
+      expect(
+        menu?.querySelector<HTMLImageElement>(".main-menu-logo")?.alt,
+      ).toBe("Loot Divers");
+      const newGame = menu?.querySelector<HTMLButtonElement>(
+        '[data-testid="main-menu-new-game"]',
+      );
+      const continueButton = menu?.querySelector<HTMLButtonElement>(
+        '[data-testid="main-menu-continue"]',
+      );
+      expect(newGame?.disabled).toBe(false);
+      expect(document.activeElement).toBe(newGame);
+      expect(continueButton?.disabled).toBe(true);
+      expect(menu?.textContent).toContain("No saved hero yet");
+
+      // Gameplay menu shortcuts stay inert while the main menu gates entry.
+      await act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+        );
+      });
+      expect(
+        container.querySelector('[data-testid="inventory-menu"]'),
+      ).toBeNull();
+
+      // The disabled Continue slot emits nothing.
+      await act(() => continueButton?.click());
+      expect(worldCommands).not.toHaveBeenCalled();
+
+      await act(() => newGame?.click());
+      expect(worldCommands).toHaveBeenCalledExactlyOnceWith({
+        type: "world.travel",
+        zoneId: WAKESHORE_LANDING_ID,
+      });
+      expect(container.querySelector('[data-testid="main-menu"]')).toBeNull();
+    } finally {
+      window.removeEventListener(WORLD_COMMAND_EVENT, captureWorld);
+      // The shared afterEach never unmounts child-container roots, so the
+      // menu App's window listeners and focus effects must be torn down here.
+      render(null, container);
+    }
+  });
+
+  it("disables New Game until the renderer is ready and never menus automation", async () => {
+    const loadingModel: ShellReadModel = {
+      ...readyModel,
+      phase: { kind: "loading", message: "Synthetic loading fixture" },
+    };
+    const channel = createReadModelChannel(loadingModel);
+    const container = document.createElement("div");
+    const bare = document.createElement("div");
+    document.body.append(container, bare);
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+            showMainMenu
+          />,
+          container,
+        );
+      });
+
+      const newGame = container.querySelector<HTMLButtonElement>(
+        '[data-testid="main-menu-new-game"]',
+      );
+      expect(newGame?.disabled).toBe(true);
+
+      await act(() => {
+        channel.publisher.publish(readyModel);
+      });
+      expect(newGame?.disabled).toBe(false);
+
+      // Without the menu prop (automation and fixture modes) no menu renders.
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+          />,
+          bare,
+        );
+      });
+      expect(bare.querySelector('[data-testid="main-menu"]')).toBeNull();
+    } finally {
+      // The shared afterEach never unmounts child-container roots, so the
+      // menu App's window listeners and focus effects must be torn down here.
+      render(null, container);
+      render(null, bare);
     }
   });
 });

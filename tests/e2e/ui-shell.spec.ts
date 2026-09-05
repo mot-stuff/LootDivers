@@ -26,7 +26,7 @@ function collectRuntimeFailures(page: Page): string[] {
 }
 
 async function openReadyShell(page: Page): Promise<void> {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
 }
 

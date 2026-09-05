@@ -2123,3 +2123,122 @@ makes the sequence unit-testable without a browser, and mirrors how
 still starts in Hearthmere (DEC-025/026/027 unchanged). Consumes the
 DEC-029 design tokens. Second accepted packet of the Phase 7 kickoff
 (TASK-702); TASK-703's New Game flow will travel into this zone.
+
+---
+
+# DEC-031
+
+### Status
+
+Accepted.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Main-menu overlay state machine and "Loot Divers" branding. The shell
+boots in a `menu` state: a full-screen Preact overlay (`MainMenu` in
+`App.tsx`, driven by a `showMainMenu` prop from `main.tsx`) rendered
+above the paused simulation. Phaser boot, the WebGL2 preflight, and boot
+diagnostics are unchanged; while the menu is up the canvas is simply
+never focused, so the existing focus-gated runner keeps the simulation
+paused and gameplay menu shortcuts are inert. "New Game" dispatches a
+new `world.travel` member of `WorldUiCommand` through the existing
+`rarpg:world-command` event path (the adapter delegates to the same
+validated `travelTo` the automation hook uses), dismisses the menu, and
+focuses the canvas so input goes live in the tutorial zone with its
+first prompt showing. "Continue" is visible but disabled ("No saved
+hero yet") with zero persistence code behind it. Escape/pause behavior
+is unchanged; there is no pause-to-menu flow.
+
+**Automation bypass:** a `?autostart` query parameter (alongside the
+existing `automation`/`fullFixture`/`persistenceTest` parameters in
+`main.tsx`) skips the menu and reproduces the exact pre-menu boot,
+including the initial canvas focus. Every pre-existing combat-mode e2e
+spec adds `?autostart` to its `page.goto` call (19 one-line edits);
+`boot.spec.ts` intentionally keeps a plain `/` load so the production
+boot check also covers the real-player menu boot. Real players (no
+query parameters) always see the menu; the new
+`tests/e2e/main-menu.spec.ts` covers both paths. The explicit query
+parameter was chosen over sniffing `__RARPG_COMBAT_TEST__` usage or
+`navigator.webdriver` because several specs click or focus the canvas
+before ever touching the automation hook, and the menu spec must be
+able to exercise the true player-default path under Playwright.
+
+**Branding:** the game is titled "Loot Divers" (owner decision,
+superseding the "RARPG" working title). The owner's pixel-art title
+logo and treasure-chest emblem live at
+`public/assets/branding/logo.png` and
+`public/assets/branding/favicon.png`; the logo is the menu's title art
+and the emblem is the favicon, with the page `<title>` set to "Loot
+Divers". The PNGs are referenced at source size (they are not
+integer-grid pixel upscales, so a lossless downscale is impossible).
+In-game diagnostic surfaces (e.g. the "RARPG Phase 6 vertical slice"
+header) keep the working title for a future branding pass.
+
+**Continue/save deferral:** the persistence subsystem serializes only
+the Phase 0 synthetic fixture envelope; there is no character
+snapshot/restore anywhere. A real character save DTO (progression,
+generated items with affixes, loadout, equipment, materials, profession
+XP, quest stage, tutorial completion, current zone) is TASK-705, owned
+by the Gameplay Engineer with the Systems Designer as required schema
+reviewer, reusing the DEC-014 generation/checksum/migration machinery.
+DEC-014 is unchanged.
+
+### Context
+
+Phase 7 kickoff (TASK-703) asked for a boot-time fantasy main menu that
+gates entry, starts a fresh character in the tutorial zone, reserves a
+disabled Continue slot, and keeps every existing automation suite green.
+
+### Options Considered
+
+1. Menu bypass by auto-dismissing on first `__RARPG_COMBAT_TEST__` call.
+2. Menu bypass via `navigator.webdriver` detection.
+3. Explicit `?autostart` query parameter applied by existing specs.
+4. New Game travel via a bespoke shell intent handled in `main.tsx`
+   versus a new `WorldUiCommand` member on the existing event path.
+
+### Chosen Approach
+
+Option 3 for the bypass and the `WorldUiCommand` extension for travel.
+
+### Why
+
+Specs that click or focus the canvas before driving the hook would race
+option 1; option 2 would hide the menu from the very spec that must
+test it. The query parameter is explicit, keeps real-player semantics
+untouched, and cost only mechanical one-line spec edits. Reusing the
+world-command event keeps the UI presentation-only and gives the menu
+the same zone-id validation as every other travel caller.
+
+### Tradeoffs
+
+- The menu backdrop is intentionally near-opaque, so the paused world
+  is not visible behind it (cleaner showpiece, less HUD bleed-through).
+- The favicon PNG is ~1 MB; acceptable locally, worth revisiting before
+  web deployment (GitHub-hosted images are already planned).
+- Idling at the menu keeps the Hearthmere session at tick 0 rather than
+  a dedicated menu scene; acceptable because the simulation is fully
+  paused and New Game travels regardless of elapsed wall time.
+
+### Systems Affected
+
+- `src/presentation/App.tsx` (MainMenu component, menu shell state)
+- `src/presentation/shell-contracts.ts` (`world.travel` command)
+- `src/main.tsx` (`?autostart` wiring, menu-conditional canvas focus)
+- `src/presentation/styles.css` (additive menu rules on DEC-029 tokens)
+- `src/adapters/phaser/combat-arena-presentation.ts` (travel delegation)
+- `index.html` (title, favicon), `public/assets/branding/`
+- New `tests/e2e/main-menu.spec.ts`; `?autostart` in existing specs;
+  menu component tests in `tests/browser/ui-shell.component.test.tsx`
+
+### Relationship to Earlier Decisions
+
+The DEC-005 core/presentation boundary is unchanged (core untouched).
+Consumes DEC-029 tokens as the theme's showpiece and travels into the
+DEC-030 tutorial zone. DEC-014 persistence architecture is unchanged;
+Continue ships with TASK-705. Third accepted packet of the Phase 7
+kickoff (TASK-703), pending the TASK-704 QA gate.

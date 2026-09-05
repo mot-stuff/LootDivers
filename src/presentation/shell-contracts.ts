@@ -340,7 +340,9 @@ export interface VendorOfferHudReadModel {
 
 export type WorldUiCommand =
   | { readonly type: "world.vendor-buy"; readonly offerId: string }
-  | { readonly type: "world.close-vendor" };
+  | { readonly type: "world.close-vendor" }
+  /** Zone travel request; unknown zone ids are ignored by the adapter. */
+  | { readonly type: "world.travel"; readonly zoneId: string };
 
 export const WORLD_COMMAND_EVENT = "rarpg:world-command";
 

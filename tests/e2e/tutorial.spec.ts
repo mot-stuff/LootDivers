@@ -15,7 +15,7 @@ test("the tutorial guides move, attack, dodge, loot, gather, and travel in order
   page,
 }, testInfo) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(page.getByTestId("combat-zone")).toContainText("Hearthmere");
   await expect(page.getByTestId("combat-tutorial")).toHaveCount(0);
@@ -175,7 +175,7 @@ test("the exit portal skips the tutorial at any step and re-entry resumes it", a
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
 
   await page.evaluate((zoneId) => {

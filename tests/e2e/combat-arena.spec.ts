@@ -28,7 +28,7 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(
     page.getByRole("heading", { name: "Hearthmere world session" }),
@@ -125,7 +125,7 @@ test("common enemy approaches and dies to two directional attacks", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect.poll(() => diagnostics(page)).not.toBeNull();
 
@@ -189,7 +189,7 @@ test("ability automation exposes projectile, area, and status presentation paths
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect.poll(() => diagnostics(page)).not.toBeNull();
 
@@ -287,7 +287,7 @@ test("focused canvas Q, E, and R drive authoritative ability presentation", asyn
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
   await canvas.focus();
@@ -389,7 +389,7 @@ test("focused canvas ability keys are rejected after player death", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
   await canvas.focus();
   await page.evaluate(() => {
@@ -437,7 +437,7 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect.poll(() => diagnostics(page)).not.toBeNull();
 
@@ -543,7 +543,7 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
 });
 
 test("combat canvas fills the browser viewport", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
 
   const viewport = page.viewportSize();
@@ -567,7 +567,7 @@ for (const viewport of [
     page,
   }) => {
     await page.setViewportSize(viewport);
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/?autostart", { waitUntil: "networkidle" });
     await expect(page.locator("body")).toHaveAttribute(
       "data-app-state",
       "ready",
@@ -694,7 +694,7 @@ for (const scenario of [
     if (scenario.viewport !== null) {
       await page.setViewportSize(scenario.viewport);
     }
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/?autostart", { waitUntil: "networkidle" });
     await expect(page.locator("body")).toHaveAttribute(
       "data-app-state",
       "ready",
@@ -759,7 +759,7 @@ test("movement remains bounded by semantic arena diagnostics", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
 
   const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
