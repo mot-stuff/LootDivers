@@ -92,10 +92,11 @@ Exit criteria:
 The former P0-009 contract implementation is available as completed-early
 infrastructure, but Phase 2 owns its gameplay integration and fitness.
 
-**Status:** Implementation complete and awaiting independent Phase 2 QA. The
-candidate includes shared-runtime Basic Cleave, Cinder Dart, Winter Pulse, and
-Defiant Signal with real Mana, cooldowns, projectile/area behavior, refreshing
-buffs/debuffs, tags, Phaser feedback, and a Preact action bar.
+**Status:** Complete. Independent Phase 2 QA passed on 2026-09-04 at `3a1ecb6`.
+The accepted implementation includes shared-runtime Basic Cleave, Cinder Dart,
+Winter Pulse, and Defiant Signal with real Mana, cooldowns, projectile/area
+behavior, refreshing buffs/debuffs, tags, Phaser feedback, and a Preact action
+bar.
 
 ---
 
