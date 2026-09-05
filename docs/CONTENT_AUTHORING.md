@@ -113,11 +113,18 @@ recovery durations; registered tags/stats; typed targeting, cost, cooldown,
 cancellation/refund, stat-capture, and ordered effect policies. Effect arrays
 are capped at 64 entries. Trigger references must exist and the content graph
 must be acyclic; runtime execution additionally enforces explicit depth and
-shared work budgets.
+simulation-tick-scoped aggregate work budgets.
 
-The framework-free executor pays or reserves through injected resource ports,
-uses injected cooldown/stat/random/event dependencies, and only dispatches
-shared or stable registered custom executor kinds. Snapshot abilities capture
-only declared stats at payment; live abilities capture none and read at effect
-execution. The checked-in `fixture:` abilities and executors are contract
+The effect-executor registry is canonical content. Every shared or custom effect
+must reference a registered stable executor kind, and runtime composition must
+provide that executor before any cost settles. Resource ports distinguish
+payment from reservation handles and expose refund, commit, and release.
+Cooldown handles similarly make clearing owner-aware.
+
+Stat captures identify both source/target subject and stat ID. Effects may read
+declared snapshots while also reading current source or entity-target values.
+Target captures and target-recipient effects require entity targeting. Ability
+costs cannot exceed their registered resource maximum. Nested trigger requests
+are queued FIFO after the parent's ordered effects, independent of child phase
+duration. The checked-in `fixture:` abilities and executors are contract
 evidence only and must not become gameplay content.

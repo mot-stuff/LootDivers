@@ -744,6 +744,20 @@ advancement. No playable ability, input, Phaser, animation/VFX, real damage,
 balance, production content, networking, or Phase 1 behavior was added. The
 implementation follows DEC-013 without requiring a new ADR.
 
+**Systems Designer remediation record (2026-09-04):** The initial review fail
+was addressed without expanding scope. Executor kinds now have a canonical
+registry and unavailable executors reject before settlement. Cooldowns start
+before observable stage events and use owner tokens. Costs use typed payment or
+reservation handles with explicit refund/commit/release. Cancellation is
+current-tick coherent and advances one pending stage tick before policy checks.
+Stat captures identify source/target subjects while effect reads choose snapshot
+or live values; target-dependent effects require entity targeting. Cost amounts
+must be attainable within registered resource maxima. Trigger requests are FIFO
+queued after parent effects, while chain depth/cycles and one aggregate
+simulation-tick work budget remain bounded. Deterministic tests cover each
+review finding. DEC-013 remains unchanged; independent acceptance is still
+pending.
+
 ### TASK-P0-010 — Establish persistence foundation
 
 **Owner:** Gameplay Engineer
