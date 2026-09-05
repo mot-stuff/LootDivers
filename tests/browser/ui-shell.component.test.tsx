@@ -320,21 +320,36 @@ describe("technical UI shell component", () => {
     const actionHud = container.querySelector(
       '[data-testid="combat-action-hud"]',
     );
+    const flaskHud = container.querySelector(
+      '[data-testid="combat-flask-slots"]',
+    );
     expect(actionHud?.querySelectorAll(".combat-ability")).toHaveLength(4);
+    expect(flaskHud?.querySelectorAll(".combat-flask-slot")).toHaveLength(4);
     expect(
-      Array.from(actionHud?.querySelectorAll("kbd") ?? [], (key) =>
-        key.textContent?.trim(),
-      ).slice(0, 4),
+      Array.from(
+        flaskHud?.querySelectorAll(".combat-flask-slot kbd") ?? [],
+        (key) => key.textContent?.trim(),
+      ),
+    ).toEqual(["1", "2", "3", "4"]);
+    expect(
+      Array.from(
+        actionHud?.querySelectorAll(".combat-ability kbd") ?? [],
+        (key) => key.textContent?.trim(),
+      ),
     ).toEqual(["LMB", "Q", "E", "F"]);
     expect(
-      actionHud?.querySelector('[data-ability-id="ability:cinder-dart"]')
-        ?.textContent,
-    ).toContain("15 mana · 0.5s cooldown");
+      actionHud
+        ?.querySelector('[data-ability-id="ability:cinder-dart"]')
+        ?.getAttribute("aria-label"),
+    ).toContain("15 mana, 0.5s cooldown");
     expect(
       actionHud
         ?.querySelector('[data-ability-id="ability:basic-cleave"]')
         ?.getAttribute("aria-label"),
     ).toContain("Left click, Basic Cleave");
+    expect(actionHud?.textContent).not.toMatch(
+      /Move WASD|Aim mouse|Dodge Space|Reset R/,
+    );
 
     await publishCombatHud({
       ...combatHudModel,

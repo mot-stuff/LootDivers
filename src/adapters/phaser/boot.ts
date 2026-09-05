@@ -48,22 +48,24 @@ class TechnicalWorldScene extends Phaser.Scene {
 
   public create(): void {
     this.configureLogicalViewport();
-    this.add
-      .text(
-        16,
-        16,
-        this.#fullFixture
-          ? "TASK-P0-008 · BEHAVIORLESS LIFECYCLE FIXTURE"
-          : "TASK-P0-006 · SYNTHETIC ISOMETRIC FIXTURE",
-        {
-          color: "#e8f1ff",
-          fontFamily: "monospace",
-          fontSize: "14px",
-        },
-      )
-      .setDepth(4_000_000);
+    if (!this.#combatPrototype) {
+      this.add
+        .text(
+          16,
+          16,
+          this.#fullFixture
+            ? "TASK-P0-008 · BEHAVIORLESS LIFECYCLE FIXTURE"
+            : "TASK-P0-006 · SYNTHETIC ISOMETRIC FIXTURE",
+          {
+            color: "#e8f1ff",
+            fontFamily: "monospace",
+            fontSize: "14px",
+          },
+        )
+        .setDepth(4_000_000);
+    }
 
-    const adapter = new IsometricZoneAdapter(this);
+    const adapter = new IsometricZoneAdapter(this, !this.#combatPrototype);
     void adapter
       .load()
       .then(async () => {

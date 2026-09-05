@@ -52,6 +52,7 @@ function tileColor(layer: ZoneLayer, gid: number): number {
 
 export class IsometricZoneAdapter {
   readonly #scene: Phaser.Scene;
+  readonly #showPickingDiagnostics: boolean;
   readonly #objects: Phaser.GameObjects.GameObject[] = [];
   #bundle: CompiledZoneBundle | null = null;
   #chunkCount = 0;
@@ -61,8 +62,9 @@ export class IsometricZoneAdapter {
   #generation = 0;
   #loadController: AbortController | null = null;
 
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Phaser.Scene, showPickingDiagnostics = true) {
     this.#scene = scene;
+    this.#showPickingDiagnostics = showPickingDiagnostics;
   }
 
   public async load(url = FIXTURE_URL): Promise<void> {
@@ -94,7 +96,9 @@ export class IsometricZoneAdapter {
       this.#createMarkerTexture();
       this.#renderLayers(candidate);
       this.#renderMarkers(candidate);
-      this.#installPicking(generation);
+      if (this.#showPickingDiagnostics) {
+        this.#installPicking(generation);
+      }
     } catch (error: unknown) {
       if (!this.#isCurrent(generation, controller)) {
         return;

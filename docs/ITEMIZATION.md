@@ -31,6 +31,19 @@ Not every field must exist initially.
 
 ---
 
+# Ability Stones
+
+Abilities will be obtained through lootable Ability Stones. Using a stone lets
+the player choose an ability to create; the resulting ability can later be
+assigned to the left-click, Q, E, or F combat slot through inventory or menu UI.
+
+The exact stone rarity, selection rules, progression, trading behavior, and
+support-modification model are deferred until the item and loot phases. The
+system should preserve player choice without directly copying another game's
+gem implementation.
+
+---
+
 # Equipment Slots
 
 Potential slots:

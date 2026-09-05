@@ -611,8 +611,12 @@ for (const viewport of [
     await expect(actionBar).toBeVisible();
     const actionBarBox = await actionBar.boundingBox();
     expect(actionBarBox).not.toBeNull();
-    expect(actionBarBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect(actionBarBox?.x).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
     expect(actionBarBox?.y ?? -1).toBeGreaterThanOrEqual(0);
+    expect(actionBarBox?.width ?? Infinity).toBeLessThanOrEqual(288);
+    expect(
+      viewport.height - ((actionBarBox?.y ?? 0) + (actionBarBox?.height ?? 0)),
+    ).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
     expect(
       (actionBarBox?.x ?? 0) + (actionBarBox?.width ?? 0),
     ).toBeLessThanOrEqual(viewport.width);
@@ -625,6 +629,14 @@ for (const viewport of [
       "Q",
       "E",
       "F",
+    ]);
+    const flaskSlots = page.getByTestId("combat-flask-slots");
+    await expect(flaskSlots.locator(".combat-flask-slot")).toHaveCount(4);
+    await expect(flaskSlots.locator(".combat-flask-slot kbd")).toHaveText([
+      "1",
+      "2",
+      "3",
+      "4",
     ]);
 
     await page.getByRole("link", { name: "Skip canvas" }).focus();

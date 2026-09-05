@@ -252,6 +252,23 @@ stacking rules, damage over time, advanced interruption, and final VFX.
 
 ---
 
+# Future Ability Loadouts
+
+Abilities will be acquired through lootable Ability Stones. An Ability Stone
+lets the player choose which ability to create, after which that ability can be
+assigned to any of the four combat slots: left click, Q, E, or F.
+
+The inventory and menu UI will own creating, selecting, and slotting abilities
+in a later phase. The Phase 2 assignments are fixed prototype defaults, but the
+runtime must not assume that a specific ability permanently belongs to a
+specific slot.
+
+Four flask slots are reserved above the ability bar and use keys 1 through 4.
+They are visual placeholders only until flask items and inventory integration
+are designed.
+
+---
+
 # Initial Combat Prototype
 
 The first prototype should include:

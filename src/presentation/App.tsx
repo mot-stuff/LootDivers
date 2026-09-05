@@ -125,6 +125,21 @@ function CombatActionBar({ model }: CombatVitalsProps) {
       aria-label="Combat abilities"
       data-testid="combat-action-hud"
     >
+      <ol
+        class="combat-flask-list"
+        aria-label="Reserved flask slots"
+        data-testid="combat-flask-slots"
+      >
+        {[1, 2, 3, 4].map((slot) => (
+          <li
+            key={slot}
+            class="combat-flask-slot"
+            aria-label={`Flask slot ${slot}, not implemented`}
+          >
+            <kbd>{slot}</kbd>
+          </li>
+        ))}
+      </ol>
       <ol class="combat-ability-list">
         {model.abilities.map((ability) => {
           const cooldownPercent =
@@ -172,9 +187,6 @@ function CombatActionBar({ model }: CombatVitalsProps) {
                 <kbd>{ability.keyLabel}</kbd>
                 <strong>{ability.name}</strong>
               </div>
-              <span class="combat-ability-details">
-                {costText} · {cooldownText}
-              </span>
               <span class="combat-ability-state">{stateText}</span>
             </li>
           );
@@ -194,10 +206,6 @@ function CombatActionBar({ model }: CombatVitalsProps) {
           ))}
         </div>
       )}
-      <p class="combat-controls-summary">
-        Move <kbd>WASD</kbd> · Aim mouse · Dodge <kbd>Space</kbd> · Reset{" "}
-        <kbd>R</kbd>
-      </p>
     </section>
   );
 }
