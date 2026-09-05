@@ -333,6 +333,18 @@ next implementation work and does not block on any owner manual step.
 
 ## TASK-706 — Site Deployment (Cloudflare Pages)
 
+**Status: shipped 2026-09-05** (Director). The gates job uploads `dist/`
+and a `deploy` job publishes the exact tested artifact via
+`wrangler pages deploy` on green main pushes; `public/_headers` ships
+immutable caching for hashed build output and a 4-hour revalidating
+policy for unhashed art (a deliberate refinement of criterion 5 below —
+`/assets/branding/*` and `/assets/characters/*` are stable filenames
+whose bytes change with art updates, so blanket-immutable would serve
+stale art); the lossless PNG pass cut `public/assets/` from 7,810,859 to
+3,910,077 bytes (−49.9%, every rewritten file pixel-verified identical).
+Live at https://lootdivers.pages.dev plus the owner-attached custom
+domain.
+
 ### Owner
 
 Director (infra/workflow work, matching CI ownership), with QA Reviewer

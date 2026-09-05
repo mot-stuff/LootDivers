@@ -189,6 +189,11 @@ save/continue and accounts remain deferred (the menu reserves a disabled
 Continue slot; character saves are TASK-705); sound, VFX, enemy and world
 art, balance, and performance polish remain open.
 
+Infrastructure: the game auto-deploys to Cloudflare Pages
+(lootdivers.pages.dev plus the owner's custom domain) on every green main
+push (TASK-706, DEC-032), with a lossless PNG pass that halved the asset
+payload. Accounts and the droplet backend are TASK-707, after TASK-705.
+
 ---
 
 ## Phase 8 - Main menu and system
@@ -205,10 +210,11 @@ Zones/dungeons will be procedurally generated ideally using isometric tilesets
 
 
 ## Final Phase
-We will be using digitalocean to deploy to our website. 
-We will need to build a db and backend for the game.
-We already own a url.
-I will need to push the code to my repo on github as well and host images there so we dont use up bandwidth. 
+Amended by DEC-032 (2026-09-05): the website deploys to Cloudflare Pages
+(done, TASK-706); the DigitalOcean droplet hosts the future backend API
+and Postgres database (TASK-707). The code is on GitHub
+(mot-stuff/LootDivers); separate GitHub image hosting is unnecessary
+under Cloudflare's bandwidth terms.
 Auction house will be the multiplayer portion of the game so we will want to make sure we track each players gold and account etc. 
 
 ## Deferred systems

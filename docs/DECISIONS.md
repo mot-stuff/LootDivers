@@ -2292,6 +2292,15 @@ exact domain string (documents use `<yourdomain.com>` placeholders) and
 the droplet facts (OS/RAM/IP/occupied ports) gathered in the owner
 runbook's first step.
 
+**Implementation status (2026-09-05):** the site-hosting half is
+implemented (TASK-706) — the owner completed runbook Part A, and CI now
+uploads the tested `dist/` and auto-deploys it to the `lootdivers`
+Cloudflare Pages project on green main pushes, with `public/_headers`
+cache policy (immutable hashed assets; 4-hour revalidation for unhashed
+art — a refinement of the blanket-immutable wording above) and a
+pixel-verified lossless PNG pass that halved `public/assets/` (7.81 MB →
+3.91 MB). The backend half (TASK-707) remains unstarted pending TASK-705.
+
 ### Date
 
 2026-09-05
