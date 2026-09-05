@@ -18,7 +18,7 @@ Current bindings:
 - Q, E, and R ability slots
 - Space dodge
 - F picks up the nearest ground loot in range
-- I opens the inventory; Esc closes the open menu
+- I toggles the inventory open or closed; Esc also closes the open menu
 - right click secondary action reserved for later
 - optional controller support later
 

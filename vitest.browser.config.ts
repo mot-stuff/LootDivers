@@ -8,6 +8,8 @@ export default defineConfig({
       enabled: true,
       headless: true,
       provider: playwright(),
+      // Desktop-first UI: pointer drag tests hit-test real coordinates.
+      viewport: { width: 1280, height: 800 },
       instances: [{ browser: "chromium" }],
     },
   },

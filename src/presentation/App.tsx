@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 
-import { FOUNDATION_ID } from "../core";
+import { FOUNDATION_ID, slotAcceptsKind } from "../core";
 import type {
   FixtureSaveState,
   PersistenceStatus,
@@ -8,6 +8,7 @@ import type {
 } from "../persistence";
 import type {
   CombatHudReadModel,
+  EquipmentItemHudReadModel,
   InventoryHudReadModel,
   ItemEquipmentSlot,
   ItemEquipmentSlotKind,
@@ -97,6 +98,50 @@ type ItemSelection =
   | { readonly kind: "inventory"; readonly index: number }
   | { readonly kind: "equipment"; readonly slot: ItemEquipmentSlot };
 
+type ItemDropTarget =
+  | { readonly kind: "equipment"; readonly slot: ItemEquipmentSlot }
+  | { readonly kind: "inventory-area" };
+
+interface ItemDragState {
+  readonly source: ItemSelection;
+  readonly item: EquipmentItemHudReadModel;
+  readonly pointerId: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly x: number;
+  readonly y: number;
+  /** True once the pointer travelled far enough to count as a drag. */
+  readonly active: boolean;
+  readonly hover: ItemDropTarget | null;
+}
+
+/** Pointer travel in CSS pixels before a press becomes a drag. */
+const DRAG_ACTIVATION_DISTANCE = 5;
+
+function dropTargetAt(x: number, y: number): ItemDropTarget | null {
+  for (const element of document.elementsFromPoint(x, y)) {
+    if (!(element instanceof HTMLElement)) continue;
+    const slot = element.dataset["dropEquipmentSlot"];
+    if (slot !== undefined) {
+      return { kind: "equipment", slot: slot as ItemEquipmentSlot };
+    }
+    if (element.dataset["dropInventory"] !== undefined) {
+      return { kind: "inventory-area" };
+    }
+  }
+  return null;
+}
+
+function dropAccepts(drag: ItemDragState, target: ItemDropTarget): boolean {
+  if (target.kind === "equipment") {
+    return (
+      drag.source.kind === "inventory" &&
+      slotAcceptsKind(target.slot, drag.item.slotKind)
+    );
+  }
+  return drag.source.kind === "equipment";
+}
+
 interface ItemMenuProps {
   readonly model: InventoryHudReadModel;
   readonly onClose: () => void;
@@ -163,6 +208,18 @@ function ItemTooltip({ item }: { readonly item: ItemHudReadModel | null }) {
             <li key={modifier.id} data-source={modifier.source}>
               <span>{modifier.source === "base" ? "Base" : "Affix"}</span>{" "}
               {modifier.label}
+              {modifier.tier !== null && (
+                <>
+                  {" "}
+                  <span
+                    class="affix-tier"
+                    data-tier={modifier.tier}
+                    aria-label={`Tier ${modifier.tier}`}
+                  >
+                    T{modifier.tier}
+                  </span>
+                </>
+              )}
             </li>
           ))}
         </ul>
@@ -173,6 +230,7 @@ function ItemTooltip({ item }: { readonly item: ItemHudReadModel | null }) {
 
 function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
   const [selection, setSelection] = useState<ItemSelection | null>(null);
+  const [drag, setDrag] = useState<ItemDragState | null>(null);
   const item = selectedItem(model, selection);
   const inventorySlots = Array.from({ length: 12 }, (_, index) => {
     return (
@@ -188,6 +246,100 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
     ({ selectableFromStone }) => selectableFromStone,
   );
   const ownedChoices = model.abilityChoices.filter(({ owned }) => owned);
+
+  useEffect(() => {
+    if (drag === null) return;
+    const handleMove = (event: PointerEvent) => {
+      if (event.pointerId !== drag.pointerId) return;
+      event.preventDefault();
+      setDrag((previous) => {
+        if (previous === null) return previous;
+        const active =
+          previous.active ||
+          Math.hypot(
+            event.clientX - previous.originX,
+            event.clientY - previous.originY,
+          ) >= DRAG_ACTIVATION_DISTANCE;
+        return {
+          ...previous,
+          x: event.clientX,
+          y: event.clientY,
+          active,
+          hover: active ? dropTargetAt(event.clientX, event.clientY) : null,
+        };
+      });
+    };
+    const handleUp = (event: PointerEvent) => {
+      if (event.pointerId !== drag.pointerId) return;
+      if (drag.active) {
+        const target = dropTargetAt(event.clientX, event.clientY);
+        if (target !== null && dropAccepts(drag, target)) {
+          if (target.kind === "equipment" && drag.source.kind === "inventory") {
+            onCommand({
+              type: "item.equip",
+              inventoryIndex: drag.source.index,
+              targetEquipmentSlot: target.slot,
+            });
+          } else if (
+            target.kind === "inventory-area" &&
+            drag.source.kind === "equipment"
+          ) {
+            onCommand({
+              type: "item.unequip",
+              equipmentSlot: drag.source.slot,
+            });
+          }
+        }
+      }
+      setDrag(null);
+    };
+    const handleCancel = (event: PointerEvent) => {
+      if (event.pointerId !== drag.pointerId) return;
+      setDrag(null);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleCancel);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleCancel);
+    };
+  }, [drag, onCommand]);
+
+  function beginDrag(
+    event: PointerEvent,
+    source: ItemSelection,
+    dragged: EquipmentItemHudReadModel,
+  ): void {
+    if (event.button !== 0 || drag !== null) return;
+    setDrag({
+      source,
+      item: dragged,
+      pointerId: event.pointerId,
+      originX: event.clientX,
+      originY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      hover: null,
+    });
+  }
+
+  function equipmentDropClass(slot: ItemEquipmentSlot): string {
+    if (drag === null || !drag.active) return "";
+    const valid = dropAccepts(drag, { kind: "equipment", slot });
+    const hovered =
+      drag.hover?.kind === "equipment" && drag.hover.slot === slot;
+    return `${valid ? " drop-valid" : " drop-invalid"}${hovered ? " drop-hover" : ""}`;
+  }
+
+  const inventoryDropClass =
+    drag !== null &&
+    drag.active &&
+    dropAccepts(drag, { kind: "inventory-area" })
+      ? `inventory-panel drop-valid${drag.hover?.kind === "inventory-area" ? " drop-hover" : ""}`
+      : "inventory-panel";
 
   return (
     <section
@@ -209,8 +361,14 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
         </button>
       </header>
 
-      <div class="item-menu-layout">
-        <section aria-labelledby="inventory-slots-title">
+      <div
+        class={drag?.active ? "item-menu-layout dragging" : "item-menu-layout"}
+      >
+        <section
+          class={inventoryDropClass}
+          aria-labelledby="inventory-slots-title"
+          data-drop-inventory
+        >
           <h3 id="inventory-slots-title">Inventory</h3>
           <ol class="inventory-grid" aria-label="12 inventory slots">
             {inventorySlots.map((slot) => (
@@ -223,6 +381,7 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
                       ? "inventory-slot selected"
                       : "inventory-slot"
                   }
+                  data-rarity={slot.item?.rarity}
                   aria-label={
                     slot.item === null
                       ? `Inventory slot ${slot.index + 1}, empty`
@@ -234,6 +393,15 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
                   onFocus={() =>
                     setSelection({ kind: "inventory", index: slot.index })
                   }
+                  onPointerDown={(event) => {
+                    if (slot.item?.kind === "equipment") {
+                      beginDrag(
+                        event,
+                        { kind: "inventory", index: slot.index },
+                        slot.item,
+                      );
+                    }
+                  }}
                 >
                   <span>{slot.item?.displayName ?? "Empty"}</span>
                   {slot.item?.kind === "ability-stone" &&
@@ -244,62 +412,108 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
               </li>
             ))}
           </ol>
-          {selection?.kind === "inventory" && item?.kind === "equipment" && (
-            <button
-              type="button"
-              onClick={() =>
-                onCommand({
-                  type: "item.equip",
-                  inventoryIndex: selection.index,
-                })
-              }
-            >
-              Equip {item.displayName}
-            </button>
-          )}
+          {selection?.kind === "inventory" &&
+            item?.kind === "equipment" &&
+            (item.slotKind === "ring" ? (
+              <div class="item-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onCommand({
+                      type: "item.equip",
+                      inventoryIndex: selection.index,
+                      targetEquipmentSlot: "ring-1",
+                    })
+                  }
+                >
+                  Equip {item.displayName} to Ring 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onCommand({
+                      type: "item.equip",
+                      inventoryIndex: selection.index,
+                      targetEquipmentSlot: "ring-2",
+                    })
+                  }
+                >
+                  Equip {item.displayName} to Ring 2
+                </button>
+              </div>
+            ) : (
+              <div class="item-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onCommand({
+                      type: "item.equip",
+                      inventoryIndex: selection.index,
+                    })
+                  }
+                >
+                  Equip {item.displayName}
+                </button>
+              </div>
+            ))}
         </section>
 
         <section aria-labelledby="equipment-slots-title">
           <h3 id="equipment-slots-title">Equipment</h3>
-          <ol class="equipment-list">
+          <div class="paper-doll" role="group" aria-label="Equipped items">
             {model.equipmentSlots.map((slot) => (
-              <li key={slot.slot}>
-                <button
-                  type="button"
-                  class={
-                    selection?.kind === "equipment" &&
-                    selection.slot === slot.slot
-                      ? "equipment-slot selected"
-                      : "equipment-slot"
+              <button
+                key={slot.slot}
+                type="button"
+                class={`equipment-slot doll-${slot.slot}${
+                  selection?.kind === "equipment" &&
+                  selection.slot === slot.slot
+                    ? " selected"
+                    : ""
+                }${equipmentDropClass(slot.slot)}`}
+                data-drop-equipment-slot={slot.slot}
+                data-rarity={slot.item?.rarity}
+                aria-label={`${slot.label}, ${slot.item?.displayName ?? "empty"}`}
+                onClick={() =>
+                  setSelection({ kind: "equipment", slot: slot.slot })
+                }
+                onFocus={() =>
+                  setSelection({ kind: "equipment", slot: slot.slot })
+                }
+                onPointerDown={(event) => {
+                  if (slot.item !== null) {
+                    beginDrag(
+                      event,
+                      { kind: "equipment", slot: slot.slot },
+                      slot.item,
+                    );
                   }
-                  aria-label={`${slot.label}, ${slot.item?.displayName ?? "empty"}`}
-                  onClick={() =>
-                    setSelection({ kind: "equipment", slot: slot.slot })
-                  }
-                  onFocus={() =>
-                    setSelection({ kind: "equipment", slot: slot.slot })
-                  }
-                >
-                  <strong>{slot.label}</strong>
-                  <span>{slot.item?.displayName ?? "Empty"}</span>
-                </button>
-                {slot.item !== null && (
-                  <button
-                    type="button"
-                    class="unequip-button"
-                    onClick={() =>
-                      onCommand({
-                        type: "item.unequip",
-                        equipmentSlot: slot.slot,
-                      })
-                    }
-                  >
-                    Unequip {slot.label}
-                  </button>
-                )}
-              </li>
+                }}
+              >
+                <strong>{slot.label}</strong>
+                <span>{slot.item?.displayName ?? "Empty"}</span>
+              </button>
             ))}
-          </ol>
+          </div>
+          {selection?.kind === "equipment" && item !== null && (
+            <div class="item-actions">
+              <button
+                type="button"
+                class="unequip-button"
+                onClick={() =>
+                  onCommand({
+                    type: "item.unequip",
+                    equipmentSlot: selection.slot,
+                  })
+                }
+              >
+                Unequip{" "}
+                {model.equipmentSlots.find(
+                  ({ slot }) => slot === selection.slot,
+                )?.label ?? selection.slot}
+              </button>
+            </div>
+          )}
         </section>
 
         <ItemTooltip item={item} />
@@ -397,6 +611,17 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
           </div>
         </section>
       </div>
+
+      {drag !== null && drag.active && (
+        <div
+          class="drag-ghost"
+          data-testid="drag-ghost"
+          aria-hidden="true"
+          style={{ left: `${drag.x}px`, top: `${drag.y}px` }}
+        >
+          {drag.item.displayName}
+        </div>
+      )}
     </section>
   );
 }
@@ -672,22 +897,36 @@ export function App({
   }, [showCombatPrototype]);
   useEffect(() => {
     if (!showCombatPrototype) return;
+    const isTextEntryTarget = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement &&
+      (target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target.isContentEditable);
     const handleMenuKey = (event: KeyboardEvent) => {
-      const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas");
-      if (
-        !itemMenuOpen &&
-        event.code === "KeyI" &&
-        document.activeElement === canvas
-      ) {
-        event.preventDefault();
-        setItemMenuOpen(true);
-      } else if (itemMenuOpen && event.code === "Escape") {
-        event.preventDefault();
+      if (event.code === "Escape") {
+        if (itemMenuOpen) {
+          event.preventDefault();
+          closeItemMenu();
+        }
+        return;
+      }
+      if (event.code !== "KeyI" || event.repeat || event.isComposing) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return;
+      }
+      if (isTextEntryTarget(event.target)) return;
+      event.preventDefault();
+      if (itemMenuOpen) {
         closeItemMenu();
+      } else {
+        setItemMenuOpen(true);
       }
     };
-    window.addEventListener("keydown", handleMenuKey);
-    return () => window.removeEventListener("keydown", handleMenuKey);
+    // Capture phase: the canvas keyboard-capture adapter stops propagation of
+    // canvas-focused keydowns before the bubble phase reaches window.
+    window.addEventListener("keydown", handleMenuKey, true);
+    return () => window.removeEventListener("keydown", handleMenuKey, true);
   }, [itemMenuOpen, showCombatPrototype]);
   useLayoutEffect(() => {
     if (itemMenuOpen) {
@@ -862,7 +1101,13 @@ export function App({
           aria-expanded={itemMenuOpen}
           aria-controls="inventory-menu"
           aria-keyshortcuts="I"
-          onClick={() => setItemMenuOpen(true)}
+          onClick={() => {
+            if (itemMenuOpen) {
+              closeItemMenu();
+            } else {
+              setItemMenuOpen(true);
+            }
+          }}
         >
           Inventory <kbd>I</kbd>
         </button>
@@ -885,7 +1130,7 @@ export function App({
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
           {showCombatPrototype
-            ? "Click the arena to play. Use left-click, Q, E, and R for assigned abilities. Press F near a drop to pick up loot. Press I while the arena is focused to open Inventory; Escape closes it. Input pauses when interface controls have focus."
+            ? "Click the arena to play. Use left-click, Q, E, and R for assigned abilities. Press F near a drop to pick up loot. Press I anywhere outside text fields to toggle Inventory; Escape also closes it. Input pauses when interface controls have focus."
             : "Focus the canvas before using keyboard input. Tab away to keep keyboard input in the interface."}
         </p>
         <button

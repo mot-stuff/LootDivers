@@ -58,6 +58,37 @@ test("DOM focus does not leak keyboard input into canvas capture", async ({
   expect(failures).toEqual([]);
 });
 
+test("I toggles the inventory menu anywhere and Escape closes it", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await openReadyShell(page);
+
+  const menu = page.getByTestId("inventory-menu");
+  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
+
+  // Toggle open and closed while the canvas holds focus.
+  await canvas.focus();
+  await page.keyboard.press("i");
+  await expect(menu).toBeVisible();
+  await expect(menu).toBeFocused();
+  await page.keyboard.press("i");
+  await expect(menu).toHaveCount(0);
+  await expect(canvas).toBeFocused();
+
+  // Opens even when focus is elsewhere in the page chrome.
+  await page.getByRole("link", { name: "Skip canvas" }).focus();
+  await page.keyboard.press("i");
+  await expect(menu).toBeVisible();
+
+  // Escape still closes and returns focus to the canvas.
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(canvas).toBeFocused();
+
+  expect(failures).toEqual([]);
+});
+
 test("canvas resizes cleanly across supported desktop viewports", async ({
   page,
 }) => {

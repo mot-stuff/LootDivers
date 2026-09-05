@@ -474,7 +474,6 @@ body.combat-mode #app,
   box-shadow: inset 0 0 0 1px #b9f6dc;
 }
 
-.equipment-list,
 .stone-choice ul {
   display: grid;
   gap: 0.55rem;
@@ -483,9 +482,57 @@ body.combat-mode #app,
   list-style: none;
 }
 
-.equipment-list > li {
+/*
+ * Original paper-doll arrangement: a central body column (helmet, chest,
+ * belt, boots), amulet by the neck, main hand and offhand flanking the chest,
+ * and the rings near the hands below each held item.
+ */
+.paper-doll {
   display: grid;
-  gap: 0.25rem;
+  grid-template-areas:
+    ".        helmet amulet"
+    "mainhand chest  offhand"
+    "ring1    belt   ring2"
+    ".        boots  .";
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.doll-helmet {
+  grid-area: helmet;
+}
+
+.doll-amulet {
+  grid-area: amulet;
+  align-self: end;
+}
+
+.doll-chest {
+  grid-area: chest;
+}
+
+.doll-main-hand {
+  grid-area: mainhand;
+}
+
+.doll-offhand {
+  grid-area: offhand;
+}
+
+.doll-belt {
+  grid-area: belt;
+}
+
+.doll-boots {
+  grid-area: boots;
+}
+
+.doll-ring-1 {
+  grid-area: ring1;
+}
+
+.doll-ring-2 {
+  grid-area: ring2;
 }
 
 .equipment-slot {
@@ -493,14 +540,101 @@ body.combat-mode #app,
   gap: 0.2rem;
   width: 100%;
   min-height: 3.75rem;
+  padding: 0.35rem;
   border-color: #52677f;
   text-align: left;
+  touch-action: none;
+}
+
+.equipment-slot strong {
+  color: #b9d8ff;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .equipment-slot span {
+  overflow: hidden;
   color: #b7c8dd;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.inventory-slot {
+  touch-action: none;
+}
+
+.inventory-slot[data-rarity="magic"],
+.equipment-slot[data-rarity="magic"] {
+  border-color: #6da5ff;
+}
+
+.inventory-slot[data-rarity="rare"],
+.equipment-slot[data-rarity="rare"] {
+  border-color: #f0c75e;
+}
+
+.inventory-slot[data-rarity="unique"],
+.equipment-slot[data-rarity="unique"] {
+  border-color: #ff8000;
+}
+
+.item-menu-layout.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.equipment-slot.drop-valid {
+  border-color: #63c7a1;
+  box-shadow: inset 0 0 0 1px #63c7a1;
+}
+
+.equipment-slot.drop-invalid {
+  border-color: #40506a;
+  opacity: 0.45;
+}
+
+.equipment-slot.drop-hover {
+  background: #16311f;
+}
+
+.inventory-panel.drop-valid {
+  border-radius: 0.45rem;
+  outline: 1px dashed #63c7a1;
+  outline-offset: 4px;
+}
+
+.inventory-panel.drop-hover {
+  background: rgb(99 199 161 / 8%);
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 6;
+  max-width: 11rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #76b8ff;
+  border-radius: 0.35rem;
+  background: rgb(8 17 31 / 95%);
+  font-size: 0.72rem;
+  pointer-events: none;
+  transform: translate(0.75rem, 0.75rem);
+}
+
+.item-actions {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.item-actions button {
+  min-height: 2.3rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.78rem;
+  text-align: left;
 }
 
 .unequip-button {
@@ -522,8 +656,25 @@ body.combat-mode #app,
   border-color: #6da5ff;
 }
 
+.item-tooltip.rarity-magic .item-rarity {
+  color: #6da5ff;
+}
+
 .item-tooltip.rarity-rare {
   border-color: #f0c75e;
+}
+
+.item-tooltip.rarity-rare .item-rarity {
+  color: #f0c75e;
+}
+
+/* Unique rarity is reserved (nothing drops as unique yet) but must render. */
+.item-tooltip.rarity-unique {
+  border-color: #ff8000;
+}
+
+.item-tooltip.rarity-unique .item-rarity {
+  color: #ff8000;
 }
 
 .item-tooltip h3 {
@@ -560,6 +711,20 @@ body.combat-mode #app,
   font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.item-tooltip li .affix-tier {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid #52677f;
+  border-radius: 0.25rem;
+  color: #91a8c6;
+  background: #0b1525;
+  font-size: 0.6rem;
+}
+
+.item-tooltip li .affix-tier[data-tier="1"] {
+  border-color: #f0c75e;
+  color: #ffd27d;
 }
 
 .item-tooltip-empty {

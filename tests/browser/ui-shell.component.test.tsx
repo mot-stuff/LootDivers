@@ -123,7 +123,24 @@ const itemHudModel: InventoryHudReadModel = {
               typeLabel: "Ability Stone" as const,
               quantity: 2,
             }
-          : null,
+          : index === 2
+            ? {
+                kind: "equipment" as const,
+                instanceId: "item-instance:loopband",
+                displayName: "Hearty Plain Loopband",
+                rarity: "magic" as const,
+                slotKind: "ring" as const,
+                typeLabel: "Ring",
+                modifiers: [
+                  {
+                    id: "affix:hearty",
+                    source: "affix" as const,
+                    label: "+11 maximum health",
+                    tier: 1,
+                  },
+                ],
+              }
+            : null,
   })),
   equipmentSlots: [
     { slot: "helmet", label: "Helmet", item: null },
@@ -258,6 +275,48 @@ async function publishItemHud(model: InventoryHudReadModel): Promise<void> {
         detail: model,
       }),
     );
+  });
+}
+
+function dispatchPointer(
+  target: EventTarget,
+  type: "pointerdown" | "pointermove" | "pointerup",
+  x: number,
+  y: number,
+): void {
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+      pointerId: 7,
+      isPrimary: true,
+      button: 0,
+    }),
+  );
+}
+
+function centerOf(element: Element): { x: number; y: number } {
+  element.scrollIntoView({ block: "center" });
+  const rect = element.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+async function dragTo(source: Element, destination: Element): Promise<void> {
+  const from = centerOf(source);
+  await act(() => {
+    dispatchPointer(source, "pointerdown", from.x, from.y);
+  });
+  await act(() => {
+    dispatchPointer(window, "pointermove", from.x + 16, from.y + 16);
+  });
+  const to = centerOf(destination);
+  await act(() => {
+    dispatchPointer(window, "pointermove", to.x, to.y);
+  });
+  await act(() => {
+    dispatchPointer(window, "pointerup", to.x, to.y);
   });
 }
 
@@ -596,7 +655,7 @@ describe("technical UI shell component", () => {
     ).toContain("Enemy Weakened 2.9s");
   });
 
-  it("opens Inventory with I only from canvas focus and restores focus on Escape", async () => {
+  it("toggles Inventory with I from anywhere outside text entry", async () => {
     const channel = createReadModelChannel(readyModel);
     const container = document.createElement("div");
     document.body.append(container);
@@ -615,17 +674,11 @@ describe("technical UI shell component", () => {
       container.querySelectorAll("button"),
     ).find((button) => button.textContent?.includes("Inventory"));
     expect(inventoryButton?.getAttribute("aria-keyshortcuts")).toBe("I");
+    expect(inventoryButton?.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector('[role="dialog"]')).toBeNull();
 
+    // Opens even when focus is outside the canvas.
     inventoryButton?.focus();
-    await act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
-      );
-    });
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
-
-    canvas?.focus();
     await act(() => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
@@ -634,7 +687,52 @@ describe("technical UI shell component", () => {
     const dialog = container.querySelector<HTMLElement>('[role="dialog"]');
     expect(dialog).not.toBeNull();
     expect(document.activeElement).toBe(dialog);
+    expect(inventoryButton?.getAttribute("aria-expanded")).toBe("true");
 
+    // I toggles the open menu closed and restores canvas focus.
+    await act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+      );
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(canvas);
+
+    // Modifier chords never toggle.
+    await act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          code: "KeyI",
+          ctrlKey: true,
+        }),
+      );
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+    // Typing "i" into a text-entry element never toggles.
+    const input = document.createElement("input");
+    document.body.append(input);
+    try {
+      input.focus();
+      await act(() => {
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+        );
+      });
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+    } finally {
+      input.remove();
+    }
+
+    // Escape still closes and restores canvas focus.
+    canvas?.focus();
+    await act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+      );
+    });
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
     await act(() => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", { bubbles: true, code: "Escape" }),
@@ -675,8 +773,25 @@ describe("technical UI shell component", () => {
         container.querySelectorAll(".inventory-grid .inventory-slot"),
       ).toHaveLength(12);
       expect(
-        container.querySelectorAll(".equipment-list .equipment-slot"),
+        container.querySelectorAll(".paper-doll .equipment-slot"),
       ).toHaveLength(9);
+      // Every slot is addressable as a drop target with its concrete slot ID.
+      expect(
+        Array.from(
+          container.querySelectorAll(".paper-doll [data-drop-equipment-slot]"),
+          (slot) => slot.getAttribute("data-drop-equipment-slot"),
+        ).sort(),
+      ).toEqual([
+        "amulet",
+        "belt",
+        "boots",
+        "chest",
+        "helmet",
+        "main-hand",
+        "offhand",
+        "ring-1",
+        "ring-2",
+      ]);
       expect(container.textContent).toContain("Maximum health124");
       expect(container.textContent).toContain("Outgoing damage112%");
 
@@ -696,10 +811,25 @@ describe("technical UI shell component", () => {
       expect(tooltip?.textContent).toContain(
         "Affix +7% outgoing ability damage",
       );
+      // Affix lines carry a compact tier marker; base lines never do.
+      expect(
+        tooltip?.querySelector('li[data-source="affix"] .affix-tier')
+          ?.textContent,
+      ).toBe("T2");
+      expect(
+        tooltip?.querySelector('li[data-source="base"] .affix-tier'),
+      ).toBeNull();
 
       await act(() => {
         Array.from(container.querySelectorAll("button"))
           .find((button) => button.textContent?.startsWith("Equip Tempered"))
+          ?.click();
+      });
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Chest, Reinforced Trailguard Vest"]',
+          )
           ?.click();
       });
       await act(() => {
@@ -715,6 +845,153 @@ describe("technical UI shell component", () => {
         type: "item.unequip",
         equipmentSlot: "chest",
       });
+
+      // A selected ring offers an explicit per-ring-slot equip choice.
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Inventory slot 3, Hearty Plain Loopband"]',
+          )
+          ?.click();
+      });
+      expect(
+        tooltip?.querySelector('li[data-source="affix"] .affix-tier')
+          ?.textContent,
+      ).toBe("T1");
+      await act(() => {
+        Array.from(container.querySelectorAll("button"))
+          .find(
+            (button) =>
+              button.textContent === "Equip Hearty Plain Loopband to Ring 2",
+          )
+          ?.click();
+      });
+      expect(commands).toHaveBeenNthCalledWith(3, {
+        type: "item.equip",
+        inventoryIndex: 2,
+        targetEquipmentSlot: "ring-2",
+      });
+    } finally {
+      window.removeEventListener(ITEM_COMMAND_EVENT, captureCommand);
+    }
+  });
+
+  it("drag-equips, rejects incompatible drops, and drag-unequips items", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    const commands = vi.fn<(command: ItemUiCommand) => void>();
+    const captureCommand = (event: CustomEvent<ItemUiCommand>) => {
+      commands(event.detail);
+    };
+    window.addEventListener(ITEM_COMMAND_EVENT, captureCommand);
+    document.body.append(container);
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+          />,
+          container,
+        );
+      });
+      await publishItemHud(itemHudModel);
+      await act(() => {
+        Array.from(container.querySelectorAll("button"))
+          .find((button) => button.textContent?.includes("Inventory"))
+          ?.click();
+      });
+
+      const cleaver = container.querySelector(
+        '[aria-label="Inventory slot 1, Tempered Worn Cleaver of Steadfast Grip"]',
+      );
+      const mainHand = container.querySelector(
+        '[data-drop-equipment-slot="main-hand"]',
+      );
+      const helmet = container.querySelector(
+        '[data-drop-equipment-slot="helmet"]',
+      );
+      if (cleaver === null || mainHand === null || helmet === null) {
+        throw new Error("Drag fixtures were missing from the item menu.");
+      }
+
+      // Mid-drag affordances: only kind-compatible slots read as valid.
+      const from = centerOf(cleaver);
+      await act(() => {
+        dispatchPointer(cleaver, "pointerdown", from.x, from.y);
+      });
+      await act(() => {
+        dispatchPointer(window, "pointermove", from.x + 16, from.y + 16);
+      });
+      expect(
+        document.querySelector('[data-testid="drag-ghost"]'),
+      ).not.toBeNull();
+      expect(mainHand.classList.contains("drop-valid")).toBe(true);
+      expect(helmet.classList.contains("drop-invalid")).toBe(true);
+
+      const to = centerOf(mainHand);
+      await act(() => {
+        dispatchPointer(window, "pointermove", to.x, to.y);
+      });
+      await act(() => {
+        dispatchPointer(window, "pointerup", to.x, to.y);
+      });
+      expect(document.querySelector('[data-testid="drag-ghost"]')).toBeNull();
+      expect(commands).toHaveBeenCalledExactlyOnceWith({
+        type: "item.equip",
+        inventoryIndex: 0,
+        targetEquipmentSlot: "main-hand",
+      });
+      commands.mockClear();
+
+      // Dropping on an incompatible slot emits nothing.
+      await dragTo(cleaver, helmet);
+      expect(commands).not.toHaveBeenCalled();
+
+      // Rings can target a specific ring slot by dropping on it.
+      const ring = container.querySelector(
+        '[aria-label="Inventory slot 3, Hearty Plain Loopband"]',
+      );
+      const ringTwo = container.querySelector(
+        '[data-drop-equipment-slot="ring-2"]',
+      );
+      if (ring === null || ringTwo === null) {
+        throw new Error("Ring drag fixtures were missing.");
+      }
+      await dragTo(ring, ringTwo);
+      expect(commands).toHaveBeenCalledExactlyOnceWith({
+        type: "item.equip",
+        inventoryIndex: 2,
+        targetEquipmentSlot: "ring-2",
+      });
+      commands.mockClear();
+
+      // Dragging an equipped item onto the inventory area unequips it.
+      const chest = container.querySelector(
+        '[data-drop-equipment-slot="chest"]',
+      );
+      const inventoryArea = container.querySelector("[data-drop-inventory]");
+      if (chest === null || inventoryArea === null) {
+        throw new Error("Unequip drag fixtures were missing.");
+      }
+      await dragTo(chest, inventoryArea);
+      expect(commands).toHaveBeenCalledExactlyOnceWith({
+        type: "item.unequip",
+        equipmentSlot: "chest",
+      });
+      commands.mockClear();
+
+      // Ability Stones are not equipment and never start a drag.
+      const stone = container.querySelector(
+        '[aria-label="Inventory slot 2, Ability Stone"]',
+      );
+      if (stone === null) {
+        throw new Error("Ability Stone fixture was missing.");
+      }
+      await dragTo(stone, mainHand);
+      expect(document.querySelector('[data-testid="drag-ghost"]')).toBeNull();
+      expect(commands).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener(ITEM_COMMAND_EVENT, captureCommand);
     }

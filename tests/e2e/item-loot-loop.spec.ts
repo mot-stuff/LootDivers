@@ -138,9 +138,15 @@ test("enemy loot can be picked, equipped, and used to reassign combat", async ({
   const itemHud = await page.evaluate(
     () => window.__RARPG_COMBAT_TEST__?.itemHud() ?? null,
   );
-  const equipmentSlot = itemHud?.inventorySlots.find(
-    ({ item }) => item?.kind === "equipment" && item.modifiers.length > 0,
-  );
+  const equipmentSlot =
+    itemHud?.inventorySlots.find(
+      ({ item }) =>
+        item?.kind === "equipment" &&
+        item.modifiers.some(({ source }) => source === "affix"),
+    ) ??
+    itemHud?.inventorySlots.find(
+      ({ item }) => item?.kind === "equipment" && item.modifiers.length > 0,
+    );
   const stoneSlot = itemHud?.inventorySlots.find(
     ({ item }) => item?.kind === "ability-stone",
   );
@@ -151,27 +157,68 @@ test("enemy loot can be picked, equipped, and used to reassign combat", async ({
     throw new Error("Deterministic equipment and Ability Stone were missing.");
   }
 
-  await page.getByRole("button", { name: /Inventory/ }).click();
+  // The canvas holds focus after loot pickup, and I toggles the menu open.
+  await page.keyboard.press("i");
   const menu = page.getByTestId("inventory-menu");
   await expect(menu).toBeVisible();
 
-  await page
-    .getByRole("button", {
-      name: `Inventory slot ${equipmentSlot.index + 1}, ${equipmentSlot.item.displayName}`,
-    })
-    .click();
+  const sourceSlot = page.getByRole("button", {
+    name: `Inventory slot ${equipmentSlot.index + 1}, ${equipmentSlot.item.displayName}`,
+  });
+  await sourceSlot.click();
   await expect(page.getByTestId("item-tooltip")).toContainText(
     equipmentSlot.item.displayName,
   );
   await expect(page.getByLabel("Item modifiers").locator("li")).toHaveCount(
     equipmentSlot.item.modifiers.length,
   );
-  await page
-    .getByRole("button", {
-      name: `Equip ${equipmentSlot.item.displayName}`,
-    })
-    .click();
+  // Affix lines surface T1–T5 tier markers; base lines never do.
+  const affixModifierCount = equipmentSlot.item.modifiers.filter(
+    ({ source }) => source === "affix",
+  ).length;
+  const tierMarkers = page.locator('[data-testid="item-tooltip"] .affix-tier');
+  await expect(tierMarkers).toHaveCount(affixModifierCount);
+  if (affixModifierCount > 0) {
+    await expect(tierMarkers.first()).toHaveText(/^T[1-5]$/);
+  }
 
+  // Drag the item from the inventory onto its concrete paper-doll slot.
+  const targetSlot =
+    equipmentSlot.item.slotKind === "ring"
+      ? "ring-1"
+      : equipmentSlot.item.slotKind;
+  const dropTarget = page.locator(`[data-drop-equipment-slot="${targetSlot}"]`);
+  const sourceBox = await sourceSlot.boundingBox();
+  const targetBox = await dropTarget.boundingBox();
+  if (sourceBox === null || targetBox === null) {
+    throw new Error("Drag source or drop target was not visible.");
+  }
+  await page.mouse.move(
+    sourceBox.x + sourceBox.width / 2,
+    sourceBox.y + sourceBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBox.x + targetBox.width / 2,
+    targetBox.y + targetBox.height / 2,
+    { steps: 8 },
+  );
+  await expect(page.getByTestId("drag-ghost")).toBeVisible();
+  await expect(dropTarget).toHaveClass(/drop-valid/);
+  await page.mouse.up();
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (slot) =>
+          window.__RARPG_COMBAT_TEST__
+            ?.itemHud()
+            ?.equipmentSlots.find((candidate) => candidate.slot === slot)?.item
+            ?.instanceId ?? null,
+        targetSlot,
+      ),
+    )
+    .toBe(equipmentSlot.item.instanceId);
   await expect
     .poll(() =>
       page.evaluate(() => {
