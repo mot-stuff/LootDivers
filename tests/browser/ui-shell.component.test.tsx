@@ -7,8 +7,14 @@ import { createReadModelChannel } from "../../src/adapters/ui/read-model-channel
 import { App } from "../../src/presentation/App";
 import type {
   CombatHudReadModel,
+  InventoryHudReadModel,
+  ItemUiCommand,
   ShellBindings,
   ShellReadModel,
+} from "../../src/presentation/shell-contracts";
+import {
+  ITEM_COMMAND_EVENT,
+  ITEM_HUD_EVENT,
 } from "../../src/presentation/shell-contracts";
 
 const readyModel: ShellReadModel = {
@@ -80,6 +86,135 @@ const combatHudModel: CombatHudReadModel = {
   activeStatuses: [],
 };
 
+const itemHudModel: InventoryHudReadModel = {
+  revision: 3,
+  inventorySlots: Array.from({ length: 12 }, (_, index) => ({
+    index,
+    item:
+      index === 0
+        ? {
+            kind: "equipment" as const,
+            instanceId: "item-instance:cleaver",
+            displayName: "Tempered Worn Cleaver of Steadfast Grip",
+            rarity: "rare" as const,
+            slot: "main-hand" as const,
+            typeLabel: "Melee weapon",
+            modifiers: [
+              {
+                id: "base:damage",
+                source: "base" as const,
+                label: "+5% outgoing ability damage",
+              },
+              {
+                id: "affix:tempered",
+                source: "affix" as const,
+                label: "+7% outgoing ability damage",
+              },
+            ],
+          }
+        : index === 1
+          ? {
+              kind: "ability-stone" as const,
+              instanceId: "item-instance:stone",
+              displayName: "Ability Stone",
+              rarity: "common" as const,
+              typeLabel: "Ability Stone" as const,
+              quantity: 2,
+            }
+          : null,
+  })),
+  equipmentSlots: [
+    { slot: "main-hand", label: "Main hand", item: null },
+    {
+      slot: "chest",
+      label: "Chest",
+      item: {
+        kind: "equipment",
+        instanceId: "item-instance:vest",
+        displayName: "Reinforced Trailguard Vest",
+        rarity: "magic",
+        slot: "chest",
+        typeLabel: "Body armor",
+        modifiers: [
+          {
+            id: "base:health",
+            source: "base",
+            label: "+10 maximum health",
+          },
+          {
+            id: "affix:reinforced",
+            source: "affix",
+            label: "+14 maximum health",
+          },
+        ],
+      },
+    },
+    { slot: "amulet", label: "Amulet", item: null },
+  ],
+  abilityChoices: [
+    {
+      id: "ability:basic-cleave",
+      displayName: "Basic Cleave",
+      owned: true,
+      selectableFromStone: false,
+    },
+    {
+      id: "ability:cinder-dart",
+      displayName: "Cinder Dart",
+      owned: false,
+      selectableFromStone: true,
+    },
+    {
+      id: "ability:winter-pulse",
+      displayName: "Winter Pulse",
+      owned: false,
+      selectableFromStone: true,
+    },
+    {
+      id: "ability:defiant-signal",
+      displayName: "Defiant Signal",
+      owned: true,
+      selectableFromStone: false,
+    },
+  ],
+  loadout: [
+    {
+      slot: "lmb",
+      keyLabel: "LMB",
+      accessibleKeyLabel: "Left click",
+      abilityId: "ability:basic-cleave",
+      displayName: "Basic Cleave",
+      borrowedDefault: false,
+    },
+    {
+      slot: "q",
+      keyLabel: "Q",
+      accessibleKeyLabel: "Q",
+      abilityId: "ability:cinder-dart",
+      displayName: "Cinder Dart",
+      borrowedDefault: true,
+    },
+    {
+      slot: "e",
+      keyLabel: "E",
+      accessibleKeyLabel: "E",
+      abilityId: "ability:winter-pulse",
+      displayName: "Winter Pulse",
+      borrowedDefault: true,
+    },
+    {
+      slot: "f",
+      keyLabel: "F",
+      accessibleKeyLabel: "F",
+      abilityId: "ability:defiant-signal",
+      displayName: "Defiant Signal",
+      borrowedDefault: false,
+    },
+  ],
+  playerMaximumHealth: 124,
+  outgoingAbilityDamagePercent: 112,
+};
+
 function mount(model: ShellReadModel, emit = vi.fn()) {
   const channel = createReadModelChannel(model);
   const bindings: ShellBindings = {
@@ -103,6 +238,16 @@ async function publishCombatHud(model: CombatHudReadModel): Promise<void> {
   );
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
+  });
+}
+
+async function publishItemHud(model: InventoryHudReadModel): Promise<void> {
+  await act(() => {
+    window.dispatchEvent(
+      new CustomEvent<InventoryHudReadModel>(ITEM_HUD_EVENT, {
+        detail: model,
+      }),
+    );
   });
 }
 
@@ -439,5 +584,228 @@ describe("technical UI shell component", () => {
       container.querySelector('[aria-label="Active combat effects"]')
         ?.textContent,
     ).toContain("Enemy Weakened 2.9s");
+  });
+
+  it("opens Inventory with I only from canvas focus and restores focus on Escape", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+        />,
+        container,
+      );
+    });
+
+    const canvas = container.querySelector<HTMLCanvasElement>("#game-canvas");
+    const inventoryButton = Array.from(
+      container.querySelectorAll("button"),
+    ).find((button) => button.textContent?.includes("Inventory"));
+    expect(inventoryButton?.getAttribute("aria-keyshortcuts")).toBe("I");
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+    inventoryButton?.focus();
+    await act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+      );
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+
+    canvas?.focus();
+    await act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, code: "KeyI" }),
+      );
+    });
+    const dialog = container.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(document.activeElement).toBe(dialog);
+
+    await act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, code: "Escape" }),
+      );
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(canvas);
+  });
+
+  it("renders bounded inventory, equipment, tooltips, stats, and equip commands", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    const commands = vi.fn<(command: ItemUiCommand) => void>();
+    const captureCommand = (event: CustomEvent<ItemUiCommand>) => {
+      commands(event.detail);
+    };
+    window.addEventListener(ITEM_COMMAND_EVENT, captureCommand);
+    document.body.append(container);
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+          />,
+          container,
+        );
+      });
+      await publishItemHud(itemHudModel);
+      await act(() => {
+        Array.from(container.querySelectorAll("button"))
+          .find((button) => button.textContent?.includes("Inventory"))
+          ?.click();
+      });
+
+      expect(
+        container.querySelectorAll(".inventory-grid .inventory-slot"),
+      ).toHaveLength(12);
+      expect(
+        container.querySelectorAll(".equipment-list .equipment-slot"),
+      ).toHaveLength(3);
+      expect(container.textContent).toContain("Maximum health124");
+      expect(container.textContent).toContain("Outgoing damage112%");
+
+      const cleaver = container.querySelector<HTMLButtonElement>(
+        '[aria-label*="Tempered Worn Cleaver"]',
+      );
+      await act(() => cleaver?.focus());
+      const tooltip = container.querySelector('[data-testid="item-tooltip"]');
+      expect(tooltip?.textContent).toContain(
+        "Tempered Worn Cleaver of Steadfast Grip",
+      );
+      expect(tooltip?.textContent).toContain("rare");
+      expect(tooltip?.textContent).toContain("Main hand · Melee weapon");
+      expect(tooltip?.textContent).toContain(
+        "Base +5% outgoing ability damage",
+      );
+      expect(tooltip?.textContent).toContain(
+        "Affix +7% outgoing ability damage",
+      );
+
+      await act(() => {
+        Array.from(container.querySelectorAll("button"))
+          .find((button) => button.textContent?.startsWith("Equip Tempered"))
+          ?.click();
+      });
+      await act(() => {
+        Array.from(container.querySelectorAll("button"))
+          .find((button) => button.textContent === "Unequip Chest")
+          ?.click();
+      });
+      expect(commands).toHaveBeenNthCalledWith(1, {
+        type: "item.equip",
+        inventoryIndex: 0,
+      });
+      expect(commands).toHaveBeenNthCalledWith(2, {
+        type: "item.unequip",
+        equipmentSlot: "chest",
+      });
+    } finally {
+      window.removeEventListener(ITEM_COMMAND_EVENT, captureCommand);
+    }
+  });
+
+  it("emits stone creation and owned-only loadout assignment commands", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    const commands = vi.fn<(command: ItemUiCommand) => void>();
+    const captureCommand = (event: CustomEvent<ItemUiCommand>) => {
+      commands(event.detail);
+    };
+    window.addEventListener(ITEM_COMMAND_EVENT, captureCommand);
+    document.body.append(container);
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+          />,
+          container,
+        );
+      });
+      await publishItemHud(itemHudModel);
+      await act(() => {
+        Array.from(container.querySelectorAll("button"))
+          .find((button) => button.textContent?.includes("Inventory"))
+          ?.click();
+      });
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Inventory slot 2, Ability Stone"]',
+          )
+          ?.click();
+      });
+
+      const stoneButtons = Array.from(
+        container.querySelectorAll(".stone-choice button"),
+        (button) => button.textContent,
+      );
+      expect(stoneButtons).toEqual([
+        "Create Cinder Dart",
+        "Create Winter Pulse",
+      ]);
+      await act(() => {
+        Array.from(
+          container.querySelectorAll<HTMLButtonElement>(".stone-choice button"),
+        )
+          .find((button) => button.textContent === "Create Cinder Dart")
+          ?.click();
+      });
+
+      const qAssignment = container.querySelector<HTMLSelectElement>(
+        '[aria-label="Assign Q ability"]',
+      );
+      expect(
+        qAssignment?.querySelector(
+          'option[value="ability:cinder-dart"][disabled]',
+        ),
+      ).not.toBeNull();
+      expect(
+        qAssignment?.querySelector('option[value="ability:winter-pulse"]'),
+      ).toBeNull();
+      if (qAssignment !== null) {
+        qAssignment.value = "ability:defiant-signal";
+        await act(() => {
+          qAssignment.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      }
+
+      expect(commands).toHaveBeenNthCalledWith(1, {
+        type: "item.consume-ability-stone",
+        inventoryIndex: 1,
+        abilityId: "ability:cinder-dart",
+      });
+      expect(commands).toHaveBeenNthCalledWith(2, {
+        type: "item.assign-ability",
+        loadoutSlot: "q",
+        abilityId: "ability:defiant-signal",
+      });
+      expect(container.textContent).toContain("Borrowed default");
+      expect(
+        container.querySelectorAll(
+          '[data-testid="combat-flask-slots"] .combat-flask-slot',
+        ),
+      ).toHaveLength(4);
+      expect(
+        Array.from(container.querySelectorAll(".combat-flask-slot"), (slot) =>
+          slot.getAttribute("aria-label"),
+        ),
+      ).toEqual([
+        "Flask slot 1, not implemented",
+        "Flask slot 2, not implemented",
+        "Flask slot 3, not implemented",
+        "Flask slot 4, not implemented",
+      ]);
+    } finally {
+      window.removeEventListener(ITEM_COMMAND_EVENT, captureCommand);
+    }
   });
 });

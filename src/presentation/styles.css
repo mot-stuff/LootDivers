@@ -353,6 +353,313 @@ body.combat-mode #app,
   background: rgb(8 17 31 / 86%);
 }
 
+.inventory-menu-toggle {
+  position: absolute;
+  z-index: 3;
+  top: 1rem;
+  right: 1rem;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.7rem;
+  background: rgb(8 17 31 / 92%);
+}
+
+.inventory-menu-toggle kbd,
+.item-menu kbd {
+  padding: 0.15rem 0.32rem;
+  border: 1px solid #7893b2;
+  border-radius: 0.25rem;
+  color: #f4f8ff;
+  background: #182940;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.item-menu {
+  position: absolute;
+  z-index: 4;
+  inset: clamp(0.5rem, 3vw, 2rem);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(62rem, calc(100% - clamp(1rem, 6vw, 4rem)));
+  height: min(44rem, calc(100% - clamp(1rem, 6vw, 4rem)));
+  margin: auto;
+  overflow: hidden;
+  border: 1px solid #76b8ff;
+  border-radius: 0.7rem;
+  background: rgb(8 17 31 / 98%);
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 70%);
+}
+
+.item-menu:focus {
+  outline: 2px solid #b9f6dc;
+  outline-offset: -4px;
+}
+
+.item-menu > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #29405e;
+}
+
+.item-menu h2,
+.item-menu h3,
+.item-menu p {
+  margin: 0;
+}
+
+.item-menu h2 {
+  font-size: clamp(1.15rem, 3vw, 1.65rem);
+}
+
+.item-menu h3 {
+  margin-bottom: 0.55rem;
+  color: #b9d8ff;
+  font-size: 0.83rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.item-menu-layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1.4fr) minmax(10rem, 0.85fr) minmax(
+      13rem,
+      1fr
+    );
+  gap: 1rem;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  list-style: none;
+}
+
+.inventory-slot {
+  position: relative;
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.35rem;
+  overflow: hidden;
+  border-color: #46617e;
+  background: #101a2b;
+  font-size: 0.72rem;
+}
+
+.inventory-slot span {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.inventory-slot small {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.2rem;
+}
+
+.inventory-slot.selected,
+.equipment-slot.selected {
+  border-color: #b9f6dc;
+  box-shadow: inset 0 0 0 1px #b9f6dc;
+}
+
+.equipment-list,
+.stone-choice ul {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.equipment-list > li {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.equipment-slot {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  min-height: 3.75rem;
+  border-color: #52677f;
+  text-align: left;
+}
+
+.equipment-slot span {
+  color: #b7c8dd;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.unequip-button {
+  min-height: 2rem;
+  padding: 0.3rem 0.45rem;
+  border-color: #52677f;
+  font-size: 0.7rem;
+}
+
+.item-tooltip {
+  min-height: 12rem;
+  padding: 0.85rem;
+  border: 1px solid #52677f;
+  border-radius: 0.45rem;
+  background: #101a2b;
+}
+
+.item-tooltip.rarity-magic {
+  border-color: #6da5ff;
+}
+
+.item-tooltip.rarity-rare {
+  border-color: #f0c75e;
+}
+
+.item-tooltip h3 {
+  margin: 0.2rem 0 0.45rem;
+  color: #f4f8ff;
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.item-tooltip .item-rarity {
+  color: #91a8c6;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.item-tooltip ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item-tooltip li {
+  color: #dceaff;
+  font-size: 0.78rem;
+}
+
+.item-tooltip li span {
+  color: #76b8ff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.item-tooltip-empty {
+  display: grid;
+  place-items: center;
+  color: #91a8c6;
+  text-align: center;
+}
+
+.character-summary dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.character-summary dl div {
+  min-width: 8rem;
+  padding: 0.55rem;
+  border: 1px solid #29405e;
+  border-radius: 0.35rem;
+  background: #101a2b;
+}
+
+.character-summary dt {
+  color: #91a8c6;
+  font-size: 0.68rem;
+}
+
+.character-summary dd {
+  margin: 0.15rem 0 0;
+  font-weight: 800;
+}
+
+.stone-choice {
+  padding: 0.75rem;
+  border: 1px solid #7c6bb0;
+  border-radius: 0.45rem;
+  background: #17152b;
+}
+
+.stone-choice button {
+  width: 100%;
+  min-height: 2.3rem;
+  padding: 0.4rem 0.55rem;
+  text-align: left;
+}
+
+.loadout-editor {
+  grid-column: 1 / -1;
+}
+
+.loadout-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.loadout-controls label {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.6rem;
+  border: 1px solid #29405e;
+  border-radius: 0.4rem;
+  background: #101a2b;
+}
+
+.loadout-controls label > span {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.loadout-controls strong {
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loadout-controls small {
+  grid-column: 1 / -1;
+  color: #ffd27d;
+  font-size: 0.65rem;
+}
+
+.loadout-controls select {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.35rem;
+  border: 1px solid #52677f;
+  border-radius: 0.3rem;
+  color: #e8f1ff;
+  background: #08111f;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
 @media (max-width: 700px) {
   .combat-vitals-hud {
     right: 0.5rem;
@@ -390,11 +697,42 @@ body.combat-mode #app,
     font-size: 0.54rem;
     text-overflow: ellipsis;
   }
+
+  .inventory-menu-toggle {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+
+  .item-menu-layout {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .item-tooltip,
+  .loadout-editor {
+    grid-column: 1 / -1;
+  }
+
+  .loadout-controls {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 420px) {
   .combat-vitals-hud {
     bottom: 8.5rem;
+  }
+
+  .item-menu-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .item-tooltip,
+  .loadout-editor {
+    grid-column: auto;
+  }
+
+  .loadout-controls {
+    grid-template-columns: 1fr;
   }
 }
 

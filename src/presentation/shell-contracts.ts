@@ -61,6 +61,109 @@ export interface CombatHudReadModel {
   readonly activeStatuses: readonly CombatStatusHudReadModel[];
 }
 
+export type ItemEquipmentSlot = "main-hand" | "chest" | "amulet";
+export type ItemRarityHud = "common" | "magic" | "rare";
+export type ItemLoadoutSlot = "lmb" | "q" | "e" | "f";
+
+export interface ItemModifierHudReadModel {
+  readonly id: string;
+  readonly source: "base" | "affix";
+  readonly label: string;
+}
+
+export interface EquipmentItemHudReadModel {
+  readonly kind: "equipment";
+  readonly instanceId: string;
+  readonly displayName: string;
+  readonly rarity: ItemRarityHud;
+  readonly slot: ItemEquipmentSlot;
+  readonly typeLabel: string;
+  readonly modifiers: readonly ItemModifierHudReadModel[];
+}
+
+export interface AbilityStoneItemHudReadModel {
+  readonly kind: "ability-stone";
+  readonly instanceId: string;
+  readonly displayName: string;
+  readonly rarity: "common";
+  readonly typeLabel: "Ability Stone";
+  readonly quantity: number;
+}
+
+export type ItemHudReadModel =
+  EquipmentItemHudReadModel | AbilityStoneItemHudReadModel;
+
+export interface InventorySlotHudReadModel {
+  readonly index: number;
+  readonly item: ItemHudReadModel | null;
+}
+
+export interface EquipmentSlotHudReadModel {
+  readonly slot: ItemEquipmentSlot;
+  readonly label: string;
+  readonly item: EquipmentItemHudReadModel | null;
+}
+
+export interface AbilityChoiceHudReadModel {
+  readonly id: string;
+  readonly displayName: string;
+  readonly owned: boolean;
+  readonly selectableFromStone: boolean;
+}
+
+export interface LoadoutAssignmentHudReadModel {
+  readonly slot: ItemLoadoutSlot;
+  readonly keyLabel: string;
+  readonly accessibleKeyLabel: string;
+  readonly abilityId: string | null;
+  readonly displayName: string;
+  /**
+   * Phase 2 defaults may remain assigned before the corresponding ability is
+   * owned. They are display-only until created from an Ability Stone.
+   */
+  readonly borrowedDefault: boolean;
+}
+
+export interface InventoryHudReadModel {
+  readonly revision: number;
+  readonly inventorySlots: readonly InventorySlotHudReadModel[];
+  readonly equipmentSlots: readonly EquipmentSlotHudReadModel[];
+  readonly abilityChoices: readonly AbilityChoiceHudReadModel[];
+  readonly loadout: readonly LoadoutAssignmentHudReadModel[];
+  readonly playerMaximumHealth: number;
+  readonly outgoingAbilityDamagePercent: number;
+}
+
+export type ItemUiCommand =
+  | {
+      readonly type: "item.equip";
+      readonly inventoryIndex: number;
+    }
+  | {
+      readonly type: "item.unequip";
+      readonly equipmentSlot: ItemEquipmentSlot;
+    }
+  | {
+      readonly type: "item.consume-ability-stone";
+      readonly inventoryIndex: number;
+      readonly abilityId: string;
+    }
+  | {
+      readonly type: "item.assign-ability";
+      readonly loadoutSlot: ItemLoadoutSlot;
+      readonly abilityId: string;
+    };
+
+export const ITEM_HUD_EVENT = "rarpg:item-hud";
+export const ITEM_COMMAND_EVENT = "rarpg:item-command";
+
+declare global {
+  interface WindowEventMap {
+    "rarpg:item-hud": CustomEvent<InventoryHudReadModel>;
+    "rarpg:item-command": CustomEvent<ItemUiCommand>;
+  }
+}
+
 export interface ShellReadModel {
   readonly revision: number;
   readonly phase: ShellPhase;

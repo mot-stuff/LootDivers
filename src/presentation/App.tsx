@@ -8,9 +8,14 @@ import type {
 } from "../persistence";
 import type {
   CombatHudReadModel,
+  InventoryHudReadModel,
+  ItemEquipmentSlot,
+  ItemHudReadModel,
+  ItemUiCommand,
   ShellBindings,
   ShellReadModel,
 } from "./shell-contracts";
+import { ITEM_COMMAND_EVENT, ITEM_HUD_EVENT } from "./shell-contracts";
 
 export interface PersistenceFixtureActions {
   save(state: FixtureSaveState): Promise<void>;
@@ -29,6 +34,357 @@ export interface AppProps {
 
 interface CombatVitalsProps {
   readonly model: CombatHudReadModel;
+}
+
+const EMPTY_ITEM_HUD: InventoryHudReadModel = {
+  revision: 0,
+  inventorySlots: Array.from({ length: 12 }, (_, index) => ({
+    index,
+    item: null,
+  })),
+  equipmentSlots: [
+    { slot: "main-hand", label: "Main hand", item: null },
+    { slot: "chest", label: "Chest", item: null },
+    { slot: "amulet", label: "Amulet", item: null },
+  ],
+  abilityChoices: [],
+  loadout: [
+    {
+      slot: "lmb",
+      keyLabel: "LMB",
+      accessibleKeyLabel: "Left click",
+      abilityId: "ability:basic-cleave",
+      displayName: "Basic Cleave",
+      borrowedDefault: false,
+    },
+    {
+      slot: "q",
+      keyLabel: "Q",
+      accessibleKeyLabel: "Q",
+      abilityId: "ability:cinder-dart",
+      displayName: "Cinder Dart",
+      borrowedDefault: true,
+    },
+    {
+      slot: "e",
+      keyLabel: "E",
+      accessibleKeyLabel: "E",
+      abilityId: "ability:winter-pulse",
+      displayName: "Winter Pulse",
+      borrowedDefault: true,
+    },
+    {
+      slot: "f",
+      keyLabel: "F",
+      accessibleKeyLabel: "F",
+      abilityId: "ability:defiant-signal",
+      displayName: "Defiant Signal",
+      borrowedDefault: true,
+    },
+  ],
+  playerMaximumHealth: 100,
+  outgoingAbilityDamagePercent: 100,
+};
+
+type ItemSelection =
+  | { readonly kind: "inventory"; readonly index: number }
+  | { readonly kind: "equipment"; readonly slot: ItemEquipmentSlot };
+
+interface ItemMenuProps {
+  readonly model: InventoryHudReadModel;
+  readonly onClose: () => void;
+  readonly onCommand: (command: ItemUiCommand) => void;
+}
+
+function selectedItem(
+  model: InventoryHudReadModel,
+  selection: ItemSelection | null,
+): ItemHudReadModel | null {
+  if (selection === null) return null;
+  if (selection.kind === "inventory") {
+    return (
+      model.inventorySlots.find(({ index }) => index === selection.index)
+        ?.item ?? null
+    );
+  }
+  return (
+    model.equipmentSlots.find(({ slot }) => slot === selection.slot)?.item ??
+    null
+  );
+}
+
+function itemSlotLabel(slot: ItemEquipmentSlot): string {
+  return slot === "main-hand"
+    ? "Main hand"
+    : slot === "chest"
+      ? "Chest"
+      : "Amulet";
+}
+
+function ItemTooltip({ item }: { readonly item: ItemHudReadModel | null }) {
+  if (item === null) {
+    return (
+      <aside class="item-tooltip item-tooltip-empty" aria-live="polite">
+        <p>Focus or select an item to inspect it.</p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside
+      class={`item-tooltip rarity-${item.rarity}`}
+      aria-live="polite"
+      data-testid="item-tooltip"
+    >
+      <p class="item-rarity">{item.rarity}</p>
+      <h3>{item.displayName}</h3>
+      <p>
+        {item.kind === "equipment"
+          ? `${itemSlotLabel(item.slot)} · ${item.typeLabel}`
+          : `${item.typeLabel} · Stack ${item.quantity}`}
+      </p>
+      {item.kind === "equipment" && (
+        <ul aria-label="Item modifiers">
+          {item.modifiers.map((modifier) => (
+            <li key={modifier.id} data-source={modifier.source}>
+              <span>{modifier.source === "base" ? "Base" : "Affix"}</span>{" "}
+              {modifier.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </aside>
+  );
+}
+
+function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
+  const [selection, setSelection] = useState<ItemSelection | null>(null);
+  const item = selectedItem(model, selection);
+  const inventorySlots = Array.from({ length: 12 }, (_, index) => {
+    return (
+      model.inventorySlots.find((slot) => slot.index === index) ?? {
+        index,
+        item: null,
+      }
+    );
+  });
+  const selectedInventoryIndex =
+    selection?.kind === "inventory" ? selection.index : null;
+  const stoneChoices = model.abilityChoices.filter(
+    ({ selectableFromStone }) => selectableFromStone,
+  );
+  const ownedChoices = model.abilityChoices.filter(({ owned }) => owned);
+
+  return (
+    <section
+      id="inventory-menu"
+      class="item-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="inventory-menu-title"
+      data-testid="inventory-menu"
+      tabIndex={-1}
+    >
+      <header>
+        <div>
+          <p class="eyebrow">Phase 3 loadout</p>
+          <h2 id="inventory-menu-title">Inventory &amp; equipment</h2>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close inventory">
+          Close <kbd>Esc</kbd>
+        </button>
+      </header>
+
+      <div class="item-menu-layout">
+        <section aria-labelledby="inventory-slots-title">
+          <h3 id="inventory-slots-title">Inventory</h3>
+          <ol class="inventory-grid" aria-label="12 inventory slots">
+            {inventorySlots.map((slot) => (
+              <li key={slot.index}>
+                <button
+                  type="button"
+                  class={
+                    selection?.kind === "inventory" &&
+                    selection.index === slot.index
+                      ? "inventory-slot selected"
+                      : "inventory-slot"
+                  }
+                  aria-label={
+                    slot.item === null
+                      ? `Inventory slot ${slot.index + 1}, empty`
+                      : `Inventory slot ${slot.index + 1}, ${slot.item.displayName}`
+                  }
+                  onClick={() =>
+                    setSelection({ kind: "inventory", index: slot.index })
+                  }
+                  onFocus={() =>
+                    setSelection({ kind: "inventory", index: slot.index })
+                  }
+                >
+                  <span>{slot.item?.displayName ?? "Empty"}</span>
+                  {slot.item?.kind === "ability-stone" &&
+                    slot.item.quantity > 1 && (
+                      <small>×{slot.item.quantity}</small>
+                    )}
+                </button>
+              </li>
+            ))}
+          </ol>
+          {selection?.kind === "inventory" && item?.kind === "equipment" && (
+            <button
+              type="button"
+              onClick={() =>
+                onCommand({
+                  type: "item.equip",
+                  inventoryIndex: selection.index,
+                })
+              }
+            >
+              Equip {item.displayName}
+            </button>
+          )}
+        </section>
+
+        <section aria-labelledby="equipment-slots-title">
+          <h3 id="equipment-slots-title">Equipment</h3>
+          <ol class="equipment-list">
+            {model.equipmentSlots.map((slot) => (
+              <li key={slot.slot}>
+                <button
+                  type="button"
+                  class={
+                    selection?.kind === "equipment" &&
+                    selection.slot === slot.slot
+                      ? "equipment-slot selected"
+                      : "equipment-slot"
+                  }
+                  aria-label={`${slot.label}, ${slot.item?.displayName ?? "empty"}`}
+                  onClick={() =>
+                    setSelection({ kind: "equipment", slot: slot.slot })
+                  }
+                  onFocus={() =>
+                    setSelection({ kind: "equipment", slot: slot.slot })
+                  }
+                >
+                  <strong>{slot.label}</strong>
+                  <span>{slot.item?.displayName ?? "Empty"}</span>
+                </button>
+                {slot.item !== null && (
+                  <button
+                    type="button"
+                    class="unequip-button"
+                    onClick={() =>
+                      onCommand({
+                        type: "item.unequip",
+                        equipmentSlot: slot.slot,
+                      })
+                    }
+                  >
+                    Unequip {slot.label}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <ItemTooltip item={item} />
+
+        <section
+          class="character-summary"
+          aria-labelledby="character-summary-title"
+        >
+          <h3 id="character-summary-title">Character</h3>
+          <dl>
+            <div>
+              <dt>Maximum health</dt>
+              <dd>{model.playerMaximumHealth}</dd>
+            </div>
+            <div>
+              <dt>Outgoing damage</dt>
+              <dd>{model.outgoingAbilityDamagePercent}%</dd>
+            </div>
+          </dl>
+        </section>
+
+        {item?.kind === "ability-stone" && selectedInventoryIndex !== null && (
+          <section class="stone-choice" aria-labelledby="stone-choice-title">
+            <h3 id="stone-choice-title">Create an ability</h3>
+            {stoneChoices.length === 0 ? (
+              <p>All currently implemented abilities are owned.</p>
+            ) : (
+              <ul>
+                {stoneChoices.map((ability) => (
+                  <li key={ability.id}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onCommand({
+                          type: "item.consume-ability-stone",
+                          inventoryIndex: selectedInventoryIndex,
+                          abilityId: ability.id,
+                        })
+                      }
+                    >
+                      Create {ability.displayName}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        <section class="loadout-editor" aria-labelledby="loadout-title">
+          <h3 id="loadout-title">Combat loadout</h3>
+          <div class="loadout-controls">
+            {model.loadout.map((assignment) => (
+              <label key={assignment.slot}>
+                <span>
+                  <kbd>{assignment.keyLabel}</kbd>{" "}
+                  <strong>{assignment.displayName}</strong>
+                  {assignment.borrowedDefault && (
+                    <small>Borrowed default</small>
+                  )}
+                </span>
+                <select
+                  aria-label={`Assign ${assignment.accessibleKeyLabel} ability`}
+                  value={assignment.abilityId ?? ""}
+                  onChange={(event) => {
+                    const abilityId = event.currentTarget.value;
+                    if (
+                      abilityId !== "" &&
+                      ownedChoices.some((choice) => choice.id === abilityId)
+                    ) {
+                      onCommand({
+                        type: "item.assign-ability",
+                        loadoutSlot: assignment.slot,
+                        abilityId,
+                      });
+                    }
+                  }}
+                >
+                  {assignment.abilityId !== null &&
+                    !ownedChoices.some(
+                      ({ id }) => id === assignment.abilityId,
+                    ) && (
+                      <option value={assignment.abilityId} disabled>
+                        {assignment.displayName} (borrowed)
+                      </option>
+                    )}
+                  {ownedChoices.map((ability) => (
+                    <option key={ability.id} value={ability.id}>
+                      {ability.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </section>
+      </div>
+    </section>
+  );
 }
 
 function CombatVitals({ model }: CombatVitalsProps) {
@@ -222,6 +578,8 @@ export function App({
   );
   const [counter, setCounter] = useState(1);
   const [serialized, setSerialized] = useState("");
+  const [itemHud, setItemHud] = useState<InventoryHudReadModel>(EMPTY_ITEM_HUD);
+  const [itemMenuOpen, setItemMenuOpen] = useState(false);
   const [combatHud, setCombatHud] = useState<CombatHudReadModel>({
     paused: true,
     playerHealth: 100,
@@ -290,6 +648,51 @@ export function App({
     window.addEventListener("rarpg:combat-hud", updateHud);
     return () => window.removeEventListener("rarpg:combat-hud", updateHud);
   }, [showCombatPrototype]);
+  useEffect(() => {
+    if (!showCombatPrototype) return;
+    const updateItems = (event: CustomEvent<InventoryHudReadModel>) => {
+      setItemHud(event.detail);
+    };
+    window.addEventListener(ITEM_HUD_EVENT, updateItems);
+    return () => window.removeEventListener(ITEM_HUD_EVENT, updateItems);
+  }, [showCombatPrototype]);
+  useEffect(() => {
+    if (!showCombatPrototype) return;
+    const handleMenuKey = (event: KeyboardEvent) => {
+      const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas");
+      if (
+        !itemMenuOpen &&
+        event.code === "KeyI" &&
+        document.activeElement === canvas
+      ) {
+        event.preventDefault();
+        setItemMenuOpen(true);
+      } else if (itemMenuOpen && event.code === "Escape") {
+        event.preventDefault();
+        closeItemMenu();
+      }
+    };
+    window.addEventListener("keydown", handleMenuKey);
+    return () => window.removeEventListener("keydown", handleMenuKey);
+  }, [itemMenuOpen, showCombatPrototype]);
+  useLayoutEffect(() => {
+    if (itemMenuOpen) {
+      document.querySelector<HTMLElement>("#inventory-menu")?.focus();
+    }
+  }, [itemMenuOpen]);
+
+  function closeItemMenu(): void {
+    setItemMenuOpen(false);
+    document
+      .querySelector<HTMLCanvasElement>("#game-canvas")
+      ?.focus({ preventScroll: true });
+  }
+
+  function emitItemCommand(command: ItemUiCommand): void {
+    window.dispatchEvent(
+      new CustomEvent<ItemUiCommand>(ITEM_COMMAND_EVENT, { detail: command }),
+    );
+  }
 
   const fixtureState = (): FixtureSaveState => ({
     label: "Phase 0 synthetic fixture",
@@ -313,12 +716,12 @@ export function App({
         <div>
           <p class="eyebrow">
             {showCombatPrototype
-              ? "RARPG Phase 2 playable prototype"
+              ? "RARPG Phase 3 item prototype"
               : "RARPG technical foundation"}
           </p>
           <h1>
             {showCombatPrototype
-              ? "Ability combat arena"
+              ? "Item and loadout combat arena"
               : "UI and renderer diagnostics"}
           </h1>
         </div>
@@ -438,6 +841,25 @@ export function App({
 
       {showCombatPrototype && <CombatVitals model={combatHud} />}
       {showCombatPrototype && <CombatActionBar model={combatHud} />}
+      {showCombatPrototype && (
+        <button
+          type="button"
+          class="inventory-menu-toggle"
+          aria-expanded={itemMenuOpen}
+          aria-controls="inventory-menu"
+          aria-keyshortcuts="I"
+          onClick={() => setItemMenuOpen(true)}
+        >
+          Inventory <kbd>I</kbd>
+        </button>
+      )}
+      {showCombatPrototype && itemMenuOpen && (
+        <ItemMenu
+          model={itemHud}
+          onClose={closeItemMenu}
+          onCommand={emitItemCommand}
+        />
+      )}
 
       {showCombatPrototype && combatHud.paused && (
         <section class="combat-paused-hud" role="status">
@@ -449,7 +871,7 @@ export function App({
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
           {showCombatPrototype
-            ? "Click the arena to play. Use left-click for Basic Cleave; Q for Cinder Dart; E for Winter Pulse; F for Defiant Signal. Input pauses when interface controls have focus."
+            ? "Click the arena to play. Use left-click, Q, E, and F for assigned abilities. Press I while the arena is focused to open Inventory; Escape closes it. Input pauses when interface controls have focus."
             : "Focus the canvas before using keyboard input. Tab away to keep keyboard input in the interface."}
         </p>
         <button
