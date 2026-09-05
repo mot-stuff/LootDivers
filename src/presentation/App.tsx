@@ -40,13 +40,10 @@ function CombatVitals({ model }: CombatVitalsProps) {
         )
       : 0;
   const manaPercent =
-    model.placeholderManaMaximum > 0
+    model.manaMaximum > 0
       ? Math.max(
           0,
-          Math.min(
-            100,
-            (model.placeholderManaCurrent / model.placeholderManaMaximum) * 100,
-          ),
+          Math.min(100, (model.manaCurrent / model.manaMaximum) * 100),
         )
       : 0;
   const experiencePercent =
@@ -90,11 +87,11 @@ function CombatVitals({ model }: CombatVitalsProps) {
         <div
           class="combat-vitals-meter combat-mana-meter"
           role="progressbar"
-          aria-label="Reserved mana placeholder"
+          aria-label="Player mana"
           aria-valuemin={0}
-          aria-valuemax={model.placeholderManaMaximum}
-          aria-valuenow={model.placeholderManaCurrent}
-          aria-valuetext={`${model.placeholderManaCurrent} of ${model.placeholderManaMaximum} reserved mana placeholder`}
+          aria-valuemax={model.manaMaximum}
+          aria-valuenow={model.manaCurrent}
+          aria-valuetext={`${model.manaCurrent} of ${model.manaMaximum} mana`}
         >
           <span style={{ width: `${manaPercent}%` }} />
         </div>
@@ -117,6 +114,90 @@ function CombatVitals({ model }: CombatVitalsProps) {
   );
 }
 
+function formatSeconds(seconds: number): string {
+  return `${Math.ceil(seconds * 10) / 10}s`;
+}
+
+function CombatActionBar({ model }: CombatVitalsProps) {
+  return (
+    <section
+      class="combat-action-hud"
+      aria-label="Combat abilities"
+      data-testid="combat-action-hud"
+    >
+      <ol class="combat-ability-list">
+        {model.abilities.map((ability) => {
+          const cooldownPercent =
+            ability.cooldownMaximumSeconds > 0
+              ? Math.min(
+                  100,
+                  (ability.cooldownRemainingSeconds /
+                    ability.cooldownMaximumSeconds) *
+                    100,
+                )
+              : 0;
+          const stateText =
+            ability.state === "cooldown"
+              ? `Cooldown ${formatSeconds(ability.cooldownRemainingSeconds)}`
+              : ability.state === "insufficient-mana"
+                ? `Need ${ability.manaCost} mana`
+                : ability.state === "defeated"
+                  ? "Defeated"
+                  : "Ready";
+          const costText =
+            ability.manaCost > 0 ? `${ability.manaCost} mana` : "Free";
+          const cooldownText =
+            ability.cooldownMaximumSeconds > 0
+              ? `${formatSeconds(ability.cooldownMaximumSeconds)} cooldown`
+              : "No cooldown";
+
+          return (
+            <li
+              key={ability.id}
+              class="combat-ability"
+              data-ability-id={ability.id}
+              data-state={ability.state}
+              aria-label={`${ability.accessibleKeyLabel}, ${ability.name}, ${costText}, ${cooldownText}, ${stateText}`}
+            >
+              <span
+                class="combat-ability-cooldown"
+                style={{ height: `${cooldownPercent}%` }}
+                aria-hidden="true"
+              />
+              <div class="combat-ability-heading">
+                <kbd>{ability.keyLabel}</kbd>
+                <strong>{ability.name}</strong>
+              </div>
+              <span class="combat-ability-details">
+                {costText} · {cooldownText}
+              </span>
+              <span class="combat-ability-state">{stateText}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {model.activeStatuses.length > 0 && (
+        <div class="combat-statuses" aria-label="Active combat effects">
+          {model.activeStatuses.map((status) => (
+            <span
+              key={status.id}
+              class="combat-status"
+              data-status-id={status.id}
+            >
+              {status.target === "enemy" ? "Enemy " : ""}
+              {status.label} {formatSeconds(status.remainingSeconds)}
+            </span>
+          ))}
+        </div>
+      )}
+      <p class="combat-controls-summary">
+        Move <kbd>WASD</kbd> · Aim mouse · Dodge <kbd>Space</kbd> · Reset{" "}
+        <kbd>R</kbd>
+      </p>
+    </section>
+  );
+}
+
 export function App({
   bindings,
   persistenceStatus,
@@ -134,10 +215,53 @@ export function App({
     playerHealth: 100,
     playerMaxHealth: 100,
     playerDead: false,
-    placeholderManaCurrent: 100,
-    placeholderManaMaximum: 100,
+    manaCurrent: 100,
+    manaMaximum: 100,
     placeholderExperienceCurrent: 0,
     placeholderExperienceMaximum: 100,
+    abilities: [
+      {
+        id: "ability:basic-cleave",
+        keyLabel: "LMB",
+        accessibleKeyLabel: "Left click",
+        name: "Basic Cleave",
+        manaCost: 0,
+        cooldownRemainingSeconds: 0,
+        cooldownMaximumSeconds: 0,
+        state: "ready",
+      },
+      {
+        id: "ability:cinder-dart",
+        keyLabel: "Q",
+        accessibleKeyLabel: "Q",
+        name: "Cinder Dart",
+        manaCost: 15,
+        cooldownRemainingSeconds: 0,
+        cooldownMaximumSeconds: 0.5,
+        state: "ready",
+      },
+      {
+        id: "ability:winter-pulse",
+        keyLabel: "E",
+        accessibleKeyLabel: "E",
+        name: "Winter Pulse",
+        manaCost: 25,
+        cooldownRemainingSeconds: 0,
+        cooldownMaximumSeconds: 2.5,
+        state: "ready",
+      },
+      {
+        id: "ability:defiant-signal",
+        keyLabel: "F",
+        accessibleKeyLabel: "F",
+        name: "Defiant Signal",
+        manaCost: 20,
+        cooldownRemainingSeconds: 0,
+        cooldownMaximumSeconds: 5,
+        state: "ready",
+      },
+    ],
+    activeStatuses: [],
   });
 
   useLayoutEffect(
@@ -177,12 +301,12 @@ export function App({
         <div>
           <p class="eyebrow">
             {showCombatPrototype
-              ? "RARPG Phase 1 playable prototype"
+              ? "RARPG Phase 2 playable prototype"
               : "RARPG technical foundation"}
           </p>
           <h1>
             {showCombatPrototype
-              ? "Combat movement arena"
+              ? "Ability combat arena"
               : "UI and renderer diagnostics"}
           </h1>
         </div>
@@ -301,6 +425,7 @@ export function App({
       </section>
 
       {showCombatPrototype && <CombatVitals model={combatHud} />}
+      {showCombatPrototype && <CombatActionBar model={combatHud} />}
 
       {showCombatPrototype && combatHud.paused && (
         <section class="combat-paused-hud" role="status">
@@ -312,7 +437,7 @@ export function App({
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
           {showCombatPrototype
-            ? "Click the arena, then use WASD to move, the mouse to aim, Space to dodge, and R to reset. Input pauses when interface controls have focus."
+            ? "Click the arena to play. Use left-click for Basic Cleave; Q for Cinder Dart; E for Winter Pulse; F for Defiant Signal. Input pauses when interface controls have focus."
             : "Focus the canvas before using keyboard input. Tab away to keep keyboard input in the interface."}
         </p>
         <button

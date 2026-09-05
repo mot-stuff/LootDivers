@@ -1,14 +1,19 @@
 import Phaser from "phaser";
 
 import {
+  BASIC_CLEAVE_ID,
   CombatArenaSimulation,
   CINDER_DART_ID,
   DEFIANT_SIGNAL_ID,
   FIXED_STEP_SECONDS,
+  FIXED_TICKS_PER_SECOND,
   FixedStepRunner,
+  MANA_RESOURCE_ID,
   WINTER_PULSE_ID,
+  definitionById,
   type CombatArenaDiagnostics,
   type CombatArenaEvent,
+  type CombatAbilityId,
   type DamageResult,
 } from "../../core";
 import type { CombatHudReadModel } from "../../presentation/shell-contracts";
@@ -19,6 +24,44 @@ const ORIGIN_Y = 72;
 const ISO_X_SCALE = 0.65;
 const ISO_Y_SCALE = 0.34;
 const PRESENTATION_DEPTH = 3_500_000;
+
+const HUD_ABILITIES: readonly {
+  readonly id: CombatAbilityId;
+  readonly keyLabel: string;
+  readonly accessibleKeyLabel: string;
+  readonly name: string;
+}[] = [
+  {
+    id: BASIC_CLEAVE_ID,
+    keyLabel: "LMB",
+    accessibleKeyLabel: "Left click",
+    name: "Basic Cleave",
+  },
+  {
+    id: CINDER_DART_ID,
+    keyLabel: "Q",
+    accessibleKeyLabel: "Q",
+    name: "Cinder Dart",
+  },
+  {
+    id: WINTER_PULSE_ID,
+    keyLabel: "E",
+    accessibleKeyLabel: "E",
+    name: "Winter Pulse",
+  },
+  {
+    id: DEFIANT_SIGNAL_ID,
+    keyLabel: "F",
+    accessibleKeyLabel: "F",
+    name: "Defiant Signal",
+  },
+];
+
+const STATUS_LABELS = {
+  chilled: "Chilled",
+  focused: "Focused",
+  weakened: "Weakened",
+} as const;
 
 export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly pausedForUi: boolean;
@@ -516,10 +559,39 @@ export class CombatArenaPresentation {
       playerHealth: state.playerHealth,
       playerMaxHealth: state.playerMaxHealth,
       playerDead: state.playerDead,
-      placeholderManaCurrent: state.mana,
-      placeholderManaMaximum: state.maxMana,
+      manaCurrent: state.mana,
+      manaMaximum: state.maxMana,
       placeholderExperienceCurrent: 0,
       placeholderExperienceMaximum: 100,
+      abilities: HUD_ABILITIES.map((ability) => {
+        const definition = definitionById(ability.id);
+        const manaCost =
+          definition?.costs.find((cost) => cost.resourceId === MANA_RESOURCE_ID)
+            ?.amount ?? 0;
+        const cooldownRemainingSeconds =
+          (state.cooldowns[ability.id] ?? 0) / FIXED_TICKS_PER_SECOND;
+        const cooldownMaximumSeconds =
+          (definition?.cooldown.durationTicks ?? 0) / FIXED_TICKS_PER_SECOND;
+        return {
+          ...ability,
+          manaCost,
+          cooldownRemainingSeconds,
+          cooldownMaximumSeconds,
+          state: state.playerDead
+            ? ("defeated" as const)
+            : cooldownRemainingSeconds > 0
+              ? ("cooldown" as const)
+              : state.mana < manaCost
+                ? ("insufficient-mana" as const)
+                : ("ready" as const),
+        };
+      }),
+      activeStatuses: state.statuses.map((status) => ({
+        id: `${status.targetId}:${status.statusId}`,
+        label: STATUS_LABELS[status.statusId],
+        target: status.targetId === "player" ? "player" : "enemy",
+        remainingSeconds: status.ticksRemaining / FIXED_TICKS_PER_SECOND,
+      })),
     };
     const key = JSON.stringify(hud);
     if (key === this.#lastHudKey) {

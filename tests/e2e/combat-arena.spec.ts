@@ -31,7 +31,7 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(
-    page.getByRole("heading", { name: "Combat movement arena" }),
+    page.getByRole("heading", { name: "Ability combat arena" }),
   ).toBeVisible();
   await expect.poll(() => diagnostics(page)).not.toBeNull();
 
@@ -202,6 +202,12 @@ test("ability automation exposes projectile, area, and status presentation paths
     ],
     renderedProjectileCount: 1,
   });
+  await expect(
+    page.getByRole("progressbar", { name: "Player mana" }),
+  ).toHaveAttribute("aria-valuenow", "85.7");
+  const cinderDart = page.locator('[data-ability-id="ability:cinder-dart"]');
+  await expect(cinderDart).toHaveAttribute("data-state", "cooldown");
+  await expect(cinderDart).toContainText("Cooldown 0.4s");
 
   await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;
@@ -223,6 +229,9 @@ test("ability automation exposes projectile, area, and status presentation paths
     renderedAreaCount: 1,
     renderedStatusCount: 1,
   });
+  await expect(
+    page.getByLabel("Active combat effects").getByText("Enemy Chilled 2s"),
+  ).toBeVisible();
 
   await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;
@@ -245,6 +254,23 @@ test("ability automation exposes projectile, area, and status presentation paths
     renderedAreaCount: 1,
     renderedStatusCount: 2,
   });
+  await expect(
+    page.getByLabel("Active combat effects").getByText("Focused 3s"),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Active combat effects").getByText("Enemy Weakened 3s"),
+  ).toBeVisible();
+  const actionBar = page.getByTestId("combat-action-hud");
+  await expect(actionBar.locator(".combat-ability")).toHaveCount(4);
+  await expect(actionBar.locator(".combat-ability kbd")).toHaveText([
+    "LMB",
+    "Q",
+    "E",
+    "F",
+  ]);
+  await expect(
+    page.getByLabel(/Left click, Basic Cleave, Free, No cooldown/),
+  ).toBeVisible();
   expect(failures).toEqual([]);
 });
 
@@ -402,7 +428,7 @@ for (const viewport of [
       page.getByRole("progressbar", { name: "Player health" }),
     ).toHaveAttribute("aria-valuenow", "100");
     await expect(
-      page.getByRole("progressbar", { name: "Reserved mana placeholder" }),
+      page.getByRole("progressbar", { name: "Player mana" }),
     ).toHaveAttribute("aria-valuenow", "100");
     await expect(
       page.getByRole("progressbar", {
@@ -427,6 +453,26 @@ for (const viewport of [
     expect((hudBox?.y ?? 0) + (hudBox?.height ?? 0)).toBeLessThanOrEqual(
       viewport.height,
     );
+
+    const actionBar = page.getByTestId("combat-action-hud");
+    await expect(actionBar).toBeVisible();
+    const actionBarBox = await actionBar.boundingBox();
+    expect(actionBarBox).not.toBeNull();
+    expect(actionBarBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect(actionBarBox?.y ?? -1).toBeGreaterThanOrEqual(0);
+    expect(
+      (actionBarBox?.x ?? 0) + (actionBarBox?.width ?? 0),
+    ).toBeLessThanOrEqual(viewport.width);
+    expect(
+      (actionBarBox?.y ?? 0) + (actionBarBox?.height ?? 0),
+    ).toBeLessThanOrEqual(viewport.height);
+    await expect(actionBar.locator(".combat-ability")).toHaveCount(4);
+    await expect(actionBar.locator(".combat-ability kbd")).toHaveText([
+      "LMB",
+      "Q",
+      "E",
+      "F",
+    ]);
 
     await page.getByRole("link", { name: "Skip canvas" }).focus();
     const pause = page.locator(".combat-paused-hud");

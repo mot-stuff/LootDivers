@@ -36,39 +36,25 @@ test("DOM focus does not leak keyboard input into canvas capture", async ({
   const failures = collectRuntimeFailures(page);
   await openReadyShell(page);
 
-  const diagnosticButton = page.getByRole("button", {
-    name: "Send diagnostic intent",
-  });
-  await diagnosticButton.focus();
+  const skipLink = page.getByRole("link", { name: "Skip canvas" });
+  await skipLink.focus();
   await page.keyboard.press("w");
   await expect(page.getByTestId("keyboard-count")).toHaveText("0");
-
-  await diagnosticButton.press("Space");
-  await expect(page.getByTestId("intent-count")).toHaveText("1");
-  await expect(page.getByTestId("keyboard-count")).toHaveText("0");
+  await expect(page.getByTestId("intent-count")).toHaveText("0");
 
   const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
   await canvas.focus();
   await page.keyboard.press("w");
   await expect(page.getByTestId("keyboard-count")).toHaveText("1");
-  await expect(page.getByTestId("intent-count")).toHaveText("2");
+  await expect(page.getByTestId("intent-count")).toHaveText("1");
 
   await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("link", { name: "Skip canvas" })).toBeFocused();
+  await expect(skipLink).toBeFocused();
   await expect(page.getByTestId("keyboard-count")).toHaveText("1");
-  await expect(page.getByTestId("intent-count")).toHaveText("2");
+  await expect(page.getByTestId("intent-count")).toHaveText("1");
   await page.keyboard.press("w");
   await expect(page.getByTestId("keyboard-count")).toHaveText("1");
-  await expect(page.getByTestId("intent-count")).toHaveText("2");
-
-  await canvas.focus();
-  await page.keyboard.press("Tab");
-  await expect(diagnosticButton).toBeFocused();
-  await expect(page.getByTestId("keyboard-count")).toHaveText("1");
-  await expect(page.getByTestId("intent-count")).toHaveText("2");
-  await page.keyboard.press("w");
-  await expect(page.getByTestId("keyboard-count")).toHaveText("1");
-  await expect(page.getByTestId("intent-count")).toHaveText("2");
+  await expect(page.getByTestId("intent-count")).toHaveText("1");
   expect(failures).toEqual([]);
 });
 

@@ -26,6 +26,60 @@ const readyModel: ShellReadModel = {
   lastIntentType: null,
 };
 
+const combatHudModel: CombatHudReadModel = {
+  paused: false,
+  playerHealth: 100,
+  playerMaxHealth: 100,
+  playerDead: false,
+  manaCurrent: 100,
+  manaMaximum: 100,
+  placeholderExperienceCurrent: 0,
+  placeholderExperienceMaximum: 100,
+  abilities: [
+    {
+      id: "ability:basic-cleave",
+      keyLabel: "LMB",
+      accessibleKeyLabel: "Left click",
+      name: "Basic Cleave",
+      manaCost: 0,
+      cooldownRemainingSeconds: 0,
+      cooldownMaximumSeconds: 0,
+      state: "ready",
+    },
+    {
+      id: "ability:cinder-dart",
+      keyLabel: "Q",
+      accessibleKeyLabel: "Q",
+      name: "Cinder Dart",
+      manaCost: 15,
+      cooldownRemainingSeconds: 0,
+      cooldownMaximumSeconds: 0.5,
+      state: "ready",
+    },
+    {
+      id: "ability:winter-pulse",
+      keyLabel: "E",
+      accessibleKeyLabel: "E",
+      name: "Winter Pulse",
+      manaCost: 25,
+      cooldownRemainingSeconds: 0,
+      cooldownMaximumSeconds: 2.5,
+      state: "ready",
+    },
+    {
+      id: "ability:defiant-signal",
+      keyLabel: "F",
+      accessibleKeyLabel: "F",
+      name: "Defiant Signal",
+      manaCost: 20,
+      cooldownRemainingSeconds: 0,
+      cooldownMaximumSeconds: 5,
+      state: "ready",
+    },
+  ],
+  activeStatuses: [],
+};
+
 function mount(model: ShellReadModel, emit = vi.fn()) {
   const channel = createReadModelChannel(model);
   const bindings: ShellBindings = {
@@ -220,14 +274,9 @@ describe("technical UI shell component", () => {
     });
 
     await publishCombatHud({
-      paused: false,
+      ...combatHudModel,
       playerHealth: 80,
-      playerMaxHealth: 100,
-      playerDead: false,
-      placeholderManaCurrent: 100,
-      placeholderManaMaximum: 100,
-      placeholderExperienceCurrent: 0,
-      placeholderExperienceMaximum: 100,
+      manaCurrent: 85,
     });
 
     const hud = container.querySelector('[data-testid="combat-vitals-hud"]');
@@ -240,7 +289,7 @@ describe("technical UI shell component", () => {
       '[role="progressbar"][aria-label="Player health"]',
     );
     const manaMeter = container.querySelector(
-      '[role="progressbar"][aria-label="Reserved mana placeholder"]',
+      '[role="progressbar"][aria-label="Player mana"]',
     );
     const experienceMeter = container.querySelector(
       '[role="progressbar"][aria-label="Reserved experience placeholder"]',
@@ -259,10 +308,8 @@ describe("technical UI shell component", () => {
     expect(playerMeter?.getAttribute("aria-valuetext")).toBe(
       "80 of 100 health",
     );
-    expect(manaMeter?.getAttribute("aria-valuenow")).toBe("100");
-    expect(manaMeter?.getAttribute("aria-valuetext")).toBe(
-      "100 of 100 reserved mana placeholder",
-    );
+    expect(manaMeter?.getAttribute("aria-valuenow")).toBe("85");
+    expect(manaMeter?.getAttribute("aria-valuetext")).toBe("85 of 100 mana");
     expect(experienceMeter?.getAttribute("aria-valuenow")).toBe("0");
     expect(experienceMeter?.getAttribute("aria-valuetext")).toBe(
       "0 of 100 reserved experience placeholder",
@@ -270,16 +317,30 @@ describe("technical UI shell component", () => {
     expect(container.textContent).not.toMatch(/STAMINA|\bST\b/i);
     expect(container.querySelector('[aria-label*="Enemy"]')).toBeNull();
     expect(container.textContent).not.toContain("ENEMY");
+    const actionHud = container.querySelector(
+      '[data-testid="combat-action-hud"]',
+    );
+    expect(actionHud?.querySelectorAll(".combat-ability")).toHaveLength(4);
+    expect(
+      Array.from(actionHud?.querySelectorAll("kbd") ?? [], (key) =>
+        key.textContent?.trim(),
+      ).slice(0, 4),
+    ).toEqual(["LMB", "Q", "E", "F"]);
+    expect(
+      actionHud?.querySelector('[data-ability-id="ability:cinder-dart"]')
+        ?.textContent,
+    ).toContain("15 mana · 0.5s cooldown");
+    expect(
+      actionHud
+        ?.querySelector('[data-ability-id="ability:basic-cleave"]')
+        ?.getAttribute("aria-label"),
+    ).toContain("Left click, Basic Cleave");
 
     await publishCombatHud({
+      ...combatHudModel,
       paused: false,
       playerHealth: 0,
-      playerMaxHealth: 100,
       playerDead: true,
-      placeholderManaCurrent: 100,
-      placeholderManaMaximum: 100,
-      placeholderExperienceCurrent: 0,
-      placeholderExperienceMaximum: 100,
     });
 
     expect(playerMeter?.getAttribute("aria-valuenow")).toBe("0");
@@ -291,14 +352,8 @@ describe("technical UI shell component", () => {
     expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
 
     await publishCombatHud({
+      ...combatHudModel,
       paused: true,
-      playerHealth: 100,
-      playerMaxHealth: 100,
-      playerDead: false,
-      placeholderManaCurrent: 100,
-      placeholderManaMaximum: 100,
-      placeholderExperienceCurrent: 0,
-      placeholderExperienceMaximum: 100,
     });
 
     expect(playerMeter?.getAttribute("aria-valuenow")).toBe("100");
@@ -311,5 +366,63 @@ describe("technical UI shell component", () => {
     expect(
       container.querySelector(".combat-paused-hud")?.contains(hud as Node),
     ).toBe(false);
+  });
+
+  it("renders cooldown and active status states from the combat read model", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+        />,
+        container,
+      );
+    });
+
+    await publishCombatHud({
+      ...combatHudModel,
+      manaCurrent: 80,
+      abilities: combatHudModel.abilities.map((ability) =>
+        ability.id === "ability:defiant-signal"
+          ? {
+              ...ability,
+              cooldownRemainingSeconds: 4.4,
+              state: "cooldown" as const,
+            }
+          : ability,
+      ),
+      activeStatuses: [
+        {
+          id: "player:focused",
+          label: "Focused",
+          target: "player",
+          remainingSeconds: 2.9,
+        },
+        {
+          id: "enemy:weakened",
+          label: "Weakened",
+          target: "enemy",
+          remainingSeconds: 2.9,
+        },
+      ],
+    });
+
+    const signal = container.querySelector(
+      '[data-ability-id="ability:defiant-signal"]',
+    );
+    expect(signal?.getAttribute("data-state")).toBe("cooldown");
+    expect(signal?.textContent).toContain("Cooldown 4.4s");
+    expect(signal?.getAttribute("aria-label")).toContain("Cooldown 4.4s");
+    expect(
+      container.querySelector('[aria-label="Active combat effects"]')
+        ?.textContent,
+    ).toContain("Focused 2.9s");
+    expect(
+      container.querySelector('[aria-label="Active combat effects"]')
+        ?.textContent,
+    ).toContain("Enemy Weakened 2.9s");
   });
 });

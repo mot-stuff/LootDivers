@@ -22,15 +22,38 @@ export interface CanvasViewportReadModel {
   readonly devicePixelRatio: number;
 }
 
+export type CombatAbilityHudState =
+  "ready" | "cooldown" | "insufficient-mana" | "defeated";
+
+export interface CombatAbilityHudReadModel {
+  readonly id: string;
+  readonly keyLabel: string;
+  readonly accessibleKeyLabel: string;
+  readonly name: string;
+  readonly manaCost: number;
+  readonly cooldownRemainingSeconds: number;
+  readonly cooldownMaximumSeconds: number;
+  readonly state: CombatAbilityHudState;
+}
+
+export interface CombatStatusHudReadModel {
+  readonly id: string;
+  readonly label: string;
+  readonly target: "player" | "enemy";
+  readonly remainingSeconds: number;
+}
+
 export interface CombatHudReadModel {
   readonly paused: boolean;
   readonly playerHealth: number;
   readonly playerMaxHealth: number;
   readonly playerDead: boolean;
-  readonly placeholderManaCurrent: number;
-  readonly placeholderManaMaximum: number;
+  readonly manaCurrent: number;
+  readonly manaMaximum: number;
   readonly placeholderExperienceCurrent: number;
   readonly placeholderExperienceMaximum: number;
+  readonly abilities: readonly CombatAbilityHudReadModel[];
+  readonly activeStatuses: readonly CombatStatusHudReadModel[];
 }
 
 export interface ShellReadModel {
