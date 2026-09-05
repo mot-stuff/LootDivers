@@ -155,6 +155,10 @@ simple crafting, and crafted-equipment integration. Woodcutting, Fletching,
 tree tiers, and arrow production are later profession candidates after the
 initial two-profession loop is proven.
 
+**Status:** Complete (2026-09-05). Mining and Smithing shipped with world
+resource nodes, gathering, profession XP/levels, three ore tiers, anvil
+crafting, and crafted equipment feeding the combat stat pipeline.
+
 ---
 
 ## Phase 6 — Vertical Slice World
@@ -166,6 +170,12 @@ Exit criterion: a repeatable 20–30 minute combat, loot, progression, gathering
 crafting, and boss loop.
 
 A compact top-right minimap is a candidate for this phase.
+
+**Status:** Complete (2026-09-05). Hearthmere town, Ashtrail wilds (white
+pack plus an elite), and the Hollowdeep dungeon boss shipped with zone
+travel, a starter quest/vendor flow, cross-zone character persistence, and
+the top-right minimap showing the walkable-area border. The world-session
+QA gate passed.
 
 ---
 
@@ -202,6 +212,20 @@ Account creation which will tie into final phase
 Title screen with settings
 Escape menu when playing so they can exit, adjust settings/pause/change keybinds
 The game name is Loot Divers
+
+**Status:** First wave complete (2026-09-05), integration QA passed at
+`1b3ff13`. Shipped: the accounts API and Postgres backend on the droplet
+(TASK-707, DEC-032), the public homepage at `/` with login/signup/news and
+the game at `/play/` (TASK-708, DEC-035), account-aware character
+creation/selection with the animated barbarian preview (TASK-709, DEC-036),
+death screen with town respawn and zero penalty (TASK-710, DEC-037), flasks
+on keys 1–4 with the charge economy (TASK-711, DEC-038), and gold drops
+with walk-over collection and the inventory counter (TASK-712, DEC-039).
+
+In flight: required accounts for `/play/` plus a character-select logout
+button (TASK-714), and the in-game escape menu with keybind remapping,
+settings, and exit options (TASK-715). Still open from the wishlist:
+title-screen settings.
 
 
 ## Phase 9 - Map builder
