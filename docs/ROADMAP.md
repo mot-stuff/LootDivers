@@ -75,6 +75,10 @@ small common melee enemy.
 
 Goal: create reusable combat abilities.
 
+The first character direction is melee-focused. Phase 4 may use passive points
+to specialize and improve acquired abilities, but ability acquisition belongs
+to the Ability Stone loot flow.
+
 Features:
 
 - ability base architecture
@@ -105,7 +109,13 @@ bar.
 Goal: create the basic ARPG loot loop.
 
 Features include item definitions, inventory, equipment, rarity, affixes, loot
-drops, stat integration, and readable tooltips.
+drops, stat integration, readable tooltips, and Ability Stone slotting.
+
+**Implementation candidate:** three equipment slots, a 12-slot inventory,
+common/magic/rare generation, deterministic enemy drops and pickup,
+equipment-derived health/damage, and configurable LMB/Q/E/F assignments are
+implemented. Gold and flask mechanics remain deferred. Independent QA is
+required before Phase 3 is complete.
 
 ---
 
@@ -114,6 +124,10 @@ drops, stat integration, and readable tooltips.
 Features include XP, levels, attributes, a small passive/mastery system, level
 requirements, and a respec prototype.
 
+The current candidate attributes are Strength, Dexterity, Vitality, and
+Intelligence. Passive points may be awarded on level-up and improve acquired
+abilities; exact unlock and upgrade rules require Phase 4 design.
+
 ---
 
 ## Phase 5 — Profession Prototype
@@ -121,7 +135,9 @@ requirements, and a respec prototype.
 Initial professions: Mining and Smithing.
 
 Features include resource nodes, gathering, profession progression, ore tiers,
-simple crafting, and crafted-equipment integration.
+simple crafting, and crafted-equipment integration. Woodcutting, Fletching,
+tree tiers, and arrow production are later profession candidates after the
+initial two-profession loop is proven.
 
 ---
 
@@ -132,6 +148,8 @@ enemy types, one elite, and one boss.
 
 Exit criterion: a repeatable 20–30 minute combat, loot, progression, gathering,
 crafting, and boss loop.
+
+A compact top-right minimap is a candidate for this phase.
 
 ---
 

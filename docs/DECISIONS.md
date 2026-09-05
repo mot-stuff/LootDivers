@@ -1220,3 +1220,93 @@ in shared definitions rather than separate ability classes.
 DEC-010 and DEC-013 remain active. This decision records their first playable
 combat integration and does not change the framework-independent simulation
 boundary.
+
+---
+
+# DEC-019
+
+### Status
+
+Accepted for the Phase 3 playable item and loot loop.
+
+### Date
+
+2026-09-04
+
+### Decision
+
+Keep authoritative generated items, inventory, equipment, world loot, equipment
+stats, ability ownership, and LMB/Q/E/F assignments in the framework-independent
+fixed-step core. Use Phaser only to render world drops and route slot input, and
+Preact only to present inventory, equipment, tooltips, Ability Stone choices,
+and loadout commands.
+
+### Context
+
+Phase 3 must prove that killing an enemy can produce readable randomized loot,
+that pickup and equipment change combat-relevant stats, and that lootable
+Ability Stones can change combat assignments. The proof must remain small and
+testable without introducing the final crafting, economy, item-level, unique
+item, flask, or persistence systems.
+
+### Options Considered
+
+1. Store inventory and loadout state in Preact and world drops in Phaser.
+2. Build a production-scale canonical item database, save migration, and generic
+   modifier engine before exposing a playable loop.
+3. Add narrow typed item catalogs and authoritative core state, then expose
+   read models and commands to Phaser and Preact.
+
+### Chosen Approach
+
+Choose option 3. Phase 3 uses three equipment bases, six restricted affixes,
+three generated rarities, a 12-slot inventory, and three equipment slots.
+Equipment does not stack; Ability Stones stack to nine. Seeded generation gives
+Common items no affixes, Magic items one affix, and Rare items two distinct
+legal affixes. Each enemy kill drops one equipment item, and the first kill
+also drops one Ability Stone. Nearby loot transfers atomically to inventory and
+remains in the world if capacity is unavailable.
+
+Maximum-health modifiers add flat values. Outgoing ability-damage percentages
+add in integer basis points and then multiply temporary status effects, with one
+final floor operation. Maximum changes preserve missing health. Arena reset
+respawns combat while preserving the run's item/loadout state, uncollected
+drops, and unique deterministic loot sequence.
+
+The Phase 2 ability assignments remain executable borrowed defaults. Basic
+Cleave is initially owned; consuming a stone creates one of the other
+implemented abilities and permits reassignment. The core rejects edits that
+would remove the final Basic Cleave slot.
+
+### Why
+
+This produces a complete playable loot decision without making Phaser or Preact
+authoritative, preserves deterministic unit and browser automation, and keeps
+the implementation proportional to one-enemy vertical-slice content.
+
+### Tradeoffs
+
+- Item and affix catalogs remain immutable typed TypeScript data for this
+  prototype rather than new canonical JSON document kinds.
+- Inventory, equipment, generated items, and ability ownership are not yet
+  included in the IndexedDB character save DTO and are lost on page reload.
+- Drops use prototype geometric presentation and automatic proximity pickup.
+- Gold, vendors, crafting, item levels, requirements, Unique items, duplicate
+  ability rules, and flask mechanics are deferred.
+- The borrowed defaults preserve Phase 2 accessibility but are transitional;
+  later progression must define the permanent starting loadout.
+
+### Systems Affected
+
+- Item generation, inventory, equipment, stats, and world loot
+- Combat input, ability loadouts, health, and damage
+- Phaser world presentation and Preact inventory/loadout UI
+- Unit, component, and browser tests
+- Future content compilation and save-schema work
+
+### Relationship to Earlier Decisions
+
+DEC-010 and DEC-013 continue to govern simulation and ability execution.
+DEC-011 remains the long-term canonical content direction; the typed Phase 3
+catalog is a documented vertical-slice exception. DEC-014 remains unchanged,
+and no Phase 3 item state is claimed to persist.

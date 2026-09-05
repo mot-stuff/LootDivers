@@ -8,6 +8,39 @@ Loot should create interesting decisions rather than only larger numbers.
 
 ---
 
+# Phase 3 Playable Scope
+
+Phase 3 proves a focused loot loop rather than the final item model:
+
+- a 12-slot inventory;
+- Main Hand, Chest, and Amulet equipment slots;
+- non-stackable equipment and Ability Stone stacks of up to nine;
+- Common equipment with no affixes, Magic equipment with one affix, and Rare
+  equipment with two distinct legal affixes;
+- one deterministic equipment drop per enemy kill and one guaranteed Ability
+  Stone on the first kill of a run;
+- automatic pickup within a short radius, with drops retained when inventory is
+  full;
+- equipment modifiers for maximum health and outgoing ability damage; and
+- readable inventory, equipment, affix, stat, and Ability Stone UI.
+
+The three prototype bases are Worn Cleaver, Trailguard Vest, and Wayfinder
+Amulet. The six prototype affixes are Tempered, Steadfast Grip, Reinforced,
+Battlewoven, Hearty, and Focused. Slot and tag restrictions prevent illegal
+rolls. This is intentionally enough content to test choices without creating a
+production-scale catalog.
+
+Base and affix catalogs are immutable typed TypeScript data consumed by generic
+generation and validation rules. Moving them into the canonical compiled JSON
+pipeline is deferred until content volume justifies extending that schema; item
+behavior must remain independent of Phaser and Preact during that migration.
+
+Inventory, equipment, generated items, and ability ownership are not yet added
+to the IndexedDB character save DTO. Reloading the page loses Phase 3 state.
+This is an explicit prototype limitation and does not change DEC-014.
+
+---
+
 # Item Structure
 
 An item should potentially contain:
@@ -37,10 +70,15 @@ Abilities will be obtained through lootable Ability Stones. Using a stone lets
 the player choose an ability to create; the resulting ability can later be
 assigned to the left-click, Q, E, or F combat slot through inventory or menu UI.
 
-The exact stone rarity, selection rules, progression, trading behavior, and
-support-modification model are deferred until the item and loot phases. The
-system should preserve player choice without directly copying another game's
-gem implementation.
+Phase 3 keeps the four Phase 2 assignments as borrowed prototype defaults so
+existing controls continue to work. Basic Cleave is initially owned. A consumed
+stone creates one of the other currently implemented abilities, making it
+assignable to any combat slot. Reassignment cannot remove the final Basic
+Cleave slot, which guarantees a free usable action.
+
+Stone rarity, later selection pools, progression, trading, duplicate ability
+rules, and support-modification mechanics remain deferred. The system preserves
+player choice without copying another game's proprietary implementation or UI.
 
 ---
 
@@ -72,7 +110,8 @@ Initial rarity structure:
 - Rare
 - Unique
 
-Possible later tiers should not be added without purpose.
+Phase 3 generates Common, Magic, and Rare equipment only. Unique items and
+possible later tiers should not be added without purpose.
 
 ---
 

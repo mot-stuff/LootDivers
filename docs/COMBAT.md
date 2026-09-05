@@ -252,16 +252,26 @@ stacking rules, damage over time, advanced interruption, and final VFX.
 
 ---
 
-# Future Ability Loadouts
+# Phase 3 Ability Loadouts
 
 Abilities will be acquired through lootable Ability Stones. An Ability Stone
 lets the player choose which ability to create, after which that ability can be
 assigned to any of the four combat slots: left click, Q, E, or F.
 
-The inventory and menu UI will own creating, selecting, and slotting abilities
-in a later phase. The Phase 2 assignments are fixed prototype defaults, but the
-runtime must not assume that a specific ability permanently belongs to a
-specific slot.
+The framework-independent character loadout owns creation and slot assignment.
+Phaser routes LMB/Q/E/F intents by slot and resolves each assigned ability's
+targeting mode; Preact only presents inventory and loadout commands.
+
+The Phase 2 assignments remain as borrowed defaults to preserve existing
+controls. Basic Cleave is initially owned, while Ability Stones make the other
+implemented abilities assignable. A loadout edit is rejected if it would remove
+the final Basic Cleave assignment, preserving a no-Mana basic action.
+
+Equipped item damage percentages add together in integer basis points, then
+multiply temporary outgoing-damage effects such as Defiant Signal. Final damage
+is floored once. Maximum-health equipment preserves the player's missing-health
+amount when equipped or removed, clamps to the new maximum, and reset restores
+the current equipped maximum.
 
 Four flask slots are reserved above the ability bar and use keys 1 through 4.
 They are visual placeholders only until flask items and inventory integration
