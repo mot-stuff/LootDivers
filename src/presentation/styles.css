@@ -95,41 +95,76 @@ body.combat-mode #app,
   font-size: 0.85rem;
 }
 
-.combat-stamina-hud {
+.combat-vitals-hud {
   position: absolute;
   z-index: 2;
   top: 1rem;
   right: 1rem;
+  display: grid;
+  gap: 0.45rem;
   width: min(14rem, calc(100vw - 2rem));
-  padding: 0.5rem 0.65rem;
-  border: 1px solid rgb(118 184 255 / 45%);
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgb(196 205 217 / 55%);
   border-radius: 0.45rem;
-  background: rgb(8 17 31 / 82%);
+  background: rgb(8 17 31 / 84%);
+  pointer-events: none;
 }
 
-.combat-stamina-label {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.3rem;
-  color: #dceaff;
+.combat-vitals-row {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.combat-vitals-label {
+  color: #f2f6fc;
   font-size: 0.7rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
 }
 
-.combat-stamina-meter {
+.combat-vitals-meter {
   height: 0.75rem;
   overflow: hidden;
-  border: 1px solid #a7f3cf;
   border-radius: 0.25rem;
-  background: #13243a;
 }
 
-.combat-stamina-meter span {
+.combat-health-meter {
+  border: 1px solid #ffb0c2;
+  background: #24151d;
+}
+
+.combat-vitals-meter span {
   display: block;
-  width: 100%;
   height: 100%;
-  background: #57d895;
   transition: width 80ms linear;
+}
+
+.combat-health-meter span {
+  background: #ef476f;
+}
+
+.combat-vitals-row[data-state="dead"] .combat-health-meter span {
+  background: #737f8f;
+}
+
+.combat-mana-meter {
+  border: 1px solid #91c9ff;
+  background: #122238;
+}
+
+.combat-mana-meter span {
+  background: #3f8fe8;
+}
+
+.combat-experience-meter {
+  border: 1px solid #d0a7ff;
+  background: #241832;
+}
+
+.combat-experience-meter span {
+  background: #9b5de5;
 }
 
 .combat-paused-hud {

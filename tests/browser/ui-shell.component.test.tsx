@@ -1,10 +1,12 @@
 import { render } from "preact";
+import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { installKeyboardCapture } from "../../src/adapters/browser/keyboard-capture";
 import { createReadModelChannel } from "../../src/adapters/ui/read-model-channel";
 import { App } from "../../src/presentation/App";
 import type {
+  CombatHudReadModel,
   ShellBindings,
   ShellReadModel,
 } from "../../src/presentation/shell-contracts";
@@ -34,6 +36,20 @@ function mount(model: ShellReadModel, emit = vi.fn()) {
   document.body.append(container);
   render(<App bindings={bindings} />, container);
   return { channel, container, emit };
+}
+
+async function publishCombatHud(model: CombatHudReadModel): Promise<void> {
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+  window.dispatchEvent(
+    new CustomEvent<CombatHudReadModel>("rarpg:combat-hud", {
+      detail: model,
+    }),
+  );
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
 }
 
 afterEach(() => {
@@ -187,5 +203,113 @@ describe("technical UI shell component", () => {
     expect(emit).toHaveBeenCalledWith({
       type: "shell.renderer-retry-requested",
     });
+  });
+
+  it("renders one compact player vitals HUD without enemy DOM UI", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+        />,
+        container,
+      );
+    });
+
+    await publishCombatHud({
+      paused: false,
+      playerHealth: 80,
+      playerMaxHealth: 100,
+      playerDead: false,
+      placeholderManaCurrent: 100,
+      placeholderManaMaximum: 100,
+      placeholderExperienceCurrent: 0,
+      placeholderExperienceMaximum: 100,
+    });
+
+    const hud = container.querySelector('[data-testid="combat-vitals-hud"]');
+    const rows = hud?.querySelectorAll(":scope > .combat-vitals-row");
+    const labels = Array.from(
+      hud?.querySelectorAll(".combat-vitals-label") ?? [],
+      (label) => label.textContent,
+    );
+    const playerMeter = container.querySelector(
+      '[role="progressbar"][aria-label="Player health"]',
+    );
+    const manaMeter = container.querySelector(
+      '[role="progressbar"][aria-label="Reserved mana placeholder"]',
+    );
+    const experienceMeter = container.querySelector(
+      '[role="progressbar"][aria-label="Reserved experience placeholder"]',
+    );
+    expect(
+      container.querySelectorAll('[data-testid="combat-vitals-hud"]'),
+    ).toHaveLength(1);
+    expect(rows).toHaveLength(3);
+    expect(labels).toEqual(["HP", "MP", "XP"]);
+    expect(hud?.textContent).toBe("HPMPXP");
+    expect(hud?.textContent).not.toMatch(
+      /HEALTH|STAMINA|READY|FULL|DEFEATED|\d|%/i,
+    );
+    expect(playerMeter?.getAttribute("aria-valuenow")).toBe("80");
+    expect(playerMeter?.getAttribute("aria-valuemax")).toBe("100");
+    expect(playerMeter?.getAttribute("aria-valuetext")).toBe(
+      "80 of 100 health",
+    );
+    expect(manaMeter?.getAttribute("aria-valuenow")).toBe("100");
+    expect(manaMeter?.getAttribute("aria-valuetext")).toBe(
+      "100 of 100 reserved mana placeholder",
+    );
+    expect(experienceMeter?.getAttribute("aria-valuenow")).toBe("0");
+    expect(experienceMeter?.getAttribute("aria-valuetext")).toBe(
+      "0 of 100 reserved experience placeholder",
+    );
+    expect(container.textContent).not.toMatch(/STAMINA|\bST\b/i);
+    expect(container.querySelector('[aria-label*="Enemy"]')).toBeNull();
+    expect(container.textContent).not.toContain("ENEMY");
+
+    await publishCombatHud({
+      paused: false,
+      playerHealth: 0,
+      playerMaxHealth: 100,
+      playerDead: true,
+      placeholderManaCurrent: 100,
+      placeholderManaMaximum: 100,
+      placeholderExperienceCurrent: 0,
+      placeholderExperienceMaximum: 100,
+    });
+
+    expect(playerMeter?.getAttribute("aria-valuenow")).toBe("0");
+    expect(playerMeter?.getAttribute("aria-valuetext")).toBe(
+      "0 of 100 health, defeated",
+    );
+    expect(hud?.textContent).toBe("HPMPXP");
+    expect(hud?.querySelector('[data-state="dead"]')).not.toBeNull();
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+
+    await publishCombatHud({
+      paused: true,
+      playerHealth: 100,
+      playerMaxHealth: 100,
+      playerDead: false,
+      placeholderManaCurrent: 100,
+      placeholderManaMaximum: 100,
+      placeholderExperienceCurrent: 0,
+      placeholderExperienceMaximum: 100,
+    });
+
+    expect(playerMeter?.getAttribute("aria-valuenow")).toBe("100");
+    expect(playerMeter?.getAttribute("aria-valuetext")).toBe(
+      "100 of 100 health",
+    );
+    expect(hud?.textContent).toBe("HPMPXP");
+    expect(hud?.querySelector('[data-state="dead"]')).toBeNull();
+    expect(container.querySelector(".combat-paused-hud")).not.toBeNull();
+    expect(
+      container.querySelector(".combat-paused-hud")?.contains(hud as Node),
+    ).toBe(false);
   });
 });

@@ -139,6 +139,15 @@ test("playable encounter approaches and dies to four directional attacks", async
   await expect
     .poll(async () => (await diagnostics(page))?.enemy.state)
     .toBe("windup");
+  const approached = await diagnostics(page);
+  expect(approached?.enemyHealthBarVisible).toBe(true);
+  expect(approached?.enemyHealthBarCanvasX).toBeCloseTo(
+    approached?.enemyCanvasX ?? 0,
+    5,
+  );
+  expect(approached?.enemyHealthBarCanvasY).toBeLessThan(
+    approached?.enemyCanvasY ?? 0,
+  );
 
   for (let attack = 1; attack <= 4; attack += 1) {
     await page.evaluate(() => {
@@ -161,7 +170,12 @@ test("playable encounter approaches and dies to four directional attacks", async
       state: "dead",
     },
     deathFeedbackCount: 1,
+    enemyHealthBarVisible: false,
   });
+  await expect(page.locator('[aria-label*="Enemy health"]')).toHaveCount(0);
+  await expect(page.getByText("ENEMY DEFEATED", { exact: true })).toHaveCount(
+    0,
+  );
   expect(failures).toEqual([]);
 });
 
@@ -220,6 +234,20 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
     enemyStrikeFeedbackCount: 2,
     impactCount: 1,
   });
+  await expect(
+    page.getByRole("progressbar", { name: "Player health" }),
+  ).toHaveAttribute("aria-valuenow", "80");
+
+  await page.evaluate(() =>
+    window.__RARPG_COMBAT_TEST__?.applyPlayerDamage(100),
+  );
+  await expect(
+    page.getByRole("progressbar", { name: "Player health" }),
+  ).toHaveAttribute("aria-valuenow", "0");
+  await expect(
+    page.getByTestId("combat-vitals-hud").locator('[data-state="dead"]'),
+  ).toHaveCount(1);
+  await expect(page.getByTestId("combat-vitals-hud")).toHaveText("HPMPXP");
 
   await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
   expect(await diagnostics(page)).toMatchObject({
@@ -249,6 +277,14 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
     deathFeedbackCount: 0,
     enemyStrikeFeedbackCount: 0,
   });
+  await expect(
+    page.getByRole("progressbar", { name: "Player health" }),
+  ).toHaveAttribute("aria-valuenow", "100");
+  await expect(
+    page.getByTestId("combat-vitals-hud").locator('[data-state="dead"]'),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("combat-vitals-hud")).toHaveText("HPMPXP");
+  await expect(page.locator('[aria-label*="Enemy health"]')).toHaveCount(0);
   expect(failures).toEqual([]);
 });
 
@@ -271,8 +307,9 @@ test("combat canvas fills the browser viewport", async ({ page }) => {
 for (const viewport of [
   { width: 1280, height: 720 },
   { width: 900, height: 900 },
+  { width: 480, height: 720 },
 ]) {
-  test(`DOM stamina HUD stays compact at top-right at ${viewport.width}x${viewport.height}`, async ({
+  test(`player vitals stay compact at top-right at ${viewport.width}x${viewport.height}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -282,14 +319,60 @@ for (const viewport of [
       "ready",
     );
 
-    const box = await page.getByTestId("combat-stamina-hud").boundingBox();
-    expect(box).not.toBeNull();
-    expect(box?.y).toBeCloseTo(16, 0);
-    expect(box?.width).toBeLessThanOrEqual(224);
-    expect(viewport.width - ((box?.x ?? 0) + (box?.width ?? 0))).toBeCloseTo(
-      16,
-      0,
+    const hud = page.getByTestId("combat-vitals-hud");
+    const rows = hud.locator(":scope > .combat-vitals-row");
+    const labels = hud.locator(".combat-vitals-label");
+    await expect(hud).toHaveCount(1);
+    await expect(rows).toHaveCount(3);
+    await expect(labels).toHaveText(["HP", "MP", "XP"]);
+    await expect(hud).toHaveText("HPMPXP");
+    await expect(hud).not.toContainText(
+      /HEALTH|STAMINA|READY|FULL|DEFEATED|\d|%/i,
     );
+    await expect(
+      page.getByRole("progressbar", { name: "Player health" }),
+    ).toHaveAttribute("aria-valuenow", "100");
+    await expect(
+      page.getByRole("progressbar", { name: "Reserved mana placeholder" }),
+    ).toHaveAttribute("aria-valuenow", "100");
+    await expect(
+      page.getByRole("progressbar", {
+        name: "Reserved experience placeholder",
+      }),
+    ).toHaveAttribute("aria-valuenow", "0");
+    await expect(
+      page.getByRole("progressbar", { name: /stamina/i }),
+    ).toHaveCount(0);
+    const hudBox = await hud.boundingBox();
+    expect(hudBox).not.toBeNull();
+    expect(hudBox?.y).toBeCloseTo(16, 0);
+    expect(hudBox?.width).toBeLessThanOrEqual(224);
+    expect(
+      viewport.width - ((hudBox?.x ?? 0) + (hudBox?.width ?? 0)),
+    ).toBeCloseTo(16, 0);
+    expect(hudBox?.x).toBeGreaterThanOrEqual(0);
+    expect(hudBox?.y).toBeGreaterThanOrEqual(0);
+    expect((hudBox?.x ?? 0) + (hudBox?.width ?? 0)).toBeLessThanOrEqual(
+      viewport.width,
+    );
+    expect((hudBox?.y ?? 0) + (hudBox?.height ?? 0)).toBeLessThanOrEqual(
+      viewport.height,
+    );
+
+    await page.getByRole("link", { name: "Skip canvas" }).focus();
+    const pause = page.locator(".combat-paused-hud");
+    await expect(pause).toBeVisible();
+    const pauseBox = await pause.boundingBox();
+    const titleBox = await page.locator(".diagnostic-shell").boundingBox();
+    expect(pauseBox).not.toBeNull();
+    expect(titleBox).not.toBeNull();
+    expect(pauseBox?.y ?? 0).toBeGreaterThanOrEqual(
+      (titleBox?.y ?? 0) + (titleBox?.height ?? 0),
+    );
+    await expect(
+      pause.locator('[data-testid="combat-vitals-hud"]'),
+    ).toHaveCount(0);
+    await expect(page.locator('[aria-label*="Enemy health"]')).toHaveCount(0);
   });
 }
 

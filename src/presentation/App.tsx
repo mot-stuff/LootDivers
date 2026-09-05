@@ -27,6 +27,96 @@ export interface AppProps {
   readonly showCombatPrototype?: boolean;
 }
 
+interface CombatVitalsProps {
+  readonly model: CombatHudReadModel;
+}
+
+function CombatVitals({ model }: CombatVitalsProps) {
+  const healthPercent =
+    model.playerMaxHealth > 0
+      ? Math.max(
+          0,
+          Math.min(100, (model.playerHealth / model.playerMaxHealth) * 100),
+        )
+      : 0;
+  const manaPercent =
+    model.placeholderManaMaximum > 0
+      ? Math.max(
+          0,
+          Math.min(
+            100,
+            (model.placeholderManaCurrent / model.placeholderManaMaximum) * 100,
+          ),
+        )
+      : 0;
+  const experiencePercent =
+    model.placeholderExperienceMaximum > 0
+      ? Math.max(
+          0,
+          Math.min(
+            100,
+            (model.placeholderExperienceCurrent /
+              model.placeholderExperienceMaximum) *
+              100,
+          ),
+        )
+      : 0;
+
+  return (
+    <section
+      class="combat-vitals-hud"
+      aria-label="Player vitals"
+      data-testid="combat-vitals-hud"
+    >
+      <div
+        class="combat-vitals-row"
+        data-state={model.playerDead ? "dead" : "alive"}
+      >
+        <span class="combat-vitals-label">HP</span>
+        <div
+          class="combat-vitals-meter combat-health-meter"
+          role="progressbar"
+          aria-label="Player health"
+          aria-valuemin={0}
+          aria-valuemax={model.playerMaxHealth}
+          aria-valuenow={model.playerHealth}
+          aria-valuetext={`${model.playerHealth} of ${model.playerMaxHealth} health${model.playerDead ? ", defeated" : ""}`}
+        >
+          <span style={{ width: `${healthPercent}%` }} />
+        </div>
+      </div>
+      <div class="combat-vitals-row">
+        <span class="combat-vitals-label">MP</span>
+        <div
+          class="combat-vitals-meter combat-mana-meter"
+          role="progressbar"
+          aria-label="Reserved mana placeholder"
+          aria-valuemin={0}
+          aria-valuemax={model.placeholderManaMaximum}
+          aria-valuenow={model.placeholderManaCurrent}
+          aria-valuetext={`${model.placeholderManaCurrent} of ${model.placeholderManaMaximum} reserved mana placeholder`}
+        >
+          <span style={{ width: `${manaPercent}%` }} />
+        </div>
+      </div>
+      <div class="combat-vitals-row">
+        <span class="combat-vitals-label">XP</span>
+        <div
+          class="combat-vitals-meter combat-experience-meter"
+          role="progressbar"
+          aria-label="Reserved experience placeholder"
+          aria-valuemin={0}
+          aria-valuemax={model.placeholderExperienceMaximum}
+          aria-valuenow={model.placeholderExperienceCurrent}
+          aria-valuetext={`${model.placeholderExperienceCurrent} of ${model.placeholderExperienceMaximum} reserved experience placeholder`}
+        >
+          <span style={{ width: `${experiencePercent}%` }} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function App({
   bindings,
   persistenceStatus,
@@ -41,9 +131,13 @@ export function App({
   const [serialized, setSerialized] = useState("");
   const [combatHud, setCombatHud] = useState<CombatHudReadModel>({
     paused: true,
-    dodgeReady: true,
-    cooldownProgress: 1,
-    cooldownSecondsRemaining: 0,
+    playerHealth: 100,
+    playerMaxHealth: 100,
+    playerDead: false,
+    placeholderManaCurrent: 100,
+    placeholderManaMaximum: 100,
+    placeholderExperienceCurrent: 0,
+    placeholderExperienceMaximum: 100,
   });
 
   useLayoutEffect(
@@ -206,32 +300,7 @@ export function App({
         </div>
       </section>
 
-      {showCombatPrototype && (
-        <section
-          class="combat-stamina-hud"
-          aria-label="Stamina"
-          data-testid="combat-stamina-hud"
-        >
-          <div class="combat-stamina-label">
-            <span>STAMINA</span>
-            <strong>
-              {combatHud.dodgeReady
-                ? "FULL"
-                : `${Math.round(combatHud.cooldownProgress * 100)}%`}
-            </strong>
-          </div>
-          <div
-            class="combat-stamina-meter"
-            role="progressbar"
-            aria-label="Stamina available"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(combatHud.cooldownProgress * 100)}
-          >
-            <span style={{ width: `${combatHud.cooldownProgress * 100}%` }} />
-          </div>
-        </section>
-      )}
+      {showCombatPrototype && <CombatVitals model={combatHud} />}
 
       {showCombatPrototype && combatHud.paused && (
         <section class="combat-paused-hud" role="status">

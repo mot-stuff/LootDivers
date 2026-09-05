@@ -24,9 +24,13 @@ export interface CanvasViewportReadModel {
 
 export interface CombatHudReadModel {
   readonly paused: boolean;
-  readonly dodgeReady: boolean;
-  readonly cooldownProgress: number;
-  readonly cooldownSecondsRemaining: number;
+  readonly playerHealth: number;
+  readonly playerMaxHealth: number;
+  readonly playerDead: boolean;
+  readonly placeholderManaCurrent: number;
+  readonly placeholderManaMaximum: number;
+  readonly placeholderExperienceCurrent: number;
+  readonly placeholderExperienceMaximum: number;
 }
 
 export interface ShellReadModel {

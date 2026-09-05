@@ -25,6 +25,9 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly facingCanvasY: number;
   readonly enemyCanvasX: number;
   readonly enemyCanvasY: number;
+  readonly enemyHealthBarCanvasX: number;
+  readonly enemyHealthBarCanvasY: number;
+  readonly enemyHealthBarVisible: boolean;
   readonly impactCount: number;
   readonly deathFeedbackCount: number;
   readonly enemyStrikeFeedbackCount: number;
@@ -40,6 +43,7 @@ export class CombatArenaPresentation {
   readonly #renderedPlayerPoint = new Phaser.Math.Vector2();
   readonly #renderedFacingPoint = new Phaser.Math.Vector2();
   readonly #renderedEnemyPoint = new Phaser.Math.Vector2();
+  readonly #renderedEnemyHealthBarPoint = new Phaser.Math.Vector2();
   #pausedForUi = true;
   #automationPaused = false;
   #lastHudKey = "";
@@ -137,6 +141,9 @@ export class CombatArenaPresentation {
       facingCanvasY: this.#renderedFacingPoint.y,
       enemyCanvasX: this.#renderedEnemyPoint.x,
       enemyCanvasY: this.#renderedEnemyPoint.y,
+      enemyHealthBarCanvasX: this.#renderedEnemyHealthBarPoint.x,
+      enemyHealthBarCanvasY: this.#renderedEnemyHealthBarPoint.y,
+      enemyHealthBarVisible: !this.#simulation.diagnostics().enemy.dead,
       impactCount: this.#impactCount,
       deathFeedbackCount: this.#deathFeedbackCount,
       enemyStrikeFeedbackCount: this.#enemyStrikeFeedbackCount,
@@ -376,6 +383,11 @@ export class CombatArenaPresentation {
       point.y - 8,
       this.#renderedEnemyPoint,
     );
+    this.scene.cameras.main.matrixCombined.transformPoint(
+      point.x,
+      point.y - 38,
+      this.#renderedEnemyHealthBarPoint,
+    );
   }
 
   private consumeEvents(events: readonly CombatArenaEvent[]): void {
@@ -404,10 +416,13 @@ export class CombatArenaPresentation {
   private publishHud(state: CombatArenaDiagnostics): void {
     const hud: CombatHudReadModel = {
       paused: this.#pausedForUi,
-      dodgeReady: state.dodgeReady,
-      cooldownProgress: Math.round(state.cooldownProgress * 20) / 20,
-      cooldownSecondsRemaining:
-        Math.ceil((state.cooldownTicksRemaining / 60) * 10) / 10,
+      playerHealth: state.playerHealth,
+      playerMaxHealth: state.playerMaxHealth,
+      playerDead: state.playerDead,
+      placeholderManaCurrent: 100,
+      placeholderManaMaximum: 100,
+      placeholderExperienceCurrent: 0,
+      placeholderExperienceMaximum: 100,
     };
     const key = JSON.stringify(hud);
     if (key === this.#lastHudKey) {
