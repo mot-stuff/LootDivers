@@ -342,6 +342,15 @@ export interface TravelResult {
   readonly zoneId?: ZoneId;
 }
 
+/**
+ * Outcome of the death-screen respawn command (TASK-710, DEC-037). Only a
+ * dead player can respawn; a living player's request is rejected without
+ * side effects.
+ */
+export type RespawnResult =
+  | { readonly accepted: true; readonly zoneId: ZoneId }
+  | { readonly accepted: false; readonly reason: "player-alive" };
+
 export type VendorTradeFailure =
   | "vendor-closed"
   | "unknown-offer"
@@ -435,6 +444,9 @@ export interface CombatArenaDiagnostics {
   readonly professions: readonly ProfessionReadModel[];
   readonly zoneId: ZoneId;
   readonly zoneName: string;
+  /** Where dying in the current zone respawns the player (DEC-037). */
+  readonly respawnZoneId: ZoneId;
+  readonly respawnZoneName: string;
   readonly quest: QuestReadModel;
   readonly tutorial: TutorialReadModel;
 }
@@ -809,6 +821,32 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     }
     this.applyZone(zone, arrivalX, arrivalY);
     return { accepted: true, zoneId: zone.id };
+  }
+
+  /** The zone a death in the current zone respawns into (DEC-037). */
+  public respawnZone(): ZoneDefinition {
+    return zoneById(this.currentZone().respawnZoneId) ?? this.currentZone();
+  }
+
+  /**
+   * Death-screen confirmation (TASK-710, DEC-037): a dead player respawns
+   * at the current zone's `respawnZoneId` spawn point with vitals refilled.
+   * Transient combat state is reconstructed by normal zone entry
+   * (`applyZone`): the destination encounter respawns, ground loot,
+   * projectiles, statuses, and executions clear, and the tutorial tracker's
+   * banked steps survive exactly as they do for portal travel. Persistent
+   * state (XP, gold, items, quest, professions) is untouched — the v1 death
+   * penalty is zero. Rejected while alive.
+   */
+  public respawn(): RespawnResult {
+    if (!this.#playerHealth.health.dead) {
+      return { accepted: false, reason: "player-alive" };
+    }
+    const destination = this.respawnZone();
+    this.#playerHealth.reset();
+    this.#manaSubunits = this.#manaMaximumSubunits;
+    this.applyZone(destination);
+    return { accepted: true, zoneId: destination.id };
   }
 
   public tradeVendorOffer(offerId: ContentId): VendorTradeResult {
@@ -1223,10 +1261,19 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
    * (DEC-034). Safe at any time; transient combat state (position, vitals,
    * enemies, ground loot, cooldowns, statuses) is intentionally excluded —
    * `restoreCharacterSave` reconstructs it through normal zone entry.
+   *
+   * While the player is dead the captured zone is the respawn destination,
+   * not the death zone (TASK-710, DEC-037): death commits its outcome the
+   * moment it is persisted, so reloading after death — before or after the
+   * respawn confirmation — restores the character where Respawn would have
+   * placed them (restore refills vitals), and the DEC-034 death-rewind is
+   * closed for every save trigger uniformly.
    */
   public captureCharacterSave(): CharacterSave {
     return {
-      zoneId: this.#zoneId,
+      zoneId: this.#playerHealth.health.dead
+        ? this.respawnZone().id
+        : this.#zoneId,
       questStage: this.#questStage,
       tutorialBankedSteps: this.#tutorial.bankedSteps(),
       gold: this.#gold,
@@ -1373,6 +1420,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       professions: this.#professions.readModel(),
       zoneId: this.#zoneId,
       zoneName: this.currentZone().displayName,
+      respawnZoneId: this.respawnZone().id,
+      respawnZoneName: this.respawnZone().displayName,
       quest: this.quest(),
       tutorial: this.#tutorial.readModel(),
     };

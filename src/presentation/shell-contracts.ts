@@ -104,6 +104,11 @@ export interface CombatHudReadModel {
   /** Stable zone id; the TASK-705 save trigger watches it for travel. */
   readonly zoneId: string;
   readonly zoneName: string;
+  /**
+   * Display name of the zone a death here respawns into (TASK-710,
+   * DEC-037); the death overlay names the destination on its confirm.
+   */
+  readonly respawnZoneName: string;
   readonly questLabel: string | null;
   /** Active tutorial prompt; null outside the tutorial or once completed. */
   readonly tutorial: TutorialHudReadModel | null;
@@ -347,9 +352,26 @@ export type WorldUiCommand =
   | { readonly type: "world.vendor-buy"; readonly offerId: string }
   | { readonly type: "world.close-vendor" }
   /** Zone travel request; unknown zone ids are ignored by the adapter. */
-  | { readonly type: "world.travel"; readonly zoneId: string };
+  | { readonly type: "world.travel"; readonly zoneId: string }
+  /**
+   * Death-screen confirmation (TASK-710, DEC-037): respawn the dead player
+   * at the current zone's respawn destination. Ignored while alive.
+   */
+  | { readonly type: "world.respawn" };
 
 export const WORLD_COMMAND_EVENT = "rarpg:world-command";
+
+/**
+ * Dispatched on `window` by the presentation adapter after an accepted
+ * respawn, carrying the arrival zone id. `main.tsx` listens to fire the
+ * DEC-037 save-at-respawn trigger alongside DEC-034's zone-travel and
+ * page-hide triggers.
+ */
+export const CHARACTER_RESPAWN_EVENT = "rarpg:character-respawned";
+
+export interface CharacterRespawnEventDetail {
+  readonly zoneId: string;
+}
 
 export const ITEM_HUD_EVENT = "rarpg:item-hud";
 export const ITEM_COMMAND_EVENT = "rarpg:item-command";
@@ -365,6 +387,7 @@ declare global {
     "rarpg:progression-command": CustomEvent<ProgressionUiCommand>;
     "rarpg:profession-command": CustomEvent<ProfessionUiCommand>;
     "rarpg:world-command": CustomEvent<WorldUiCommand>;
+    "rarpg:character-respawned": CustomEvent<CharacterRespawnEventDetail>;
   }
 }
 

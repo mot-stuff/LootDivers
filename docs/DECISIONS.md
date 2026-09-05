@@ -2589,3 +2589,65 @@ couple the save format to per-tick simulation internals.
   chain is exercised by unit tests through an injected synthetic v1→v2.
 - TASK-707's backend adapter implements the same `SaveRepository` port and
   ships the same envelope bytes; no DTO change is expected.
+
+---
+
+# DEC-037
+
+## Death and respawn: death screen, per-zone town respawn, death-committed saves
+
+Date: 2026-09-05 (TASK-710)
+
+## Decision
+
+1. **Death shows a confirm-gated death screen.** When the player dies the
+   core keeps its existing dead state (inputs rejected with
+   `player-defeated`, simulation still ticking) and the shell renders a
+   death overlay from the HUD read model (`playerDead` plus the new
+   `respawnZoneName`), styled with the DEC-029 tokens. The overlay never
+   steals canvas focus and offers one action: "Respawn in {zone}".
+2. **Respawn is data-driven per zone.** `ZoneDefinition` gains a required
+   `respawnZoneId`: Ashtrail Expanse → Hearthmere, Hollowdeep →
+   Hearthmere, Wakeshore Landing → itself (a tutorial death must not
+   eject the player from the tutorial, DEC-030), Hearthmere → itself
+   (safe zone, unreachable in practice). Confirming runs
+   `CombatArenaSimulation.respawn()`: rejected while alive, otherwise
+   vitals refill and normal zone entry (`applyZone`) reconstructs all
+   transient state — enemies, loot, cooldowns, statuses — exactly like
+   travel or restore does.
+3. **v1 death penalty is zero.** XP, level, gold, items, professions, and
+   quest state are untouched (TASK-713 §3; a post-v1 cost is an owner
+   decision).
+4. **Dying commits the respawn outcome to the save.** DEC-034 skipped
+   persistence while dead, leaving a rewind exploit (die, reload, resume
+   pre-death). Now `captureCharacterSave()` on a dead simulation writes
+   the zone as the respawn destination, and two triggers use it: a save
+   the moment the player dies, and a save after every accepted respawn
+   (same-zone respawns never change the HUD zone id, so the travel
+   trigger alone would miss them). Reloading from the death screen or
+   after respawning restores the identical post-respawn character. The
+   DEC-034 pagehide safeguard still skips the dead state — the death
+   trigger has already persisted the same envelope.
+
+## Alternatives Considered
+
+- Auto-respawn on a timer: rejected; the confirm keeps the death legible
+  and leaves room for future choices (e.g. a fee or a graveyard option).
+- Saving only at respawn confirm: rejected; reloading from the death
+  screen before confirming would still rewind to the pre-death save.
+- Persisting a `dead: true` flag and resolving respawn at load: rejected;
+  it would add a save-format state that every consumer must handle, when
+  committing the respawn destination expresses the same outcome with the
+  existing schema.
+- A death penalty (gold fee / XP debt): deferred per TASK-713 §3 — an
+  owner decision after the economy ships.
+
+## Consequences
+
+- Death is now a save trigger, so specs that relied on "dead players
+  never persist" changed: the corrupted-save e2e now uses the death save
+  itself as the only written generation.
+- The rewind exploit is closed end to end (unit and e2e verified: the
+  death envelope equals the respawn envelope, checksum included).
+- A future death penalty only touches `respawn()` and the capture
+  semantics; zone data and the overlay contract stay stable.
