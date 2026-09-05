@@ -37,12 +37,12 @@
       "sha256": "d345688b1e5b0d9c9b43c8fd80fac80d8111eb8152c77fc3f0db36760c354b71"
     },
     {
-      "path": "assets/index-DBkORRmX.js",
+      "path": "assets/index-CxKNURVq.js",
       "initiators": ["index.html"],
       "cacheStatus": "not-measured-static-artifact",
-      "rawBytes": 1465887,
-      "brotliBytes": 308672,
-      "sha256": "29d474a4b1d890d006584e1f05b4d95a7fec5db31a4f3fbe7f6eb1014037833e"
+      "rawBytes": 1469259,
+      "brotliBytes": 309453,
+      "sha256": "5553c7b97ee042dbd45e861877661591a104f36a0eaad906164d344200e482aa"
     },
     {
       "path": "fixture-icon.svg",
@@ -57,8 +57,8 @@
       "initiators": ["navigation"],
       "cacheStatus": "not-measured-static-artifact",
       "rawBytes": 626,
-      "brotliBytes": 258,
-      "sha256": "edbdf706c5cac12c318c13960a8eeff1b3cfcd7b6f4f50622ee45bba76fe3b75"
+      "brotliBytes": 257,
+      "sha256": "b8f7e6a724fd1773cd631c292da2ff1e026abb95a533670ca5256e03e0277f3a"
     },
     {
       "path": "assets/technical-entities.svg",
@@ -89,8 +89,8 @@
   "unselectedZoneArtifacts": [],
   "duplicatePayloads": [],
   "fixtureBrotliBytes": 1385,
-  "shellBrotliBytes": 310165,
-  "combinedBrotliBytes": 311550,
+  "shellBrotliBytes": 310945,
+  "combinedBrotliBytes": 312330,
   "gates": {
     "fixtureAtMost8MiB": "PASS",
     "combinedAtMost10MiB": "PASS",
