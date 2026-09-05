@@ -170,12 +170,17 @@ jobs:
           echo "::error::wrangler pages deploy failed: ${tail_text}"
           exit 1
 
-      - name: Post-deploy smoke (index + hashed asset reachable)
+      - name: Post-deploy smoke (homepage + /play/ + hashed asset reachable)
         run: |
           set -euo pipefail
           sleep 15
+          # "/" is the homepage since TASK-708 (DEC-035); the game lives at
+          # /play/. -L on the /play/ checks tolerates Pages' trailing-slash
+          # normalization redirects.
           curl -fsSI https://lootdivers.pages.dev/ | head -n 1
           curl -fsS https://lootdivers.pages.dev/ | grep -qi "Loot Divers"
+          curl -fsSLI https://lootdivers.pages.dev/play/ | head -n 1
+          curl -fsSL https://lootdivers.pages.dev/play/ | grep -qi "Loot Divers"
           asset="$(basename "$(ls dist/assets/*.js | head -n 1)")"
           echo "checking /assets/${asset}"
           curl -fsSI "https://lootdivers.pages.dev/assets/${asset}" | head -n 1

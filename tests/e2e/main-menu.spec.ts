@@ -13,7 +13,7 @@ test("a plain load shows the main menu and New Game lands in the tutorial", asyn
   page,
 }, testInfo) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/play/", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(page).toHaveTitle("Loot Divers");
 
@@ -86,7 +86,7 @@ test("?autostart bypasses the menu and boots straight into gameplay", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
 
   await expect(page.getByTestId("main-menu")).toHaveCount(0);

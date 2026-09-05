@@ -152,11 +152,13 @@ version after Phaser boot. Failure hides the canvas and shows actionable browser
 hardware-acceleration, and driver guidance. There is no Canvas gameplay fallback.
 
 `npm run budget` runs the literal command
-`node scripts/report-transfer-budget.mjs`. It starts at production
-`dist/index.html`, follows initial HTML, static JavaScript import, stylesheet,
-CSS asset, icon, font, and web-manifest references, and does not follow dynamic
-imports or unrelated build output. Missing, external, or dist-escaping initial
-references fail the report.
+`node scripts/report-transfer-budget.mjs --root=play/index.html`. It starts at
+the production game shell `dist/play/index.html` (since TASK-708/DEC-035 moved
+the game to `/play/`; `dist/index.html` is the light homepage, measurable with
+`--root=index.html`), follows initial HTML, static JavaScript import,
+stylesheet, CSS asset, icon, font, and web-manifest references, and does not
+follow dynamic imports or unrelated build output. Missing, external, or
+dist-escaping initial references fail the report.
 
 Each discovered artifact is compressed with Node.js `node:zlib` using
 `gzipSync(..., { level: 9 })` and the Brotli quality-11 equivalent

@@ -24,7 +24,7 @@ test("production build boots Phaser and the diagnostic shell", async ({
     }
   });
 
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/play/", { waitUntil: "networkidle" });
 
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(page.getByTestId("boot-status")).toHaveText(
@@ -54,7 +54,7 @@ test("cleans partial lifecycle resources when atlas loading fails", async ({
   await page.route("**/assets/technical-entities.svg", async (route) => {
     await route.fulfill({ status: 500, body: "synthetic atlas failure" });
   });
-  await page.goto("/?automation=1&fullFixture=1", {
+  await page.goto("/play/?automation=1&fullFixture=1", {
     waitUntil: "domcontentloaded",
   });
   await expect(page.locator("body")).toHaveAttribute(

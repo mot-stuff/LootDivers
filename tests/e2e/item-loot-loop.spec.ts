@@ -41,7 +41,7 @@ test("enemy loot can be picked, equipped, and used to create an ability", async 
     "hardware-sensitive on GPU-less CI (DEC-033)",
   );
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect
     .poll(() =>
@@ -278,7 +278,7 @@ test("inventory keeps default Basic Cleave and reserved flask slots", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect
     .poll(() =>
@@ -319,7 +319,7 @@ test("C opens the character screen so attributes and loadout can be changed", as
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect
     .poll(() =>

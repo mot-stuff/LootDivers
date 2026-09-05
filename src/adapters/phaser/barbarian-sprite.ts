@@ -38,7 +38,9 @@ const SHEETS: readonly BarbarianSheetDefinition[] = [
   { id: "die", file: "Die.png", frameRate: 20, repeat: 0 },
 ];
 
-const ASSET_ROOT = "assets/characters/barbarian";
+// Root-absolute so the sheets resolve identically from "/" and from the
+// "/play/" page the game shell moved to in TASK-708 (DEC-035).
+const ASSET_ROOT = "/assets/characters/barbarian";
 const SHADOW_ALPHA = 0.5;
 
 function textureKey(id: BarbarianAnimationId): string {

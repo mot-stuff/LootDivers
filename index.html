@@ -5,13 +5,120 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Loot Divers — a browser action RPG (development build)"
+      content="Loot Divers — a free browser action RPG. Dive into the depths, fight your way back out, and haul home the hoard."
     />
     <link rel="icon" href="/assets/branding/favicon.png" type="image/png" />
     <title>Loot Divers</title>
+    <script type="module" src="/src/home/main.ts"></script>
   </head>
-  <body data-app-state="booting">
-    <div id="app"></div>
-    <script type="module" src="/src/main.tsx"></script>
+  <body class="home">
+    <main class="home-shell">
+      <header class="home-hero">
+        <img
+          class="home-logo"
+          src="/assets/branding/logo.png"
+          alt="Loot Divers"
+        />
+        <p class="home-tagline">
+          Dive into the depths. Fight your way back out. Haul home the hoard.
+        </p>
+        <a class="home-play" href="/play/" data-testid="home-play">Play now</a>
+        <p class="home-play-note">
+          Free in your browser. No download, no account required.
+        </p>
+      </header>
+
+      <div class="home-columns">
+        <section
+          class="home-panel home-news"
+          data-testid="home-news"
+          aria-labelledby="home-news-heading"
+        >
+          <h2 id="home-news-heading">News</h2>
+          <ol class="home-news-list" data-testid="home-news-list"></ol>
+        </section>
+
+        <section
+          class="home-panel home-account"
+          aria-labelledby="home-account-heading"
+        >
+          <h2 id="home-account-heading">Account</h2>
+          <div
+            class="home-auth-tabs"
+            role="tablist"
+            aria-label="Log in or sign up"
+          >
+            <button
+              type="button"
+              class="home-auth-tab"
+              data-mode="login"
+              data-testid="home-auth-tab-login"
+              role="tab"
+              aria-selected="true"
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              class="home-auth-tab"
+              data-mode="signup"
+              data-testid="home-auth-tab-signup"
+              role="tab"
+              aria-selected="false"
+            >
+              Sign up
+            </button>
+          </div>
+          <form class="home-auth-form" data-testid="home-auth-form" novalidate>
+            <label class="home-auth-label" for="home-auth-email">Email</label>
+            <input
+              id="home-auth-email"
+              data-testid="home-auth-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+            <label class="home-auth-label" for="home-auth-password">
+              Password
+            </label>
+            <input
+              id="home-auth-password"
+              data-testid="home-auth-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              minlength="8"
+              required
+            />
+            <button
+              type="submit"
+              class="home-auth-submit"
+              data-testid="home-auth-submit"
+            >
+              Log in
+            </button>
+            <p
+              class="home-auth-status"
+              data-testid="home-auth-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </form>
+          <p class="home-account-note">
+            Accounts keep your heroes on the server so you can continue from any
+            device. You can always play without one — local saves stay in your
+            browser.
+          </p>
+        </section>
+      </div>
+
+      <footer class="home-footer">
+        <p>
+          Loot Divers is an original browser action RPG, in active development.
+          Pre-alpha — everything you see is a work in progress.
+        </p>
+      </footer>
+    </main>
   </body>
 </html>

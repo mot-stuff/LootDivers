@@ -7,7 +7,7 @@ const RUNNING_IN_CI = process.env["CI"] !== undefined;
 test.describe.configure({ mode: "serial" });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/?automation=1&fullFixture=1", {
+  await page.goto("/play/?automation=1&fullFixture=1", {
     waitUntil: "domcontentloaded",
   });
   await expect(page.locator("body")).toHaveAttribute(
