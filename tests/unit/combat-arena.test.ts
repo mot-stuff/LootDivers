@@ -109,7 +109,7 @@ describe("CombatArenaSimulation", () => {
       attackAimX: 1,
       attackAimY: 0,
       attackHitCount: 0,
-      targets: [{ health: 100 }],
+      targets: [{ health: 50 }],
     });
 
     simulation.setAim(-1, 0);
@@ -119,7 +119,7 @@ describe("CombatArenaSimulation", () => {
       attackAimX: 1,
       attackAimY: 0,
       attackHitCount: 1,
-      targets: [{ health: 75 }],
+      targets: [{ health: 25 }],
     });
   });
 
@@ -167,7 +167,7 @@ describe("CombatArenaSimulation", () => {
 
     expect(simulation.diagnostics()).toMatchObject({
       attackHitCount: 1,
-      targets: [{ health: 75 }],
+      targets: [{ health: 25 }],
     });
     expect(
       simulation

@@ -68,7 +68,7 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
     .toEqual({
       attackCount: 1,
       attackHitCount: 0,
-      targetHealth: 100,
+      targetHealth: 50,
       impactCount: 0,
     });
 
@@ -121,7 +121,7 @@ test("playable arena accepts movement, primary attack, aim, and dodge input", as
   expect(failures).toEqual([]);
 });
 
-test("playable encounter approaches and dies to four directional attacks", async ({
+test("common enemy approaches and dies to two directional attacks", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
@@ -133,7 +133,7 @@ test("playable encounter approaches and dies to four directional attacks", async
     const combat = window.__RARPG_COMBAT_TEST__;
     combat?.setAutomationPaused(true);
     combat?.reset();
-    combat?.advancePaused(113);
+    combat?.advancePaused(76);
     combat?.setAimDirection(1, 0);
   });
   await expect
@@ -149,7 +149,7 @@ test("playable encounter approaches and dies to four directional attacks", async
     approached?.enemyCanvasY ?? 0,
   );
 
-  for (let attack = 1; attack <= 4; attack += 1) {
+  for (let attack = 1; attack <= 2; attack += 1) {
     await page.evaluate(() => {
       const combat = window.__RARPG_COMBAT_TEST__;
       combat?.requestPrimaryAttack();
@@ -157,12 +157,12 @@ test("playable encounter approaches and dies to four directional attacks", async
     });
     await expect
       .poll(async () => (await diagnostics(page))?.enemy.health)
-      .toBe(100 - attack * 25);
+      .toBe(50 - attack * 25);
   }
 
   const defeated = await diagnostics(page);
   expect(defeated).toMatchObject({
-    attackCount: 4,
+    attackCount: 2,
     attackHitCount: 1,
     enemy: {
       health: 0,
@@ -192,10 +192,10 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
     combat?.setAutomationPaused(true);
     combat?.reset();
     combat?.setAimDirection(1, 0);
-    combat?.advancePaused(130);
+    combat?.advancePaused(93);
   });
   expect(await diagnostics(page)).toMatchObject({
-    tick: 130,
+    tick: 93,
     playerHealth: 100,
     enemy: {
       state: "windup",
@@ -211,7 +211,7 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
     combat?.advancePaused(1);
   });
   expect(await diagnostics(page)).toMatchObject({
-    tick: 131,
+    tick: 94,
     playerHealth: 100,
     dodging: true,
     enemy: {
@@ -224,8 +224,8 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
 
   await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.advancePaused(60));
   expect(await diagnostics(page)).toMatchObject({
-    tick: 191,
-    playerHealth: 80,
+    tick: 154,
+    playerHealth: 90,
     enemy: {
       attackCount: 2,
       damageAttemptCount: 2,
@@ -236,7 +236,7 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
   });
   await expect(
     page.getByRole("progressbar", { name: "Player health" }),
-  ).toHaveAttribute("aria-valuenow", "80");
+  ).toHaveAttribute("aria-valuenow", "90");
 
   await page.evaluate(() =>
     window.__RARPG_COMBAT_TEST__?.applyPlayerDamage(100),
@@ -264,7 +264,7 @@ test("enemy cadence honors exact-tick dodge and reset semantics", async ({
     enemy: {
       x: 860,
       y: 400,
-      health: 100,
+      health: 50,
       dead: false,
       state: "approaching",
       windupTicksRemaining: 0,

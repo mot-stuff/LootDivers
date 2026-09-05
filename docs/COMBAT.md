@@ -151,11 +151,25 @@ Dodge should:
 
 - move the character rapidly
 - feel responsive
-- have a cooldown or resource cost
+- use a cooldown without a stamina resource
 - prevent spam
 - potentially provide brief invulnerability depending on testing
 
 Exact invulnerability duration should remain configurable.
+
+---
+
+# Enemy Power Tiers
+
+Enemy populations should use clear power tiers:
+
+- Common enemies are small, weak, and intended to appear in large groups.
+- Magic enemies are stronger variants with one or more meaningful modifiers.
+- Rare enemies combine stronger stats with multiple mechanics or modifiers.
+- Bosses use bespoke mechanics, telegraphs, and substantially greater durability.
+
+Higher tiers should gain mechanical identity rather than relying only on larger
+health and damage values. The first combat prototype uses one common enemy only.
 
 ---
 

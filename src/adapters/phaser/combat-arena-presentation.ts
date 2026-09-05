@@ -372,11 +372,23 @@ export class CombatArenaPresentation {
           enemy.radius + 15,
         );
       }
-      const healthWidth = 44 * (enemy.health / enemy.maxHealth);
+      const healthBarWidth = Math.max(28, enemy.radius * 2.4);
+      const healthBarY = point.y - enemy.radius - 14;
+      const healthWidth = healthBarWidth * (enemy.health / enemy.maxHealth);
       this.#combatGraphics.fillStyle(0x32131b, 1);
-      this.#combatGraphics.fillRect(point.x - 22, point.y - 38, 44, 5);
+      this.#combatGraphics.fillRect(
+        point.x - healthBarWidth / 2,
+        healthBarY,
+        healthBarWidth,
+        4,
+      );
       this.#combatGraphics.fillStyle(0xff6b6b, 1);
-      this.#combatGraphics.fillRect(point.x - 22, point.y - 38, healthWidth, 5);
+      this.#combatGraphics.fillRect(
+        point.x - healthBarWidth / 2,
+        healthBarY,
+        healthWidth,
+        4,
+      );
     }
     this.scene.cameras.main.matrixCombined.transformPoint(
       point.x,
@@ -385,7 +397,7 @@ export class CombatArenaPresentation {
     );
     this.scene.cameras.main.matrixCombined.transformPoint(
       point.x,
-      point.y - 38,
+      point.y - enemy.radius - 14,
       this.#renderedEnemyHealthBarPoint,
     );
   }
