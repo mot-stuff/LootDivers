@@ -37,10 +37,7 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
 
   const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
   await canvas.focus();
-  await page.evaluate(() => {
-    window.__RARPG_COMBAT_TEST__?.reset();
-    window.__RARPG_COMBAT_TEST__?.setAimDirection(-1, 0);
-  });
+  await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
 
   await page.keyboard.down("w");
   await page.keyboard.down("d");
@@ -52,13 +49,11 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
         : {
             movementX: state.movementX,
             movementY: state.movementY,
-            facingLeft: state.facingX < 0,
           };
     })
     .toMatchObject({
       movementX: 1 / Math.sqrt(2),
       movementY: -1 / Math.sqrt(2),
-      facingLeft: true,
     });
   await page.keyboard.up("w");
   await page.keyboard.up("d");
@@ -80,6 +75,52 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
 
   await page.keyboard.press("w");
   expect((await diagnostics(page))?.tick).toBe(pausedState?.tick);
+  expect(failures).toEqual([]);
+});
+
+test("real pointer movement inverse-projects screen aim into world facing", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+
+  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
+  const box = await canvas.boundingBox();
+  const canvasSize = await canvas.evaluate((element) => ({
+    width: (element as HTMLCanvasElement).width,
+    height: (element as HTMLCanvasElement).height,
+  }));
+  const state = await diagnostics(page);
+  if (box === null || state === null) {
+    throw new Error("Combat canvas diagnostics were unavailable.");
+  }
+
+  await page.mouse.move(
+    box.x + (state.playerCanvasX / canvasSize.width) * box.width,
+    box.y + (state.playerCanvasY / canvasSize.height) * box.height - 100,
+  );
+
+  await expect
+    .poll(async () => {
+      const facing = await diagnostics(page);
+      if (facing === null) {
+        return false;
+      }
+      const screenX = facing.pointerCanvasX - facing.playerCanvasX;
+      const screenY = facing.pointerCanvasY - facing.playerCanvasY;
+      const difference = screenX / 0.65;
+      const sum = screenY / 0.34;
+      const worldX = (difference + sum) / 2;
+      const worldY = (sum - difference) / 2;
+      const length = Math.hypot(worldX, worldY);
+      return (
+        length > 0 &&
+        Math.abs(facing.facingX - worldX / length) < 0.01 &&
+        Math.abs(facing.facingY - worldY / length) < 0.01
+      );
+    })
+    .toBe(true);
   expect(failures).toEqual([]);
 });
 

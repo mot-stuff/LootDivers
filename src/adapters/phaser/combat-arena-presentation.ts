@@ -15,6 +15,10 @@ const PRESENTATION_DEPTH = 3_500_000;
 
 export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly pausedForUi: boolean;
+  readonly playerCanvasX: number;
+  readonly playerCanvasY: number;
+  readonly pointerCanvasX: number;
+  readonly pointerCanvasY: number;
 }
 
 export class CombatArenaPresentation {
@@ -80,10 +84,11 @@ export class CombatArenaPresentation {
     }
     const player = this.#simulation.diagnostics();
     const playerPoint = this.project(player.x, player.y);
-    this.#simulation.setAim(
+    const aim = this.inverseProjectDelta(
       this.#lastPointerX - playerPoint.x,
       this.#lastPointerY - playerPoint.y,
     );
+    this.#simulation.setAim(aim.x, aim.y);
 
     const result = this.#runner.advance();
     this.render(result.interpolationAlpha);
@@ -94,18 +99,24 @@ export class CombatArenaPresentation {
   }
 
   public diagnostics(): CombatPresentationDiagnostics {
+    const state = this.#simulation.diagnostics();
+    const point = this.project(state.x, state.y);
     return {
-      ...this.#simulation.diagnostics(),
+      ...state,
       pausedForUi: this.#pausedForUi,
+      playerCanvasX: point.x,
+      playerCanvasY: point.y,
+      pointerCanvasX: this.#lastPointerX,
+      pointerCanvasY: this.#lastPointerY,
     };
   }
 
   public setAimDirection(x: number, y: number): void {
     this.#simulation.setAim(x, y);
     const state = this.#simulation.diagnostics();
-    const point = this.project(state.x, state.y);
-    this.#lastPointerX = point.x + x * 100;
-    this.#lastPointerY = point.y + y * 100;
+    const target = this.project(state.x + x * 100, state.y + y * 100);
+    this.#lastPointerX = target.x;
+    this.#lastPointerY = target.y;
   }
 
   public dispose(): void {
@@ -205,6 +216,18 @@ export class CombatArenaPresentation {
     return {
       x: ORIGIN_X + (x - y) * ISO_X_SCALE,
       y: ORIGIN_Y + (x + y) * ISO_Y_SCALE,
+    };
+  }
+
+  private inverseProjectDelta(
+    screenX: number,
+    screenY: number,
+  ): { readonly x: number; readonly y: number } {
+    const difference = screenX / ISO_X_SCALE;
+    const sum = screenY / ISO_Y_SCALE;
+    return {
+      x: (difference + sum) / 2,
+      y: (sum - difference) / 2,
     };
   }
 }
