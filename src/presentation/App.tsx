@@ -20,6 +20,7 @@ export interface AppProps {
   readonly persistenceStatus?: PersistenceStatus;
   readonly persistenceActions?: PersistenceFixtureActions;
   readonly showPersistence?: boolean;
+  readonly showCombatPrototype?: boolean;
 }
 
 export function App({
@@ -27,6 +28,7 @@ export function App({
   persistenceStatus,
   persistenceActions,
   showPersistence,
+  showCombatPrototype,
 }: AppProps) {
   const [model, setModel] = useState<ShellReadModel>(() =>
     bindings.models.getSnapshot(),
@@ -55,8 +57,16 @@ export function App({
       </a>
       <header class="diagnostic-shell">
         <div>
-          <p class="eyebrow">RARPG technical foundation</p>
-          <h1>UI and renderer diagnostics</h1>
+          <p class="eyebrow">
+            {showCombatPrototype
+              ? "RARPG Phase 1 playable prototype"
+              : "RARPG technical foundation"}
+          </p>
+          <h1>
+            {showCombatPrototype
+              ? "Combat movement arena"
+              : "UI and renderer diagnostics"}
+          </h1>
         </div>
         <dl class="diagnostics" aria-label="Foundation diagnostics">
           <div>
@@ -174,8 +184,9 @@ export function App({
 
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
-          Focus the canvas before using keyboard input. Tab away to keep
-          keyboard input in the interface.
+          {showCombatPrototype
+            ? "Click the arena, then use WASD to move, the mouse to aim, Space to dodge, and R to reset. Input pauses when interface controls have focus."
+            : "Focus the canvas before using keyboard input. Tab away to keep keyboard input in the interface."}
         </p>
         <button
           type="button"

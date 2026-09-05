@@ -4,6 +4,10 @@ import type { CanvasViewportReadModel } from "../../presentation/shell-contracts
 import { applyCanvasViewport } from "../browser/canvas-viewport";
 import { assertWebGL2Context } from "../browser/webgl2";
 import {
+  CombatArenaPresentation,
+  type CombatPresentationDiagnostics,
+} from "./combat-arena-presentation";
+import {
   IsometricZoneAdapter,
   type ZoneLifecycleDiagnostics,
 } from "./isometric-world";
@@ -24,17 +28,21 @@ class TechnicalWorldScene extends Phaser.Scene {
   readonly #onReady: (adapter: IsometricZoneAdapter) => void;
   readonly #onError: (error: Error) => void;
   readonly #fullFixture: boolean;
+  readonly #combatPrototype: boolean;
   #fixture: SyntheticLifecyclePresentation | null = null;
+  #combat: CombatArenaPresentation | null = null;
 
   public constructor(
     onReady: (adapter: IsometricZoneAdapter) => void,
     onError: (error: Error) => void,
     fullFixture: boolean,
+    combatPrototype: boolean,
   ) {
     super("technical-isometric-world");
     this.#onReady = onReady;
     this.#onError = onError;
     this.#fullFixture = fullFixture;
+    this.#combatPrototype = combatPrototype;
   }
 
   public create(): void {
@@ -67,6 +75,13 @@ class TechnicalWorldScene extends Phaser.Scene {
             this.#fixture = null;
           });
         }
+        if (this.#combatPrototype) {
+          this.#combat = new CombatArenaPresentation(this, this.game.canvas);
+          this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.#combat?.dispose();
+            this.#combat = null;
+          });
+        }
         this.#onReady(adapter);
       })
       .catch((error: unknown) => {
@@ -80,6 +95,7 @@ class TechnicalWorldScene extends Phaser.Scene {
 
   public override update(time: number, delta: number): void {
     this.#fixture?.update(time, delta);
+    this.#combat?.update();
   }
 
   public configureLogicalViewport(): void {
@@ -157,6 +173,18 @@ class TechnicalWorldScene extends Phaser.Scene {
   public invalidateFixtureSample(reason: string): void {
     this.#fixture?.invalidateSample(reason);
   }
+
+  public combatDiagnostics(): CombatPresentationDiagnostics | null {
+    return this.#combat?.diagnostics() ?? null;
+  }
+
+  public resetCombat(): void {
+    this.#combat?.reset();
+  }
+
+  public setCombatAimDirection(x: number, y: number): void {
+    this.#combat?.setAimDirection(x, y);
+  }
 }
 
 export interface TechnicalWorldController {
@@ -184,11 +212,17 @@ export interface PhaserBootResult {
     };
     setCullingProbe(enabled: boolean): void;
   };
+  readonly combat: {
+    diagnostics(): CombatPresentationDiagnostics | null;
+    reset(): void;
+    setAimDirection(x: number, y: number): void;
+  };
   resize(viewport: CanvasViewportReadModel): void;
 }
 
 export interface PhaserBootOptions {
   readonly fullFixture?: boolean;
+  readonly combatPrototype?: boolean;
 }
 
 export function bootPhaser(
@@ -231,6 +265,15 @@ export function bootPhaser(
                   scene.setFixtureCullingProbe(enabled);
                 },
               },
+              combat: {
+                diagnostics: () => scene.combatDiagnostics(),
+                reset: () => {
+                  scene.resetCombat();
+                },
+                setAimDirection: (x, y) => {
+                  scene.setCombatAimDirection(x, y);
+                },
+              },
               resize(viewport) {
                 scene.invalidateFixtureSample("viewport-resized");
                 game.scale.resize(
@@ -251,6 +294,7 @@ export function bootPhaser(
           reject(error);
         },
         options.fullFixture ?? false,
+        options.combatPrototype ?? true,
       );
       gameRef.current = new Phaser.Game({
         type: Phaser.WEBGL,
