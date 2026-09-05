@@ -102,6 +102,17 @@ jobs:
             echo "::error::CLOUDFLARE_ACCOUNT_ID repo secret is missing or empty"
             exit 1
           fi
+          # Surface the account's existing Pages projects for diagnosis,
+          # and create the lootdivers project if it does not exist yet
+          # (idempotent: create fails harmlessly when it already exists).
+          projects="$(npx wrangler@4 pages project list 2>&1 | tr '\n' ' | ' || true)"
+          echo "::notice::pages projects in account: ${projects}"
+          if ! echo "${projects}" | grep -q "lootdivers"; then
+            npx wrangler@4 pages project create lootdivers --production-branch=main 2>&1 | tee create.log || {
+              echo "::error::pages project create failed: $(tail -c 500 create.log | tr '\n' ' ')"
+              exit 1
+            }
+          fi
           if npx wrangler@4 pages deploy dist --project-name=lootdivers --branch=main 2>&1 | tee wrangler.log; then
             exit 0
           fi
