@@ -29,8 +29,7 @@
     "refund": "reserved",
     "cooldown": "retain"
   },
-  "statPolicy": "snapshot",
-  "capturedStatIds": ["fixture:power"],
+  "statCaptures": [{ "subject": "source", "statId": "fixture:power" }],
   "effects": [
     {
       "kind": "modify-resource",

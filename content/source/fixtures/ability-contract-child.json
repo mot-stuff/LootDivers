@@ -23,7 +23,6 @@
     "refund": "none",
     "cooldown": "retain"
   },
-  "statPolicy": "live",
-  "capturedStatIds": [],
+  "statCaptures": [],
   "effects": []
 }

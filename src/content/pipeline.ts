@@ -30,6 +30,7 @@ import {
   type ContentDocument,
   type ContentProject,
   type Diagnostic,
+  type EffectExecutorDefinition,
   type StatDefinition,
   type StableId,
   type TagDefinition,
@@ -407,6 +408,7 @@ export async function validateContentDirectory(
   const assets: AssetDefinition[] = [];
   const stats: StatDefinition[] = [];
   const tags: TagDefinition[] = [];
+  const effectExecutors: EffectExecutorDefinition[] = [];
   const definitions: TechnicalDefinition[] = [];
   const abilities: AbilityContentDefinition[] = [];
   const definitionSources = new Map<StableId, string>();
@@ -467,6 +469,16 @@ export async function validateContentDirectory(
           diagnostics,
         ),
       );
+    } else if (value.kind === "effect-executor-registry") {
+      value.entries.forEach((entry, index) =>
+        addUnique(
+          { source, path: `/entries/${index}/id`, value: entry },
+          "effect executor",
+          effectExecutors,
+          idSources,
+          diagnostics,
+        ),
+      );
     } else if (value.kind === "technical-definition") {
       addUnique(
         { source, path: "/id", value },
@@ -496,6 +508,7 @@ export async function validateContentDirectory(
     "asset-registry",
     "stat-registry",
     "tag-registry",
+    "effect-executor-registry",
   ] as const) {
     const registrySources = registryDocuments.get(kind) ?? [];
     const count = registrySources.length;
@@ -530,6 +543,7 @@ export async function validateContentDirectory(
   const tagIds = new Set(tags.map((entry) => entry.id));
   const definitionIds = new Set(definitions.map((entry) => entry.id));
   const abilityIds = new Set(abilities.map((entry) => entry.id));
+  const effectExecutorIds = new Set(effectExecutors.map((entry) => entry.id));
 
   for (const stat of stats) {
     if (stat.minimum > stat.maximum) {
@@ -672,7 +686,8 @@ export async function validateContentDirectory(
         );
       }
       usedCosts.add(cost.resourceId);
-      if (!statById.has(cost.resourceId)) {
+      const resource = statById.get(cost.resourceId);
+      if (resource === undefined) {
         diagnostics.push(
           diagnostic(
             "STAT_UNKNOWN",
@@ -681,27 +696,52 @@ export async function validateContentDirectory(
             `Unknown resource stat ID "${cost.resourceId}".`,
           ),
         );
-      }
-    });
-    ability.capturedStatIds.forEach((id, index) => {
-      if (!statById.has(id)) {
+      } else if (cost.amount > resource.maximum) {
         diagnostics.push(
           diagnostic(
-            "STAT_UNKNOWN",
+            "RESOURCE_COST_UNATTAINABLE",
             source,
-            `/capturedStatIds/${index}`,
-            `Unknown captured stat ID "${id}".`,
+            `/costs/${index}/amount`,
+            `Cost ${cost.amount} exceeds attainable "${resource.id}" maximum ${resource.maximum}.`,
           ),
         );
       }
     });
-    if (ability.statPolicy === "live" && ability.capturedStatIds.length > 0) {
+    const usedCaptures = new Set<string>();
+    ability.statCaptures.forEach((capture, index) => {
+      const captureKey = `${capture.subject}\0${capture.statId}`;
+      if (usedCaptures.has(captureKey)) {
+        diagnostics.push(
+          diagnostic(
+            "DUPLICATE_VALUE",
+            source,
+            `/statCaptures/${index}`,
+            `Stat "${capture.statId}" is captured more than once for "${capture.subject}".`,
+          ),
+        );
+      }
+      usedCaptures.add(captureKey);
+      if (!statById.has(capture.statId)) {
+        diagnostics.push(
+          diagnostic(
+            "STAT_UNKNOWN",
+            source,
+            `/statCaptures/${index}/statId`,
+            `Unknown captured stat ID "${capture.statId}".`,
+          ),
+        );
+      }
+    });
+    if (
+      ability.targeting.mode !== "entity" &&
+      ability.statCaptures.some(({ subject }) => subject === "target")
+    ) {
       diagnostics.push(
         diagnostic(
-          "STAT_POLICY_INVALID",
+          "TARGETING_INVALID",
           source,
-          "/capturedStatIds",
-          "Live-stat abilities must not declare captured stat IDs.",
+          "/statCaptures",
+          "Target stat captures require entity targeting.",
         ),
       );
     }
@@ -727,6 +767,29 @@ export async function validateContentDirectory(
             ),
           );
         }
+        if (
+          effect.recipient === "target" &&
+          ability.targeting.mode !== "entity"
+        ) {
+          diagnostics.push(
+            diagnostic(
+              "TARGETING_INVALID",
+              source,
+              `/effects/${index}/recipient`,
+              "Target-recipient effects require entity targeting.",
+            ),
+          );
+        }
+        if (!effectExecutorIds.has("core:modify-resource")) {
+          diagnostics.push(
+            diagnostic(
+              "EXECUTOR_UNKNOWN",
+              source,
+              `/effects/${index}/kind`,
+              'Shared effect requires registered executor "core:modify-resource".',
+            ),
+          );
+        }
       } else if (
         effect.kind === "trigger-ability" &&
         !abilityIds.has(effect.abilityId)
@@ -740,6 +803,16 @@ export async function validateContentDirectory(
           ),
         );
       } else if (effect.kind === "custom") {
+        if (!effectExecutorIds.has(effect.executorKind)) {
+          diagnostics.push(
+            diagnostic(
+              "EXECUTOR_UNKNOWN",
+              source,
+              `/effects/${index}/executorKind`,
+              `Unknown effect executor ID "${effect.executorKind}".`,
+            ),
+          );
+        }
         const keys = new Set<string>();
         effect.parameters.forEach((parameter, parameterIndex) => {
           if (keys.has(parameter.key)) {
@@ -821,6 +894,7 @@ export async function validateContentDirectory(
       assets: sortById(assets),
       stats: sortById(stats),
       tags: sortById(tags),
+      effectExecutors: sortById(effectExecutors),
       definitions: sortById(definitions).map((definition) => ({
         ...definition,
         assets: [...definition.assets].sort(compareCodeUnits),
@@ -832,7 +906,12 @@ export async function validateContentDirectory(
       })),
       abilities: sortById(abilities).map((ability) => ({
         ...ability,
-        capturedStatIds: [...ability.capturedStatIds].sort(compareCodeUnits),
+        statCaptures: [...ability.statCaptures].sort((left, right) =>
+          compareCodeUnits(
+            `${left.subject}\0${left.statId}`,
+            `${right.subject}\0${right.statId}`,
+          ),
+        ),
         tags: [...ability.tags].sort(compareCodeUnits),
       })),
       sourceHash,
@@ -877,6 +956,7 @@ export async function compileContent(
     assets: content.assets,
     stats: content.stats,
     tags: content.tags,
+    effectExecutors: content.effectExecutors,
   };
   const definitionsChunk: CompiledTechnicalDefinitionsChunk =
     content.definitions;

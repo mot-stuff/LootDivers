@@ -11,6 +11,8 @@ import {
   type CompiledRegistriesChunk,
   type CompiledTechnicalDefinitionsChunk,
   type ContentProject,
+  type EffectExecutorDefinition,
+  type EffectExecutorRegistry,
   type StatDefinition,
   type StatRegistry,
   type StatValue,
@@ -72,6 +74,15 @@ const tagDefinitionSchema = {
   },
   required: ["id"],
 } as const satisfies JSONSchemaType<TagDefinition>;
+
+const effectExecutorDefinitionSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    id: stableIdSchema,
+  },
+  required: ["id"],
+} as const satisfies JSONSchemaType<EffectExecutorDefinition>;
 
 const assetDefinitionSchema = {
   type: "object",
@@ -271,15 +282,18 @@ const abilityDefinitionBody = {
       },
       required: ["allowedDuring", "refund", "cooldown"],
     },
-    statPolicy: {
-      type: "string",
-      enum: ["snapshot", "live"],
-    },
-    capturedStatIds: {
+    statCaptures: {
       type: "array",
       maxItems: 32,
-      uniqueItems: true,
-      items: stableIdSchema,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          subject: { type: "string", enum: ["source", "target"] },
+          statId: stableIdSchema,
+        },
+        required: ["subject", "statId"],
+      },
     },
     effects: {
       type: "array",
@@ -298,8 +312,7 @@ const abilityDefinitionBody = {
     "costs",
     "cooldown",
     "cancellation",
-    "statPolicy",
-    "capturedStatIds",
+    "statCaptures",
     "effects",
   ],
 } as const satisfies JSONSchemaType<AbilityContentDefinition>;
@@ -357,6 +370,23 @@ export const tagRegistrySchema = {
   },
   required: ["schemaVersion", "contentVersion", "kind", "entries"],
 } as const satisfies JSONSchemaType<TagRegistry>;
+
+export const effectExecutorRegistrySchema = {
+  $schema: META_SCHEMA,
+  $id: `${SCHEMA_ROOT}/effect-executor-registry.schema.json`,
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    schemaVersion: versionSchema,
+    contentVersion: versionSchema,
+    kind: { type: "string", const: "effect-executor-registry" },
+    entries: {
+      type: "array",
+      items: effectExecutorDefinitionSchema,
+    },
+  },
+  required: ["schemaVersion", "contentVersion", "kind", "entries"],
+} as const satisfies JSONSchemaType<EffectExecutorRegistry>;
 
 export const assetRegistrySchema = {
   $schema: META_SCHEMA,
@@ -467,8 +497,12 @@ export const compiledRegistriesChunkSchema = {
     assets: { type: "array", items: assetDefinitionSchema },
     stats: { type: "array", items: statDefinitionSchema },
     tags: { type: "array", items: tagDefinitionSchema },
+    effectExecutors: {
+      type: "array",
+      items: effectExecutorDefinitionSchema,
+    },
   },
-  required: ["assets", "stats", "tags"],
+  required: ["assets", "stats", "tags", "effectExecutors"],
 } as const satisfies JSONSchemaType<CompiledRegistriesChunk>;
 
 export const compiledTechnicalDefinitionsChunkSchema = {
@@ -506,6 +540,7 @@ export const CONTENT_SCHEMAS = {
   "compiled-registries-chunk.schema.json": compiledRegistriesChunkSchema,
   "compiled-technical-definitions-chunk.schema.json":
     compiledTechnicalDefinitionsChunkSchema,
+  "effect-executor-registry.schema.json": effectExecutorRegistrySchema,
   "project.schema.json": projectSchema,
   "stat-registry.schema.json": statRegistrySchema,
   "tag-registry.schema.json": tagRegistrySchema,
@@ -514,6 +549,7 @@ export const CONTENT_SCHEMAS = {
 
 export const SOURCE_SCHEMA_BY_KIND = {
   "ability-definition": abilityDefinitionSchema,
+  "effect-executor-registry": effectExecutorRegistrySchema,
   project: projectSchema,
   "stat-registry": statRegistrySchema,
   "tag-registry": tagRegistrySchema,

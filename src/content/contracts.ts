@@ -39,6 +39,15 @@ export interface TagRegistry extends VersionedDocument {
   readonly entries: readonly TagDefinition[];
 }
 
+export interface EffectExecutorDefinition {
+  readonly id: StableId;
+}
+
+export interface EffectExecutorRegistry extends VersionedDocument {
+  readonly kind: "effect-executor-registry";
+  readonly entries: readonly EffectExecutorDefinition[];
+}
+
 export const ASSET_TYPES = ["audio", "data", "image"] as const;
 export type AssetType = (typeof ASSET_TYPES)[number];
 
@@ -116,8 +125,10 @@ export interface AbilityContentDefinition extends VersionedDocument {
     readonly refund: "none" | "reserved" | "all";
     readonly cooldown: "retain" | "clear";
   };
-  readonly statPolicy: "snapshot" | "live";
-  readonly capturedStatIds: readonly StableId[];
+  readonly statCaptures: readonly {
+    readonly subject: "source" | "target";
+    readonly statId: StableId;
+  }[];
   readonly effects: readonly AbilityEffectContent[];
 }
 
@@ -125,6 +136,7 @@ export type ContentDocument =
   | AbilityContentDefinition
   | AssetRegistry
   | ContentProject
+  | EffectExecutorRegistry
   | StatRegistry
   | TagRegistry
   | TechnicalDefinition;
@@ -143,6 +155,7 @@ export interface ValidatedContent {
   readonly tags: readonly TagDefinition[];
   readonly definitions: readonly TechnicalDefinition[];
   readonly abilities: readonly AbilityContentDefinition[];
+  readonly effectExecutors: readonly EffectExecutorDefinition[];
   readonly sourceHash: string;
 }
 
@@ -165,6 +178,7 @@ export interface CompiledRegistriesChunk {
   readonly assets: readonly AssetDefinition[];
   readonly stats: readonly StatDefinition[];
   readonly tags: readonly TagDefinition[];
+  readonly effectExecutors: readonly EffectExecutorDefinition[];
 }
 
 export type CompiledTechnicalDefinitionsChunk = readonly TechnicalDefinition[];

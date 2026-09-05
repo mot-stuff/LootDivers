@@ -135,6 +135,7 @@ describe("schema and TypeScript contract alignment", () => {
       assets: [],
       stats: [],
       tags: [],
+      effectExecutors: [],
     };
     const ajv = new Ajv2020({ allErrors: true, strict: true });
 
@@ -161,8 +162,7 @@ describe("schema and TypeScript contract alignment", () => {
         refund: "reserved",
         cooldown: "retain",
       },
-      statPolicy: "snapshot",
-      capturedStatIds: ["fixture:power"],
+      statCaptures: [{ subject: "source", statId: "fixture:power" }],
       effects: [
         {
           kind: "custom",

@@ -301,7 +301,11 @@ describe("content validation", () => {
       [{ resourceId: "fixture:missing", amount: 1, settlement: "pay" }],
       "STAT_UNKNOWN",
     ],
-    ["capturedStatIds", ["fixture:missing"], "STAT_UNKNOWN"],
+    [
+      "statCaptures",
+      [{ subject: "source", statId: "fixture:missing" }],
+      "STAT_UNKNOWN",
+    ],
     [
       "effects",
       [
@@ -319,14 +323,66 @@ describe("content validation", () => {
     await expectDiagnostic(code, "fixtures/ability-contract.json");
   });
 
-  it("requires live abilities to read stats live rather than capture them", async () => {
+  it("rejects target stat captures without entity targeting", async () => {
     await mutate("fixtures/ability-contract-child.json", (ability) => {
-      ability.capturedStatIds = ["fixture:power"];
+      ability.statCaptures = [{ subject: "target", statId: "fixture:power" }];
     });
     await expectDiagnostic(
-      "STAT_POLICY_INVALID",
+      "TARGETING_INVALID",
       "fixtures/ability-contract-child.json",
-      "/capturedStatIds",
+      "/statCaptures",
+    );
+  });
+
+  it("rejects unavailable custom executor kinds", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.effects = [
+        {
+          kind: "custom",
+          executorKind: "fixture:missing-executor",
+          parameters: [],
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "EXECUTOR_UNKNOWN",
+      "fixtures/ability-contract.json",
+      "/effects/0/executorKind",
+    );
+  });
+
+  it("rejects target-recipient effects without entity targeting", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.effects = [
+        {
+          kind: "modify-resource",
+          resourceId: "fixture:mana",
+          amount: 1,
+          recipient: "target",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "TARGETING_INVALID",
+      "fixtures/ability-contract.json",
+      "/effects/0/recipient",
+    );
+  });
+
+  it("rejects costs above the registered attainable maximum", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.costs = [
+        {
+          resourceId: "fixture:mana",
+          amount: 101,
+          settlement: "pay",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "RESOURCE_COST_UNATTAINABLE",
+      "fixtures/ability-contract.json",
+      "/costs/0/amount",
     );
   });
 

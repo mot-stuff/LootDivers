@@ -173,20 +173,29 @@
           "cooldown"
         ]
       },
-      "statPolicy": {
-        "type": "string",
-        "enum": [
-          "snapshot",
-          "live"
-        ]
-      },
-      "capturedStatIds": {
+      "statCaptures": {
         "type": "array",
         "maxItems": 32,
-        "uniqueItems": true,
         "items": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "subject": {
+              "type": "string",
+              "enum": [
+                "source",
+                "target"
+              ]
+            },
+            "statId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+            }
+          },
+          "required": [
+            "subject",
+            "statId"
+          ]
         }
       },
       "effects": {
@@ -313,8 +322,7 @@
       "costs",
       "cooldown",
       "cancellation",
-      "statPolicy",
-      "capturedStatIds",
+      "statCaptures",
       "effects"
     ]
   }
