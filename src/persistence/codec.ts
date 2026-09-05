@@ -6,7 +6,9 @@ import {
   SAVE_FORMAT,
   type ChecksumProvider,
   type FixtureSaveState,
+  type SaveChecksum,
   type SaveClock,
+  type SaveEnvelopeCodec,
   type SaveEnvelopeV1,
   type SaveEnvelopeV2,
   type SaveMetadata,
@@ -18,7 +20,11 @@ export interface DecodedSave {
   readonly migratedFromVersion: number | null;
 }
 
-async function checksumEnvelope(
+/**
+ * Verifies an untrusted envelope's checksum against its canonical JSON.
+ * Shared by every envelope format (fixture and character saves).
+ */
+export async function verifyEnvelopeChecksum(
   value: unknown,
   checksumProvider: ChecksumProvider,
 ): Promise<void> {
@@ -136,7 +142,7 @@ export async function decodeSaveEnvelope(
   checksumProvider: ChecksumProvider,
   clock: SaveClock,
 ): Promise<DecodedSave> {
-  await checksumEnvelope(value, checksumProvider);
+  await verifyEnvelopeChecksum(value, checksumProvider);
   const envelope = validateEnvelopeStructure(value);
 
   if (envelope.formatVersion === CURRENT_SAVE_VERSION) {
@@ -164,3 +170,39 @@ export function parseSaveJson(serializedEnvelope: string): unknown {
 export function serializeSaveEnvelope(envelope: SaveEnvelopeV2): string {
   return `${canonicalJson(envelope)}\n`;
 }
+
+/**
+ * Signs an unsigned envelope of any format with the shared canonical-JSON
+ * SHA-256 checksum (TASK-705: reused by the character save codec).
+ */
+export async function signEnvelope<T extends Record<string, unknown>>(
+  unsigned: T,
+  checksumProvider: ChecksumProvider,
+): Promise<T & { readonly checksum: SaveChecksum }> {
+  const digest = await checksumProvider.digest(canonicalJson(unsigned));
+  return {
+    ...unsigned,
+    checksum: { algorithm: CHECKSUM_ALGORITHM, value: digest },
+  };
+}
+
+/**
+ * The Phase 0 fixture envelope's codec, expressed through the shared
+ * repository seam so `IndexedDbSaveRepository` stays payload-agnostic.
+ */
+export const FIXTURE_SAVE_CODEC: SaveEnvelopeCodec<
+  FixtureSaveState,
+  SaveEnvelopeV2
+> = {
+  create: (state, metadata, checksumProvider) =>
+    createSaveEnvelope(state, metadata, checksumProvider),
+  async decode(value, checksumProvider, clock) {
+    const decoded = await decodeSaveEnvelope(value, checksumProvider, clock);
+    return {
+      envelope: decoded.envelope,
+      state: decoded.envelope.payload.fixture,
+      migratedFromVersion: decoded.migratedFromVersion,
+    };
+  },
+  serialize: (envelope) => serializeSaveEnvelope(envelope),
+};

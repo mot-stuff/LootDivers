@@ -115,6 +115,20 @@ export class TutorialTracker {
     this.#inZone = false;
   }
 
+  /** Banked steps in canonical order, for the character save DTO. */
+  public bankedSteps(): readonly TutorialStepId[] {
+    return TUTORIAL_STEP_IDS.filter((id) => this.#banked.has(id));
+  }
+
+  /**
+   * Replaces banked progress from a validated save. Zone receptiveness is
+   * not part of the snapshot; the arena re-applies it on zone entry.
+   */
+  public restore(steps: readonly TutorialStepId[]): void {
+    this.#banked.clear();
+    for (const step of steps) this.#banked.add(step);
+  }
+
   public readModel(): TutorialReadModel {
     const currentIndex = TUTORIAL_STEPS.findIndex(
       (step) => !this.#banked.has(step.id),

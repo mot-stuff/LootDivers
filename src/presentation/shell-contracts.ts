@@ -101,6 +101,8 @@ export interface CombatHudReadModel {
   readonly activeStatuses: readonly CombatStatusHudReadModel[];
   readonly gatheringLabel: string | null;
   readonly gatheringProgress: number;
+  /** Stable zone id; the TASK-705 save trigger watches it for travel. */
+  readonly zoneId: string;
   readonly zoneName: string;
   readonly questLabel: string | null;
   /** Active tutorial prompt; null outside the tutorial or once completed. */

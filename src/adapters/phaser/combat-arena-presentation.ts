@@ -3,6 +3,7 @@ import Phaser from "phaser";
 import {
   BASIC_CLEAVE_ID,
   CombatArenaSimulation,
+  type CharacterSave,
   CINDER_DART_ID,
   DEFIANT_SIGNAL_ID,
   FIXED_STEP_SECONDS,
@@ -400,6 +401,22 @@ export class CombatArenaPresentation {
   public travelTo(zoneId: string): void {
     if (!isZoneId(zoneId)) return;
     if (!this.#simulation.travelTo(zoneId).accepted) return;
+    this.drawArena();
+    this.render(0, true);
+  }
+
+  /** Captures the TASK-705 character save DTO from the live simulation. */
+  public captureCharacterSave(): CharacterSave {
+    return this.#simulation.captureCharacterSave();
+  }
+
+  /**
+   * Restores a loaded character save into the simulation and refreshes the
+   * zone drawing and every HUD channel, mirroring `travelTo`. Throws
+   * `RangeError` when the save fails core validation.
+   */
+  public restoreCharacterSave(save: CharacterSave): void {
+    this.#simulation.restoreCharacterSave(save);
     this.drawArena();
     this.render(0, true);
   }
@@ -1105,6 +1122,7 @@ export class CombatArenaPresentation {
         state.gathering === null || state.gathering.totalTicks === 0
           ? 0
           : 1 - state.gathering.ticksRemaining / state.gathering.totalTicks,
+      zoneId: state.zoneId,
       zoneName: state.zoneName,
       questLabel:
         state.quest.stage === "inactive"

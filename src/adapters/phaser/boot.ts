@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 
-import type { DamageResult, LoadoutSlot } from "../../core";
+import type { CharacterSave, DamageResult, LoadoutSlot } from "../../core";
 import type {
   CanvasViewportReadModel,
   CharacterHudReadModel,
@@ -281,6 +281,20 @@ class TechnicalWorldScene extends Phaser.Scene {
     }
     return this.#combat.applyPlayerDamage(amount);
   }
+
+  public captureCombatCharacterSave(): CharacterSave {
+    if (this.#combat === null) {
+      throw new Error("Combat prototype is not active.");
+    }
+    return this.#combat.captureCharacterSave();
+  }
+
+  public restoreCombatCharacterSave(save: CharacterSave): void {
+    if (this.#combat === null) {
+      throw new Error("Combat prototype is not active.");
+    }
+    this.#combat.restoreCharacterSave(save);
+  }
 }
 
 export interface TechnicalWorldController {
@@ -330,6 +344,8 @@ export interface PhaserBootResult {
     executeProfessionCommand(command: ProfessionUiCommand): void;
     executeWorldCommand(command: WorldUiCommand): void;
     applyPlayerDamage(amount: number): DamageResult;
+    captureCharacterSave(): CharacterSave;
+    restoreCharacterSave(save: CharacterSave): void;
   };
   resize(viewport: CanvasViewportReadModel): void;
 }
@@ -436,6 +452,10 @@ export function bootPhaser(
                 },
                 applyPlayerDamage: (amount) =>
                   scene.applyCombatPlayerDamage(amount),
+                captureCharacterSave: () => scene.captureCombatCharacterSave(),
+                restoreCharacterSave: (save) => {
+                  scene.restoreCombatCharacterSave(save);
+                },
               },
               resize(viewport) {
                 scene.invalidateFixtureSample("viewport-resized");

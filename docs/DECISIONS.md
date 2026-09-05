@@ -2491,3 +2491,89 @@ CI green means: typecheck, lint, content checks, unit, component, build,
 and the e2e suite minus eight skips on three browser engines. Firefox
 coverage and the skipped specs are validated only in the local gate, so
 task completion reports must keep running the full matrix locally.
+
+---
+
+# DEC-034
+
+## Character save: core-owned DTO, envelope codec seam, single local slot
+
+Date: 2026-09-05 (TASK-705)
+
+## Decision
+
+1. **The character save DTO lives in core** (`src/core/character-save.ts`).
+   `CharacterSave` is pure JSON-safe data capturing the complete persistent
+   character: current zone, quest stage, banked tutorial steps (DEC-030
+   amendment), progression (level/XP/attributes/passives/unspent points),
+   profession levels and XP, all item locations (48-slot inventory layout,
+   worn equipment, flasks), owned abilities, loadout assignments, and the
+   instance-ID generator positions (craft/vendor/material serials plus the
+   deterministic loot generator's seed, sequence counters, and Mulberry32
+   state). `parseCharacterSave` — also core — validates untrusted values
+   field by field against the content catalogs, so a value that parses is
+   guaranteed restorable. This respects the DEC-005 boundary (persistence
+   imports core, never the reverse) and keeps the DTO backend-agnostic per
+   DEC-032: the envelope wrapping it is the blob a future backend stores
+   verbatim behind the same repository port.
+2. **The DEC-014 repository is generalized, not forked.**
+   `IndexedDbSaveRepository` is now generic over payload/envelope types and
+   receives a `SaveEnvelopeCodec` (create/decode/serialize). The Phase 0
+   fixture envelope became `FIXTURE_SAVE_CODEC` with zero behavior change;
+   the character envelope (`rarpg-character-save`, format version 1, no
+   migrations yet) is a second codec built from the same exported field
+   validators, checksum signing, and ordered-migration semantics. One
+   generation/backup/checksum machine now serves both formats.
+3. **One local save slot, its own database.** The character slot writes to
+   `rarpg-character-save-v1` / `character:slot-1`, separate from the Phase 0
+   fixture database so the two envelopes never share generation rotation.
+4. **Save triggers: zone travel and page hide.** A zone-ID change observed
+   on the combat HUD read model persists the character (this includes New
+   Game's travel into the tutorial zone, which is how New Game overwrites
+   the slot — there is no explicit delete). `pagehide`/`visibilitychange`
+   also persist, but only after gameplay has started and never while the
+   player is dead, so an idle main menu or a death screen can never
+   clobber a good save. Saves are fire-and-forget with `console.warn` on
+   failure: local persistence stays best-effort (DEC-014).
+5. **Load on boot resolves the DEC-031 Continue deferral.** Boot attempts
+   one load; missing, corrupt, checksum-failing, or newer-versioned slots
+   all read as "no save" (Continue stays disabled, no crash) while backup
+   recovery surfaces as a menu note. Continue restores the simulation via
+   `CombatArenaSimulation.restoreCharacterSave`, which re-validates,
+   resets transient state, restores persistent state, refills vitals, and
+   re-enters the saved zone at its spawn point (DEC-030 re-entry
+   semantics).
+
+## Deliberately not persisted
+
+Player position (zone re-entry spawns at the zone's entry point), health
+and mana (refilled to recomputed maximums), enemies, ground loot, ability
+cooldowns and in-flight executions, status effects, gathering progress,
+node charges, and open forge/vendor UI. All of it is transient combat
+state that normal zone entry already reconstructs, and persisting it would
+couple the save format to per-tick simulation internals.
+
+## Alternatives Considered
+
+- Extending the fixture envelope with a character payload variant:
+  rejected; the fixture is a Phase 0 technical artifact and mixing
+  payloads in one format/database would entangle generation rotation and
+  migration histories.
+- Duplicating the repository for the character format: rejected as a DEC-014
+  fork; the codec seam keeps one tested storage machine.
+- Persisting full transient combat state (position, cooldowns, enemies):
+  rejected; save points are zone-granular by design and the DTO stays
+  stable across combat-internal refactors.
+- An explicit "delete save" on New Game: rejected for now; the single slot
+  is overwritten at the first save trigger, and the menu's confirmation UX
+  is deferred until multi-character support is on the table.
+
+## Consequences
+
+- The Continue button enables whenever a valid save exists; its note line
+  distinguishes fresh, resumable, and backup-recovered saves.
+- Version bumps happen on the envelope (`formatVersion`), with ordered
+  migrations and provenance identical to the fixture format; the migration
+  chain is exercised by unit tests through an injected synthetic v1→v2.
+- TASK-707's backend adapter implements the same `SaveRepository` port and
+  ships the same envelope bytes; no DTO change is expected.

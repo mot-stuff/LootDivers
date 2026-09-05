@@ -69,6 +69,7 @@ import {
   type ProfessionReadModel,
   type WorldInteractableKind,
 } from "./professions";
+import { parseCharacterSave, type CharacterSave } from "./character-save";
 import { TutorialTracker, type TutorialReadModel } from "./tutorial";
 import {
   ASHTRAIL_ENEMY,
@@ -489,7 +490,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   #forgeOpen = false;
   #nextCraftSerial = 1;
   #nextMaterialSerial = 1;
-  readonly #lootGenerator: DeterministicEnemyLootGenerator;
+  #lootGenerator: DeterministicEnemyLootGenerator;
   readonly #worldLoot: WorldLootDrop[] = [];
   readonly #events: CombatArenaEvent[] = [];
   readonly #attackHitTargets = new Set<string>();
@@ -1186,6 +1187,61 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
   public drainEvents(): readonly CombatArenaEvent[] {
     return this.#events.splice(0);
+  }
+
+  /**
+   * Captures the complete persistent character as the TASK-705 save DTO
+   * (DEC-034). Safe at any time; transient combat state (position, vitals,
+   * enemies, ground loot, cooldowns, statuses) is intentionally excluded —
+   * `restoreCharacterSave` reconstructs it through normal zone entry.
+   */
+  public captureCharacterSave(): CharacterSave {
+    return {
+      zoneId: this.#zoneId,
+      questStage: this.#questStage,
+      tutorialBankedSteps: this.#tutorial.bankedSteps(),
+      progression: this.#progression.snapshot(),
+      professions: this.#professions.snapshot(),
+      items: this.#characterItems.snapshot(),
+      generators: {
+        craftSerial: this.#nextCraftSerial,
+        vendorSerial: this.#nextVendorSerial,
+        materialSerial: this.#nextMaterialSerial,
+        loot: this.#lootGenerator.snapshot(),
+      },
+    };
+  }
+
+  /**
+   * Rebuilds the simulation from a save DTO: transient state is reset,
+   * persistent state (progression, professions, items, quest, banked
+   * tutorial steps, instance-ID generators) is replaced, vitals refill to
+   * their recomputed maximums, and the session re-enters the saved zone at
+   * its spawn point (respawning that zone's encounter, mirroring DEC-030
+   * re-entry semantics). The value is re-validated via `parseCharacterSave`;
+   * invalid saves throw `RangeError` and leave no partial restore observable
+   * to callers that treat the throw as a failed load.
+   */
+  public restoreCharacterSave(save: CharacterSave): void {
+    const parsed = parseCharacterSave(save);
+    this.reset();
+    this.#progression.restore(parsed.progression);
+    this.#professions.restore(parsed.professions);
+    this.#characterItems.restore(parsed.items);
+    this.#tutorial.restore(parsed.tutorialBankedSteps);
+    this.#questStage = parsed.questStage;
+    this.#nextCraftSerial = parsed.generators.craftSerial;
+    this.#nextVendorSerial = parsed.generators.vendorSerial;
+    this.#nextMaterialSerial = parsed.generators.materialSerial;
+    this.#lootGenerator = DeterministicEnemyLootGenerator.fromSnapshot(
+      parsed.generators.loot,
+      this.config.loot.rarityWeights,
+    );
+    this.synchronizeCharacterResources();
+    this.#playerHealth.reset();
+    this.#manaMaximumSubunits = this.manaMaximumSubunits();
+    this.#manaSubunits = this.#manaMaximumSubunits;
+    this.travelTo(parsed.zoneId);
   }
 
   public diagnostics(): CombatArenaDiagnostics {

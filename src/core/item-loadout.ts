@@ -67,7 +67,22 @@ export interface StoneConsumptionResult {
   readonly reason?: StoneConsumptionFailure;
 }
 
-const LOADOUT_SLOTS: readonly LoadoutSlot[] = ["lmb", "q", "e", "r"];
+export const LOADOUT_SLOTS: readonly LoadoutSlot[] = ["lmb", "q", "e", "r"];
+
+/**
+ * Serializable item/ability state for the character save DTO (TASK-705).
+ * Equipment and flask records carry only occupied slots; inventory keeps
+ * its full 48-slot layout including empty positions.
+ */
+export interface CharacterItemsSnapshot {
+  readonly inventory: readonly (ItemInstance | null)[];
+  readonly equipment: Readonly<
+    Partial<Record<EquipmentSlot, EquipmentItemInstance>>
+  >;
+  readonly flasks: Readonly<Partial<Record<FlaskSlot, EquipmentItemInstance>>>;
+  readonly ownedAbilities: readonly CombatAbilityId[];
+  readonly loadout: Readonly<Record<LoadoutSlot, CombatAbilityId | null>>;
+}
 
 function emptyEquipment(): Record<EquipmentSlot, EquipmentItemInstance | null> {
   const equipment = {} as Record<EquipmentSlot, EquipmentItemInstance | null>;
@@ -161,6 +176,49 @@ export class CharacterItemLoadout {
     return IMPLEMENTED_ABILITY_CATALOG.filter((id) =>
       this.#ownedAbilities.has(id),
     );
+  }
+
+  public snapshot(): CharacterItemsSnapshot {
+    const equipment: Partial<Record<EquipmentSlot, EquipmentItemInstance>> = {};
+    for (const slot of EQUIPMENT_SLOTS) {
+      const item = this.#equipment[slot];
+      if (item !== null) equipment[slot] = item;
+    }
+    const flasks: Partial<Record<FlaskSlot, EquipmentItemInstance>> = {};
+    for (const slot of FLASK_SLOTS) {
+      const item = this.#flasks[slot];
+      if (item !== null) flasks[slot] = item;
+    }
+    return {
+      inventory: this.#inventory.slots(),
+      equipment,
+      flasks,
+      ownedAbilities: this.ownedAbilities(),
+      loadout: { ...this.#loadout },
+    };
+  }
+
+  /**
+   * Replaces all item locations, learned abilities, and slot assignments
+   * from a snapshot. Callers validate the snapshot first (see
+   * `parseCharacterSave`); item instances are immutable data and are
+   * adopted by reference.
+   */
+  public restore(snapshot: CharacterItemsSnapshot): void {
+    this.#inventory.restoreSlots(snapshot.inventory);
+    for (const slot of EQUIPMENT_SLOTS) {
+      this.#equipment[slot] = snapshot.equipment[slot] ?? null;
+    }
+    for (const slot of FLASK_SLOTS) {
+      this.#flasks[slot] = snapshot.flasks[slot] ?? null;
+    }
+    this.#ownedAbilities.clear();
+    for (const abilityId of snapshot.ownedAbilities) {
+      this.#ownedAbilities.add(abilityId);
+    }
+    for (const slot of LOADOUT_SLOTS) {
+      this.#loadout[slot] = snapshot.loadout[slot];
+    }
   }
 
   public materialCount(materialId: ContentId): number {
