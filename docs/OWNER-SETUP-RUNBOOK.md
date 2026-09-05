@@ -127,6 +127,13 @@ token. Create it:
 4. Account Resources: Include → your account.
 5. Continue → Create Token → **copy the token now** (it is shown once).
 
+**NEVER paste the real token or account ID into this file or any other
+repo file — they belong only in the GitHub secrets below.** (A pasted
+token was caught here by push protection on 2026-09-05 and removed;
+that token should be rolled: Cloudflare → My Profile → API Tokens →
+"..." on `lootdivers-pages-deploy` → Roll, then update the GitHub
+secret.)
+
 Find your Account ID:
 
 1. Cloudflare dashboard → **Workers & Pages** (or any zone Overview
@@ -194,11 +201,11 @@ type $env:USERPROFILE\.ssh\id_ed25519.pub
 Back on the **droplet**:
 
 ```bash
-mkdir -p /home/<you>/.ssh
-nano /home/<you>/.ssh/authorized_keys   # paste the public key line, save (Ctrl+O, Enter, Ctrl+X)
-chmod 700 /home/<you>/.ssh
-chmod 600 /home/<you>/.ssh/authorized_keys
-chown -R <you>:<you> /home/<you>/.ssh
+mkdir -p /home/tom/.ssh
+nano /home/tom/.ssh/authorized_keys   # paste the public key line, save (Ctrl+O, Enter, Ctrl+X)
+chmod 700 /home/tom/.ssh
+chmod 600 /home/tom/.ssh/authorized_keys
+chown -R tom:tom /home/tom/.ssh
 ```
 
 **Open a NEW terminal and confirm `ssh <you>@<droplet-ip>` works and that
@@ -283,7 +290,7 @@ docker compose version
 Let your admin user run docker without sudo:
 
 ```bash
-sudo usermod -aG docker <you>
+sudo usermod -aG docker tom
 # log out and back in, then verify:
 docker ps
 ```
@@ -400,45 +407,65 @@ and **nothing running on the droplet yet**.
 
 # Part B — Do WHEN THE API SHIPS (TASK-707)
 
-Do not perform these now. The API, its `docker-compose.yml`, the Caddy
-config, and the deploy script will live in this repo when TASK-707 is
-implemented; these steps are what only you will need to do at that point.
-They are listed now so you can see the full shape of your commitment.
+Do not perform these now. Refreshed 2026-09-05 to match the layout the
+TASK-707 packet mandates (see `docs/tasks/PHASE8-KICKOFF.md`): a `server/`
+workspace in this repo containing the Fastify API, SQL migrations (run
+automatically when the API starts — you never run migrations by hand),
+`docker-compose.yml`, `Caddyfile`, `backup.sh`, and `deploy.sh`. The
+deploy workflow checks the repo out on the droplet at
+`/opt/lootdivers/app` and runs Compose from `/opt/lootdivers/app/server`.
+If TASK-707's implementation deviates, updating this Part B is inside
+that task's acceptance criteria — trust this file at the moment 707
+merges.
 
 ## Step 12 — Create the server `.env`
 
-On the droplet, in `/opt/lootdivers` (exact variable names will be
-specified by the TASK-707 completion report):
+On the droplet. The `.env` lives OUTSIDE the checkout (so deploys never
+touch it):
 
 ```bash
+mkdir -p /opt/lootdivers
 cd /opt/lootdivers
-# generate a strong database password and keep it only in this file
+
+# Database password: generated once, never typed again (the compose file
+# passes it to Postgres and the API).
 echo "POSTGRES_PASSWORD=$(openssl rand -base64 32)" > .env
+
+# Your real domain (no placeholder!) — the API uses it for CORS and
+# cookie scope:
+echo "APP_DOMAIN=<yourdomain.com>" >> .env
+
 chmod 600 .env
 ```
 
 ## Step 13 — First start of the API stack
 
+The first deploy (Step 15) normally does this for you; these are the
+manual equivalents and the health checks:
+
 ```bash
-cd /opt/lootdivers
-docker compose up -d
+cd /opt/lootdivers/app/server
+docker compose --env-file /opt/lootdivers/.env up -d
 docker compose ps          # expect postgres, api, caddy all "running"
-docker compose logs --tail=50 api
+docker compose logs --tail=50 api   # look for "migrations applied" and "listening"
 ```
 
-Postgres data lives in a named Docker volume; the compose file will mount
-`/opt/lootdivers/certs` into Caddy for the Step 9 origin certificate.
+Postgres data lives in a named Docker volume (`pgdata`); the compose file
+mounts `/opt/lootdivers/certs` into Caddy for the Step 9 origin
+certificate. Migrations run automatically at API startup — a clean boot
+log means the schema exists.
 
 ## Step 14 — Daily database backups
 
-The repo will ship a backup script (`pg_dump` from the running container
+The repo ships `server/backup.sh` (`pg_dump` from the running container
 into `/opt/lootdivers/backups`, dated, with retention). Your step is just
 scheduling it:
 
 ```bash
+mkdir -p /opt/lootdivers/backups
 sudo crontab -u deploy -e
 # add (3:17 AM server time daily):
-17 3 * * * /opt/lootdivers/backup.sh >> /opt/lootdivers/backups/backup.log 2>&1
+17 3 * * * /opt/lootdivers/app/server/backup.sh >> /opt/lootdivers/backups/backup.log 2>&1
 ```
 
 Occasionally copy a dump off the droplet (your machine or DO Spaces) —
@@ -450,16 +477,17 @@ Trigger: merge the TASK-707 PR to main (or re-run the deploy workflow).
 Then verify from your Windows machine:
 
 ```powershell
-# Health endpoint through Cloudflare (proves DNS + proxy + Caddy + API)
+# Health endpoint through Cloudflare (proves DNS + proxy + Caddy + API + DB)
 curl.exe -s https://api.<yourdomain.com>/healthz
 
-# TLS mode sanity: page loads over HTTPS with no certificate warnings
+# TLS mode sanity: loads over HTTPS with no certificate warnings
 curl.exe -sI https://api.<yourdomain.com>/healthz | Select-String "HTTP"
 ```
 
-And the full loop in the game: create an account, save a character, open
-the game on a different browser/machine, log in, Continue — the character
-is there.
+And the full loop in the game: sign up on the homepage, create a
+character (name it, admire the barbarian), play until a zone travel saves
+it, open the game on a different browser/machine, log in — the character
+is in your list and continues where the save left it.
 
 ---
 

@@ -523,6 +523,12 @@ Core snapshot/restore, persistence envelope/repository, shell contracts,
 
 ## TASK-707 — Accounts and Cloud Saves on the Droplet (epic, coarse)
 
+> **Superseded in detail (2026-09-05):** the authoritative TASK-707
+> packet — with the full v1 API contract (character create, name/class
+> columns, four slots), sequencing, and sibling gameplay tasks — is
+> `docs/tasks/PHASE8-KICKOFF.md`. The stack and stance below remain
+> accurate; the surface grew per the owner's Phase 8 directive.
+
 ### Owner
 
 Director decomposes at kickoff; expected split: Gameplay Engineer (API
