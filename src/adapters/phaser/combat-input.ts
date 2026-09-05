@@ -1,6 +1,14 @@
 import Phaser from "phaser";
 
-import type { LoadoutSlot } from "../../core";
+import type { FlaskSlot, LoadoutSlot } from "../../core";
+
+/** Digit keys 1–4 map onto the four flask slots (TASK-711, DEC-038). */
+const FLASK_KEY_CODES: Readonly<Record<string, FlaskSlot>> = {
+  Digit1: "flask-1",
+  Digit2: "flask-2",
+  Digit3: "flask-3",
+  Digit4: "flask-4",
+};
 
 export interface CombatInputSnapshot {
   readonly movementX: number;
@@ -10,6 +18,7 @@ export interface CombatInputSnapshot {
   readonly hasPointer: boolean;
   readonly dodgeRequested: boolean;
   readonly abilitySlotsRequested: readonly LoadoutSlot[];
+  readonly flaskSlotsRequested: readonly FlaskSlot[];
   readonly lootPickupRequested: boolean;
 }
 
@@ -20,6 +29,7 @@ export class CombatInputAdapter {
   #hasPointer = false;
   #dodgeRequested = false;
   readonly #abilitySlotsRequested: LoadoutSlot[] = [];
+  readonly #flaskSlotsRequested: FlaskSlot[] = [];
   #lootPickupRequested = false;
   readonly #keyDown = (event: KeyboardEvent): void => {
     if (!this.isGameplayFocused(event)) {
@@ -47,6 +57,11 @@ export class CombatInputAdapter {
         this.#abilitySlotsRequested.push(
           event.code === "KeyQ" ? "q" : event.code === "KeyE" ? "e" : "r",
         );
+      }
+      event.preventDefault();
+    } else if (FLASK_KEY_CODES[event.code] !== undefined) {
+      if (!event.repeat) {
+        this.#flaskSlotsRequested.push(FLASK_KEY_CODES[event.code]!);
       }
       event.preventDefault();
     }
@@ -117,10 +132,12 @@ export class CombatInputAdapter {
       hasPointer: this.#hasPointer,
       dodgeRequested: this.#dodgeRequested,
       abilitySlotsRequested: [...this.#abilitySlotsRequested],
+      flaskSlotsRequested: [...this.#flaskSlotsRequested],
       lootPickupRequested: this.#lootPickupRequested,
     };
     this.#dodgeRequested = false;
     this.#abilitySlotsRequested.length = 0;
+    this.#flaskSlotsRequested.length = 0;
     this.#lootPickupRequested = false;
     return snapshot;
   }
@@ -138,6 +155,7 @@ export class CombatInputAdapter {
     this.#held.clear();
     this.#dodgeRequested = false;
     this.#abilitySlotsRequested.length = 0;
+    this.#flaskSlotsRequested.length = 0;
     this.#lootPickupRequested = false;
   }
 

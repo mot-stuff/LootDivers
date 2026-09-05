@@ -404,6 +404,54 @@ body.combat-mode #app,
   border-color: var(--rarity-rare);
 }
 
+/* TASK-711 flask charge state (DEC-038): additive on the DEC-029 tokens. */
+.combat-flask-charges {
+  display: block;
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  margin-top: 0;
+  padding: 0.06rem 0.2rem;
+  border-radius: 0.25rem;
+  color: var(--ui-text-bright);
+  background: var(--ui-key-bg);
+  font-size: 0.52rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.combat-flask-slot[data-state="depleted"] {
+  border-style: dashed;
+  opacity: 0.65;
+}
+
+.combat-flask-slot[data-state="depleted"] .combat-flask-charges {
+  color: var(--ui-warn);
+}
+
+.combat-flask-slot[data-state="cooldown"] {
+  opacity: 0.8;
+}
+
+.combat-flask-slot[data-state="cooldown"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(8 12 18 / 45%);
+  pointer-events: none;
+}
+
+.combat-flask-feedback {
+  margin: 0.25rem 0 0;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--ui-border-dim);
+  border-radius: 0.3rem;
+  color: var(--ui-text-bright);
+  background: var(--ui-panel-bg-raised);
+  font-size: 0.56rem;
+  text-align: center;
+}
+
 .combat-ability {
   position: relative;
   display: flex;

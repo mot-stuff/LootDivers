@@ -2798,6 +2798,82 @@ Date: 2026-09-05 (TASK-710)
 
 ---
 
+# DEC-038
+
+## Flask drinking: keys 1–4, restore-over-time with a Sudden instant portion, transient charges
+
+Date: 2026-09-05 (TASK-711; numbers and the per-drink algorithm from the
+TASK-713 memo §1, which amended the kickoff draft's "instant restore")
+
+## Decision
+
+1. **Keys 1–4 drink the four equipped flask slots.** `Digit1`–`Digit4`
+   join the combat input adapter and require gameplay focus, so they are
+   inert in menus, in text entry, and while the canvas is unfocused. The
+   core command is `CombatArenaSimulation.useFlask(slot)`; the adapter
+   applies queued requests only while automation is unpaused, mirroring
+   ability slots.
+2. **Restore is over time, not instant (memo §1.1 amendment).** A drink
+   applies the flask's total recovery linearly over its effective
+   duration using a cumulative-rounding schedule (the applied total is
+   exactly the planned amount); the Sudden portion lands on the drink
+   tick. All six DEC-022 flask affixes are live: Brimming (flat
+   recovery), Sudden (instant portion), Fleetpour (shorter window, same
+   total), Deep Reserve (max charges), Thrifty (charges per drink,
+   floored at `FLASK_MINIMUM_CHARGES_USED = 1`), Reaping (charges on
+   kill). Every per-item value is read from the item instance's catalog
+   stats (`src/core/flasks.ts`); nothing is hardcoded in the arena.
+3. **No stacking; one recovery per resource.** Drinking while a
+   same-resource recovery runs replaces it and discards the unapplied
+   remainder; health and mana recoveries may run concurrently. Restores
+   clamp at maximum — overflow is lost. Death cancels active recoveries.
+4. **Charge economy per memo §1.3.** Bases hold 30 charges and spend 20
+   per drink (catalog values). Every player kill feeds
+   `FLASK_BASE_CHARGES_GAINED_ON_KILL = 5` (+Reaping) to each equipped
+   flask independently, clamped at that flask's maximum. A shared
+   `FLASK_DRINK_SHARED_COOLDOWN_TICKS = 18` (0.3 s) cooldown spans all
+   four slots to stop same-tick burst-drinking.
+5. **Rejections spend nothing.** Dead player, empty slot, shared
+   cooldown, insufficient charges, and full target resource each reject
+   the drink with feedback (HUD toast from `lastFlaskResult`) and change
+   no other state.
+6. **Charges are transient (DEC-034).** Never serialized; refilled to
+   full on zone entry, respawn, and reset (`applyZone`/`reset` call the
+   shared refill, which also clears recoveries and the cooldown). The
+   save DTO is unchanged. A newly equipped flask instance starts full.
+7. **HUD.** The combat action bar's flask row is now driven by the core
+   read model (`CombatHudReadModel.flasks`): keybind label, name,
+   rarity, `charges/max`, and a `ready`/`cooldown`/`depleted`/`empty`
+   state rendered additively with the DEC-029 tokens.
+
+## Alternatives Considered
+
+- Pure instant restore (the kickoff draft): rejected by the memo — it
+  would leave the shipped Sudden and Fleetpour affixes and the catalog
+  duration stat dead, and makes flasks a free undo button.
+- Per-slot drink cooldowns: rejected; charges are the real limiter and
+  the short shared cooldown only blocks same-tick multi-slot bursts.
+- Persisting charges in the save: rejected (DEC-034 transient combat
+  state); zone entry refills make persistence meaningless anyway.
+- Keeping charges when a flask is swapped mid-zone: rejected for v1;
+  charge state is keyed to the equipped instance and a swapped-in flask
+  starts full. Swap-to-refill is bounded by inventory flasks and the
+  zone-entry refill already grants the same outcome; revisit if flask
+  juggling becomes degenerate.
+
+## Consequences
+
+- `HealthPool` gained a `heal()` (clamping, dead pools never heal) — the
+  first healing path in the game; future regen/leech reuse it.
+- The flask row moved from the inventory read model to the combat HUD
+  read model; the paper-doll flask slots are unchanged.
+- Kill feeding hooks `handleEnemyDeath`, so any future kill source that
+  routes through it (DoT, minions) feeds flasks automatically.
+- E2e can equip deterministic flasks via the `grantFlask`/`useFlask`
+  automation hooks without relying on loot RNG.
+
+---
+
 # DEC-039
 
 ## Gold: deterministic rank-scaled drops, walk-over collection, blob-resident wallet

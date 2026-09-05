@@ -20,7 +20,15 @@ import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
 import type { CombatPresentationDiagnostics } from "./adapters/phaser/combat-arena-presentation";
-import type { DamageResult, LoadoutSlot } from "./core";
+import {
+  contentId,
+  persistentInstanceId,
+  type DamageResult,
+  type EquipmentItemInstance,
+  type FlaskDrinkResult,
+  type FlaskSlot,
+  type LoadoutSlot,
+} from "./core";
 import type {
   FrameSampleSummary,
   RawFrameSamples,
@@ -108,6 +116,14 @@ declare global {
       executeProfessionCommand: (command: ProfessionUiCommand) => void;
       executeWorldCommand: (command: WorldUiCommand) => void;
       applyPlayerDamage: (amount: number) => DamageResult;
+      /** Drinks the flask in slot 1–4 (TASK-711). */
+      useFlask: (slotNumber: 1 | 2 | 3 | 4) => FlaskDrinkResult;
+      /**
+       * Grants a deterministic flask (Heartwell for "life", Mindwell for
+       * "mana", with a fixed low-tier Deep Reserve affix) and equips it
+       * into slot 1–4. Returns whether the equip was accepted.
+       */
+      grantFlask: (slotNumber: 1 | 2 | 3 | 4, kind: "life" | "mana") => boolean;
     };
     __RARPG_CHARACTER_SAVE_TEST__?: {
       saveNow: () => Promise<void>;
@@ -128,6 +144,43 @@ declare global {
       reset: () => Promise<void>;
     };
   }
+}
+
+function flaskSlotFromNumber(slotNumber: 1 | 2 | 3 | 4): FlaskSlot {
+  return `flask-${slotNumber}`;
+}
+
+/**
+ * Deterministic flask instances for the TASK-711 automation hook: catalog
+ * base stats plus a fixed low-roll Deep Reserve affix (commons carry
+ * exactly one affix), so e2e assertions can rely on exact recovery,
+ * duration, and charge numbers.
+ */
+let nextTestFlaskSerial = 1;
+function createTestFlask(kind: "life" | "mana"): EquipmentItemInstance {
+  return {
+    kind: "equipment",
+    instanceId: persistentInstanceId(
+      `item:test-flask-${nextTestFlaskSerial++}`,
+    ),
+    baseId: contentId(
+      kind === "life" ? "item:heartwell-flask" : "item:mindwell-flask",
+    ),
+    rarity: "common",
+    requiredLevel: 1,
+    origin: "loot",
+    affixes: [
+      {
+        affixId: contentId("affix:deep-reserve"),
+        tier: 5,
+        modifier: {
+          statId: contentId("stat:flask-charges"),
+          operation: "flat",
+          value: 4,
+        },
+      },
+    ],
+  };
 }
 
 function requireElement<T extends Element>(selector: string): T {
@@ -420,6 +473,13 @@ if (!support.supported) {
           },
           applyPlayerDamage: (amount) =>
             renderer.combat.applyPlayerDamage(amount),
+          useFlask: (slotNumber) =>
+            renderer.combat.useFlask(flaskSlotFromNumber(slotNumber)),
+          grantFlask: (slotNumber, kind) =>
+            renderer.combat.grantAndEquipFlask(
+              createTestFlask(kind),
+              flaskSlotFromNumber(slotNumber),
+            ),
         };
         // While the main menu is up the canvas stays unfocused so the
         // simulation remains paused; New Game focuses it after travel.
