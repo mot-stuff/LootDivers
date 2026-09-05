@@ -303,6 +303,7 @@ test("matches deterministic full fixture presentation", async ({
     testInfo.project.name !== "chromium",
     "Canonical visual baseline uses pinned Chromium.",
   );
+  test.skip(RUNNING_IN_CI, "hardware-sensitive on GPU-less CI (DEC-033)");
   await page.evaluate(() => window.__RARPG_FIXTURE_TEST__?.resetAtStep(120));
   await expect
     .poll(

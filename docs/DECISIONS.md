@@ -2447,7 +2447,7 @@ Date: 2026-09-05
 ## Decision
 
 The GitHub Actions gate (`.github/workflows/ci.yml`) runs the e2e suite on
-chromium, edge, and webkit only, and nine hardware-sensitive specs skip
+chromium, edge, and webkit only, and ten hardware-sensitive specs skip
 themselves when `CI` is set in the environment. The authoritative pre-merge
 gate remains the full local four-browser matrix (chromium, edge, firefox,
 webkit) with no skips, as exercised by QA and task owners.
@@ -2466,8 +2466,10 @@ to two GitHub-hosted-runner limitations, not product defects:
    `combat-arena` 27/286/566(480x720), `entity-lifecycle` "samples
    allocation and frame diagnostics" and "releases and reacquires one
    actor without stale ownership" (20 cycleActor rounds exceed the 30 s
-   budget under software rendering, CI run #6), `isometric-world`
-   276(webkit)/323, and `item-loot-loop` 32 (webkit).
+   budget under software rendering, CI run #6) and "matches deterministic
+   full fixture presentation" (screenshot baseline never stabilizes under
+   software rendering, CI run #7), `isometric-world` 276(webkit)/323, and
+   `item-loot-loop` 32 (webkit).
 
 Skips are annotated inline with `DEC-033` and use the existing
 `test.skip(condition, reason)` idiom (precedent: the chromium-only visual
