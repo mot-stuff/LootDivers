@@ -1,5 +1,121 @@
 # Phase 0 Project Baseline
 
+**Status:** Compact gate adopted; staging and final independent QA remain
+**Last updated:** 2026-09-04
+**Authority:** DEC-016 and `PHASE_0_ARCHITECTURE.md`
+
+## Approved technical baseline
+
+- Browser-first, desktop-first 2D isometric ARPG.
+- Phaser 4.2.1 and WebGL2 presentation.
+- Strict TypeScript with framework-independent core rules.
+- Tiled for the synthetic isometric fixture.
+- Vite, Vitest, and Playwright for build and verification.
+- IndexedDB behind a repository boundary for prototype local persistence.
+- Preact/HTML/CSS remains available for DOM UI, but a full UI shell is not a
+  Phase 0 gate.
+- PixiJS remains only a fallback after a documented hard Phaser failure.
+- WebGPU remains deferred beyond the vertical slice.
+
+Local Git on `main` remains the source-control baseline. A remote, hosted CI,
+branch protection, production host, and real Safari hardware are not currently
+available and do not block the compact Phase 0 gate. One temporary HTTPS staging
+deployment is still required.
+
+## Phase boundary
+
+Phase 0 is now a seven-task validation gate, not an infrastructure-completion
+phase. P0-G07 PASS immediately authorizes Phase 1 combat. The QA review must not
+hold the transition for exhaustive remediation of deferred work.
+
+Allowed before the gate:
+
+- rerun and repair only the compact acceptance checks;
+- select a temporary staging path and deploy the tested static artifact once;
+- perform independent QA against P0-G01 through P0-G07.
+
+Not authorized by this revision:
+
+- production deployment or production hosting selection;
+- Phase 1 gameplay implementation before QA PASS;
+- production launch, hosting hardening, backend, or multiplayer;
+- new broad infrastructure work justified only by the superseded backlog.
+
+## Evidence mapping
+
+- **P0-G01 Browser foundation — Complete:** former P0-001 and P0-003 were
+  independently accepted.
+- **P0-G02 Isometric fixture — Complete, recheck in G07:** former P0-006
+  implementation and QA remediation were merged.
+- **P0-G03 Simulation lifecycle — Complete:** former P0-004 and P0-008 were
+  independently accepted.
+- **P0-G04 Synthetic performance — Fresh short run required:** former P0-002
+  defined the contract and P0-008 implemented the browser fixture.
+- **P0-G05 IndexedDB persistence — Complete, recheck in G07:** former P0-010
+  implementation and QA remediation were merged.
+- **P0-G06 Web staging — Blocked on one deployment:** production build
+  capability exists but staging evidence does not.
+- **P0-G07 Independent QA — Pending G06:** the compact gate has not been run.
+
+The table maps evidence; it does not retroactively claim that previously
+pending reviews passed. G07 independently rechecks every compact criterion and
+is the single acceptance decision.
+
+## Completed-early, non-gating scope
+
+- **Former P0-005:** versioned content schemas, Ajv/semantic validation, stable
+  IDs, and deterministic compiled output.
+- **Former P0-007:** spatial hash, simple collision, navigation grid, bounded A*,
+  scheduling, and local separation.
+- **Former P0-009:** typed ability/effect schemas and deterministic execution
+  contracts, merged at `d7025ee`.
+- **Former P0-010 excess:** migrations, checksums, generations/backups,
+  import/export, concurrency, fallback, and error UX.
+- **Former P0-011:** Preact/canvas shell contracts, focus/resize behavior, and
+  automated accessibility checks, implemented and remediated in merge
+  `3dff65a`.
+
+This code remains in place. Its advanced acceptance, expansion, and maintenance
+move to the phase that first depends on it. A defect in this code blocks Phase 0
+only if it breaks a compact gate command or criterion.
+
+## Deferred acceptance obligations
+
+The compact gate does not require:
+
+- eligible minimum-reference hardware or five performance repetitions;
+- branded browser, Firefox, WebKit, or real Safari completion;
+- full content-compiler acceptance;
+- advanced navigation validation;
+- full ability-contract acceptance before combat prototyping;
+- advanced persistence failure/recovery matrices;
+- full UI shell or manual accessibility certification;
+- forced WebGL context restoration;
+- CI, rollback, production cache/header/security analysis, or remote automation;
+- detailed production telemetry;
+- multiplayer architecture beyond preserving simple boundaries.
+
+## Remaining minimal blockers
+
+1. Run the fresh short synthetic Chromium performance test.
+2. Deploy the already testable production artifact once to an HTTPS staging URL
+   and record artifact/commit/URL plus a successful manual Chromium boot.
+3. Have an independent QA Reviewer execute the exact lean gate in
+   `PHASE_0_ARCHITECTURE.md` and issue PASS.
+
+Nothing else is a Phase 1 authorization blocker unless one of those checks
+reveals a direct compact-gate failure.
+
+---
+
+## Archived pre-DEC-016 baseline
+
+Everything below this heading is retained only as historical evidence for the
+former backlog. It is superseded by the compact baseline above and defines no
+current blocker or authorization rule.
+
+# Historical Phase 0 Project Baseline
+
 **Task:** TASK-P0-001
 **Status:** Complete; pending independent QA acceptance
 **Last updated:** 2026-09-04

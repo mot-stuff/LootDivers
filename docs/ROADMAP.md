@@ -1,33 +1,44 @@
 # Development Roadmap
 
-## Phase 0 — Project Foundation
+## Phase 0 — Minimal Stack Validation
 
-Goal:
-Create a clean project structure and technical foundation.
+Goal: prove the browser stack is adequate, then begin combat immediately.
 
-Tasks:
+Phase 0 contains exactly seven dependency-ordered gates:
 
-- establish coding conventions
-- establish folder structure
-- establish source control workflow
-- create basic testing framework
-- create logging conventions
-- define data architecture
-- define save architecture
+1. **P0-G01 Browser foundation** — toolchain, strict TypeScript, Phaser/WebGL2
+   boot, core/adapter boundary.
+2. **P0-G02 Isometric fixture** — one Tiled fixture and basic depth sorting.
+3. **P0-G03 Simulation lifecycle** — bounded fixed step and minimal
+   entity/component/presentation cleanup.
+4. **P0-G04 Synthetic performance** — one short browser population test.
+5. **P0-G05 IndexedDB persistence** — one fixture save/load round trip.
+6. **P0-G06 Web staging** — one production build and one staging deployment.
+7. **P0-G07 Independent QA** — lean acceptance of the six technical gates.
 
-Exit Criteria:
+Dependencies and exact acceptance commands are authoritative in
+[`PHASE_0_ARCHITECTURE.md`](PHASE_0_ARCHITECTURE.md).
 
-- project builds
-- basic test can run
-- architecture is documented
-- agent workflow is functional
+Existing content compiler, navigation, ability-contract, advanced persistence,
+and UI-shell work is retained but does not enlarge the gate. Full browser
+matrix, advanced recovery, CI/CD and rollback, production hosting hardening,
+detailed telemetry, and multiplayer preparation are deferred.
+
+Exit criteria:
+
+- P0-G01 through P0-G06 satisfy their minimal acceptance criteria;
+- independent QA executes the lean gate and issues PASS;
+- no blocker is inferred from explicitly deferred or non-gating work.
+
+**Transition rule:** P0-G07 PASS completes Phase 0 and immediately authorizes
+Phase 1. No additional architecture review or separate Director approval is
+required.
 
 ---
 
-# Phase 1 — Combat Prototype
+## Phase 1 — Combat Prototype
 
-Goal:
-Prove that movement and combat feel good.
+Goal: prove that movement and combat feel good.
 
 Features:
 
@@ -41,162 +52,84 @@ Features:
 - enemy death
 - basic combat feedback
 
-Exit Criteria:
+Exit criteria:
 
-- movement feels responsive
-- player can attack enemy
-- enemy can damage player
-- dodge works
-- deaths work
-- no major runtime errors
+- movement feels responsive;
+- player and enemy can damage one another;
+- dodge and deaths work;
+- no major runtime errors.
+
+Phase 1 starts as soon as the independent P0-G07 gate passes.
 
 ---
 
-# Phase 2 — Ability Framework
+## Phase 2 — Ability Framework
 
-Goal:
-Create reusable combat abilities.
+Goal: create reusable combat abilities.
 
 Features:
 
 - ability base architecture
-- cooldowns
-- resource costs
-- melee ability
-- projectile ability
-- AoE ability
+- cooldowns and resource costs
+- melee, projectile, and area abilities
 - buff/debuff support
 - ability tags
 
-Exit Criteria:
+Exit criteria:
 
-- at least four abilities work
-- abilities use shared architecture
-- abilities can be configured without rewriting core logic
+- at least four abilities work;
+- abilities use shared architecture;
+- abilities can be configured without rewriting core logic.
 
----
-
-# Phase 3 — Items and Loot
-
-Goal:
-Create the basic ARPG loot loop.
-
-Features:
-
-- item definitions
-- equipment
-- inventory
-- item bases
-- rarity
-- affixes
-- loot drops
-- stat integration
-- item tooltips
-
-Exit Criteria:
-
-- enemies can drop randomized items
-- items can be equipped
-- equipment modifies character stats
-- item information is readable
+The former P0-009 contract implementation is available as completed-early
+infrastructure, but Phase 2 owns its gameplay integration and fitness.
 
 ---
 
-# Phase 4 — Character Progression
+## Phase 3 — Items and Loot
 
-Features:
+Goal: create the basic ARPG loot loop.
 
-- XP
-- levels
-- attributes
-- small passive/mastery system
-- level requirements
-- respec prototype
-
-Exit Criteria:
-
-- player gains XP
-- player levels
-- progression choices affect gameplay
+Features include item definitions, inventory, equipment, rarity, affixes, loot
+drops, stat integration, and readable tooltips.
 
 ---
 
-# Phase 5 — Profession Prototype
+## Phase 4 — Character Progression
 
-Initial professions:
-
-- Mining
-- Smithing
-
-Features:
-
-- resource nodes
-- gathering
-- profession XP
-- profession level
-- ore tiers
-- simple crafting
-- crafted equipment integration
-
-Exit Criteria:
-
-- player can mine resources
-- mining levels increase
-- materials can be used in smithing
-- crafted output affects combat
+Features include XP, levels, attributes, a small passive/mastery system, level
+requirements, and a respec prototype.
 
 ---
 
-# Phase 6 — Vertical Slice World
+## Phase 5 — Profession Prototype
 
-Features:
+Initial professions: Mining and Smithing.
 
-- town
-- outdoor zone
-- dungeon
-- NPC interaction
-- basic quest
-- vendors
-- five enemy types
-- one elite
-- one boss
-
-Exit Criteria:
-
-- player can complete a 20–30 minute gameplay loop
-- player can return to town
-- player can improve equipment
-- player can gather and craft
-- player can defeat the boss
+Features include resource nodes, gathering, profession progression, ore tiers,
+simple crafting, and crafted-equipment integration.
 
 ---
 
-# Phase 7 — Polish
+## Phase 6 — Vertical Slice World
 
-Features:
+Features include one town, outdoor zone, dungeon, basic quest/vendor flow, five
+enemy types, one elite, and one boss.
 
-- sound
-- VFX
-- combat feedback
-- UI polish
-- balance pass
-- performance
-- bug fixing
-- onboarding
+Exit criterion: a repeatable 20–30 minute combat, loot, progression, gathering,
+crafting, and boss loop.
 
 ---
 
-# Deferred Systems
+## Phase 7 — Polish
 
-Do not build these until approved:
+Sound, VFX, combat feedback, UI polish, balance, performance, bug fixing, and
+onboarding.
 
-- multiplayer
-- guilds
-- trading economy
-- auction house
-- PvP
-- giant passive tree
-- procedural world generation
-- massive quest system
-- large endgame system
-- dozens of professions
+---
+
+## Deferred systems
+
+Do not build without approval: multiplayer, guilds, shared trading economy,
+auction house, PvP, a giant passive tree, procedural world generation, massive
+quest/endgame systems, or dozens of professions.

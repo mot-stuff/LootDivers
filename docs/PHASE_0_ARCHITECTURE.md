@@ -1,7 +1,237 @@
-# RARPG Phase 0 Architecture
+# RARPG Phase 0 — Minimal Stack-Validation Gate
 
-**Status:** Phase 0 architecture direction approved by the project owner on
-2026-09-04; Phase 1 remains blocked on the Phase 0 acceptance gate
+**Status:** Scope reduced on 2026-09-04; existing implementation evidence is
+mapped below. Phase 1 is authorized immediately after TASK-P0-G07 passes.
+**Decision:** DEC-016
+**Scope:** The smallest browser foundation needed to begin combat prototyping.
+
+## Purpose
+
+Phase 0 answers one question: can RARPG boot, render a correct isometric
+fixture, run framework-independent state, persist a fixture, survive a synthetic
+browser load, build for the web, and be deployed once to staging?
+
+It is not a mandate to finish infrastructure for the vertical slice. Phaser
+4.2.1, strict TypeScript, WebGL2, Vite, Vitest, Playwright, Tiled, IndexedDB,
+and the core/Phaser boundary remain approved. Working code already delivered
+beyond this gate is retained, but it does not expand the gate.
+
+## Retained safeguards
+
+- `src/core` remains independent of Phaser, Preact, DOM, and browser APIs.
+- Phaser objects remain presentation adapters, never authoritative domain state.
+- Simulation time uses a bounded fixed step rather than render frames or
+  unbounded wall-clock catch-up.
+- Entity creation/destruction removes component and presentation state.
+- The checked-in Tiled map and generated bundle remain synthetic fixtures.
+- Static checks, unit tests, a production-artifact browser smoke, deterministic
+  depth coverage, and one synthetic browser performance run remain required.
+- Local persistence remains behind a framework-independent repository boundary.
+- The browser client remains untrusted; local saves are prototype data only.
+
+## Explicit Phase 0 deferrals
+
+The following are not blockers for Phase 1:
+
+- advanced save migration, backup-generation recovery, export/import, corruption
+  recovery, quota/eviction UX, and concurrency hardening;
+- the full ability/effect execution contract;
+- the extensive content schema/compiler and generated-content workflow;
+- a branded Chrome/Edge/Firefox/WebKit matrix or real Safari certification;
+- sophisticated WebGL context-loss restoration;
+- advanced CI/CD, immutable promotion, rollback drills, cache/header hardening,
+  and production hosting analysis;
+- a full Preact UI shell, exhaustive accessibility review, HUD, menus, or
+  information architecture;
+- advanced collision/navigation, bounded A*, scheduling, local separation,
+  flow fields, workers, or crowd behavior;
+- detailed telemetry, long-duration profiling, eligible-reference-hardware
+  certification, or five-run statistical acceptance;
+- multiplayer, network determinism, rollback, server persistence, or preparation
+  beyond simple commands/events/DTO and adapter boundaries.
+
+These capabilities may be maintained where already implemented. New work on
+them requires a later gameplay-driven task and must not delay Phase 1 merely
+because a non-gating improvement is available.
+
+## Compact dependency-ordered backlog
+
+### TASK-P0-G01 — Establish browser foundation
+
+**Owner:** Game Director / Gameplay Engineer
+**Dependencies:** None
+**Objective:** Provide the project/toolchain foundation and a Phaser 4.2.1
+WebGL2 boot under strict TypeScript.
+**Scope:** Pinned Node/npm, Vite, lint/format/typecheck/unit scripts, production
+build script, Chromium smoke harness, module skeleton, and boot diagnostics.
+**Acceptance:** A clean install passes static checks and tests; the production
+artifact boots Phaser in Chromium; core dependency boundaries are enforced.
+**Mapped evidence:** Former P0-001 and P0-003, independently accepted. Former
+P0-005 tooling may remain but is not required by this task.
+**Status:** Complete from accepted evidence.
+
+### TASK-P0-G02 — Validate one isometric fixture
+
+**Owner:** Gameplay Engineer
+**Dependencies:** P0-G01
+**Objective:** Load one Tiled isometric fixture and prove basic foot-point depth
+sorting.
+**Scope:** One synthetic map, deterministic compile/freshness check, Phaser
+render adapter, basic elevation/foreground example, and one deterministic visual
+case.
+**Acceptance:** `world:check` passes; the fixture loads in Chromium; the visual
+case proves stable basic depth order.
+**Mapped evidence:** Former P0-006 implementation and remediation, merged before
+`d7025ee`.
+**Status:** Complete from existing implementation evidence; rechecked by G07.
+
+### TASK-P0-G03 — Validate simulation and lifecycle
+
+**Owner:** Combat Engineer
+**Dependencies:** P0-G01, P0-G02
+**Objective:** Provide the minimal framework-independent fixed-step and
+entity/component lifecycle needed by Phase 1.
+**Scope:** Bounded fixed step, pause/resume, runtime IDs, minimal typed component
+stores, deterministic create/update/destroy, and Phaser presentation cleanup.
+**Acceptance:** Tests prove bounded catch-up, core/Phaser separation, and no
+stale component or presentation state after destruction.
+**Mapped evidence:** Former P0-004 and P0-008, independently accepted.
+**Status:** Complete from accepted evidence.
+
+### TASK-P0-G04 — Run one synthetic browser performance test
+
+**Owner:** QA Reviewer
+**Dependencies:** P0-G02, P0-G03
+**Objective:** Detect a catastrophic browser/runtime scaling problem before
+combat work begins.
+**Scope:** One short Chromium run of the existing synthetic fixture, including
+actors, projectiles, particles, loot, spatial queries, and periodic path work.
+**Acceptance:** The run completes without crash, browser/page/console/network
+error, sample overflow, or a reported catastrophic threshold failure. Record
+hardware, browser, duration, and reported timings. `INELIGIBLE` reference-tier
+status is acceptable and must not be relabeled as a strict performance pass.
+**Mapped evidence:** Former P0-002 specified the harness and former P0-008
+implemented it. Older strict multi-browser/reference-tier requirements are
+superseded for the Phase 0 gate.
+**Status:** Implementation complete; one fresh short run is required before G06
+and its evidence is inspected, not rerun, by G07.
+
+### TASK-P0-G05 — Validate minimal IndexedDB persistence
+
+**Owner:** Gameplay Engineer
+**Dependencies:** P0-G01, P0-G03
+**Objective:** Save and reload one synthetic fixture through IndexedDB behind a
+framework-independent repository.
+**Scope:** One current-version round trip and browser reload assertion.
+**Acceptance:** Chromium proves the fixture survives save/reload and malformed
+fixture data does not silently become valid state.
+**Mapped evidence:** Former P0-010 implemented and tested a superset. Its
+migrations, generations, fallback, export/import, and failure UX are completed
+early, retained, and non-gating.
+**Status:** Complete from implementation evidence; rechecked by G07.
+
+### TASK-P0-G06 — Produce and stage one web build
+
+**Owner:** Game Director / release engineering
+**Dependencies:** P0-G01 through P0-G05
+**Objective:** Prove the built static site can leave the development machine.
+**Scope:** One production `dist` build, one HTTPS staging deployment of that
+build, and one staging boot check.
+**Acceptance:** The exact locally tested `dist` output is deployed once; its
+root returns success over HTTPS and a current desktop Chromium browser reaches
+the ready diagnostic without uncaught or failed-asset errors.
+**Out of scope:** Provider comparison, production hosting choice, custom
+domains, CI automation, rollback drills, cache/header hardening, analytics, and
+production launch.
+**Status:** Production build capability exists. One staging deployment and its
+URL/evidence remain incomplete. This document does not perform that deployment.
+
+### TASK-P0-G07 — Run lean independent QA gate
+
+**Owner:** QA Reviewer; Game Director records the result
+**Dependencies:** P0-G01 through P0-G06
+**Objective:** Independently decide whether the minimal stack is safe for Phase
+1 combat.
+**Scope:** Execute the commands below on clean `main`, inspect staging evidence,
+and report only blockers against this compact gate.
+**Acceptance:** QA confirms all seven tasks and dependencies; retained
+safeguards; explicit deferrals; clean command results; the fresh synthetic run;
+and the staging boot. QA issues PASS or FAIL with blocking findings.
+**Remediation policy:** Only failures of a listed acceptance criterion block.
+Major/minor improvements outside this gate are logged for later and do not
+require exhaustive remediation.
+**Authorization:** A PASS automatically completes Phase 0 and authorizes Phase
+1 combat immediately. No second architecture review, exhaustive browser matrix,
+eligible reference machine, or separate owner approval is required.
+
+## Exact lean gate commands
+
+Run from the repository root on clean `main`:
+
+```powershell
+$npm = & .\scripts\bootstrap-toolchain.ps1
+& $npm ci
+& $npm run format:check
+& $npm run lint
+& $npm run typecheck
+& $npm test
+& $npm run world:check
+& $npm run build
+& $npm run budget
+& $npm run test:smoke
+& $npm run test:visual
+git status --short
+```
+
+Run the single P0-G04 performance execution after the local build checks and
+before staging:
+
+```powershell
+& $npm run timing:fixture -- --warmup-seconds=2 --sample-seconds=10
+```
+
+For the one staging deployment, release engineering records the provider's
+upload command, deployed commit, artifact identity, and URL. After upload:
+
+```powershell
+$env:RARPG_STAGING_URL = "https://<assigned-staging-url>"
+$response = Invoke-WebRequest -Uri "$env:RARPG_STAGING_URL/" -UseBasicParsing
+if ($response.StatusCode -ne 200) { throw "Staging root did not return HTTP 200" }
+Start-Process $env:RARPG_STAGING_URL
+```
+
+QA then confirms in current desktop Chromium that diagnostics reach `ready`,
+WebGL2 is active, and the console/network panels contain no uncaught error or
+failed required asset. This small manual staging check is sufficient until a
+remote-smoke command is justified.
+
+## Existing work mapped outside the gate
+
+- **Former P0-005:** content schemas/compiler — completed early; defer expansion
+  and treat maintenance as non-gating unless Phase 1 consumes it.
+- **Former P0-007:** spatial/collision/navigation primitives — completed early;
+  retain, but advanced navigation acceptance is deferred.
+- **Former P0-009:** ability execution contracts — completed early at
+  `d7025ee`; retain for Phase 2 and maintain only as Phase 1 integration needs.
+- **Former P0-010:** advanced persistence protections — completed early; only
+  the minimal current-version IndexedDB round trip gates Phase 0.
+- **Former P0-011:** UI shell boundaries — completed early; retain, but full
+  shell, accessibility/manual matrix, and UI polish are deferred. Implementation
+  and remediation were merged at `3dff65a`; compact acceptance belongs to G07.
+
+No working code is to be deleted because its former task left the gate.
+
+---
+
+## Archived pre-DEC-016 plan
+
+Everything below this heading is retained only as completion-history detail for
+the former backlog. It is superseded by DEC-016, defines no active tasks or
+gates, and must not be used to delay P0-G07 or Phase 1.
+
+# Historical RARPG Phase 0 Architecture
+
+**Status:** Superseded by DEC-016 on 2026-09-04
 **Date:** 2026-09-04
 **Scope:** Browser-first technical foundation only. This document does not authorize Phase 1 or gameplay implementation.
 
@@ -521,7 +751,7 @@ intended production path.
     protection, or CI. Mitigate with small local branches now and require an
     approved remote before TASK-P0-013 or shared development.
 
-## 13. Dependency-ordered Phase 0 implementation backlog
+## Historical dependency-ordered Phase 0 implementation backlog
 
 The project owner authorized the Phase 0 architecture baseline on 2026-09-04.
 No task below authorizes Phase 1 gameplay, player/enemy combat, production
@@ -863,7 +1093,7 @@ explicit Director approval.
 **Testing:** Execute rather than infer every available automated gate; explicitly
 list unavailable hardware/manual checks.
 
-## Approval status
+## Historical approval status
 
 Approved by the project owner on 2026-09-04:
 

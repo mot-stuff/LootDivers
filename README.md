@@ -6,10 +6,13 @@ professions, gathering, crafting, exploration, dungeons, and bosses.
 
 ## Project status
 
-Phase 0 architecture is approved. Foundation work is in progress.
+Phase 0 is a minimal seven-task stack-validation gate. Existing foundation work
+has been mapped to the compact gate without deleting completed code.
 
-Phase 1 gameplay implementation has not started and remains blocked until the
-Phase 0 acceptance gate passes and the Director explicitly authorizes it.
+Phase 1 gameplay implementation has not started. The only remaining Phase 0
+work is one fresh short synthetic performance run, one staging deployment, and
+the lean independent QA gate. A QA PASS immediately authorizes Phase 1 combat;
+no separate Director approval is required.
 
 ## Approved technical direction
 
@@ -42,3 +45,7 @@ defined in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 The runnable browser toolchain is documented in
 [`docs/TOOLING.md`](docs/TOOLING.md). It provides only the Phase 0 diagnostic
 foundation; gameplay remains out of scope.
+
+The compact task mapping, exact gate commands, deferrals, and authorization rule
+are documented in
+[`docs/PHASE_0_ARCHITECTURE.md`](docs/PHASE_0_ARCHITECTURE.md).

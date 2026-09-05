@@ -9,6 +9,8 @@ framework-independent simulation. Provider, reference-hardware, and Safari
 availability selections are recorded in `docs/PROJECT_BASELINE.md`: local Git
 only for now, an Intel UHD 630-class minimum reference tier, and no current real
 Safari hardware. Remote/CI and hosting providers remain future decisions.
+DEC-016 reduces Phase 0 to a seven-task validation gate and supersedes earlier
+Phase 0 completion/authorization language.
 
 ---
 
@@ -541,9 +543,8 @@ See `docs/PHASE_0_ARCHITECTURE.md`, sections 10, 11, and 13.
 
 ### Status
 
-Accepted by the Director and project owner as the Phase 0 technical baseline;
-Phase 1 remains blocked on the Phase 0 acceptance gate and explicit Director
-approval.
+Accepted as technical direction. DEC-016 supersedes its original exhaustive
+Phase 0 gate and separate-Director-approval language.
 
 ### Date
 
@@ -955,3 +956,100 @@ Hashed static artifacts support CDN delivery and reproducible rollback.
 ### Reference
 
 See `docs/PHASE_0_ARCHITECTURE.md`, sections 10-13.
+
+---
+
+# DEC-016
+
+### Status
+
+Accepted. This decision narrows Phase 0 acceptance scope without deleting or
+reversing working implementation.
+
+### Date
+
+2026-09-04
+
+### Decision
+
+Replace the fourteen-task Phase 0 infrastructure program with seven
+dependency-ordered stack-validation tasks. Independent QA PASS on the lean gate
+immediately completes Phase 0 and authorizes Phase 1 combat.
+
+Retain only these Phase 0 obligations: project/toolchain foundation;
+Phaser/WebGL2 boot under strict TypeScript; one Tiled isometric fixture and basic
+depth sorting; framework-independent fixed-step and minimal entity/component
+lifecycle; one synthetic browser performance run; minimal IndexedDB save/load;
+one production build deployed once to staging; and independent QA acceptance.
+
+### Context
+
+Former P0-001 through P0-011 delivered substantial foundation code before
+combat feel was tested. The backlog had turned advanced content compilation,
+navigation, abilities, persistence recovery, UI, browser matrices, CI/CD, and
+production operations into prerequisites for the first movement and combat
+prototype. That sequencing conflicted with the project priority to prove
+responsive combat before broad infrastructure.
+
+### Options Considered
+
+1. Finish the original P0-012 through P0-014 gates before combat.
+2. Discard the completed foundation and restart with a smaller scaffold.
+3. Preserve working code, map existing evidence to a compact gate, defer
+   advanced acceptance, and begin Phase 1 immediately after lean independent QA.
+
+### Chosen Approach
+
+Choose option 3. Former P0-001/P0-003 map to the browser foundation; P0-006 to
+the isometric fixture; P0-004/P0-008 to fixed-step and lifecycle; P0-002/P0-008
+to the synthetic performance check; and P0-010 to minimal IndexedDB persistence.
+The existing production build plus one still-pending staging deployment form the
+release proof. A new P0-G07 QA review is the only final authorization gate.
+
+Former P0-005, P0-007, P0-009, and the excess scope of P0-010 and P0-011 are
+completed-early, non-gating infrastructure. Their code stays in place. Their
+advanced acceptance and future maintenance move to the gameplay phase that
+actually consumes them.
+
+### Why
+
+The compact gate still tests the architectural risks that could invalidate the
+stack: browser boot, isometric rendering/depth, simulation separation and
+lifecycle, synthetic density, local browser persistence, production output, and
+real HTTPS delivery. It removes speculative completeness requirements that do
+not need to precede player movement and attacks.
+
+Independent QA remains mandatory, but it evaluates only explicit compact
+criteria. A PASS authorizes Phase 1 without a second architecture or owner
+approval, avoiding another administrative gate after technical acceptance.
+
+### Tradeoffs
+
+- Phase 1 may discover that completed-early systems need redesign.
+- Cross-browser, minimum-spec, recovery, accessibility, hosting, and operations
+  risks remain open and must be revisited before their consuming milestones.
+- One short current-machine performance run catches catastrophic regressions
+  but is not minimum-spec certification or a statistical performance claim.
+- Manual staging verification is less repeatable than future remote automation.
+- Keeping extra code carries maintenance cost even though it no longer gates
+  combat.
+
+### Systems Affected
+
+- Phase planning and task status
+- QA and Phase 1 authorization
+- Browser/runtime, world, entity, persistence, build, and staging acceptance
+- Content, navigation, ability, UI, browser-matrix, CI/CD, and multiplayer
+  deferrals
+
+### Relationship to Earlier Decisions
+
+DEC-009 through DEC-015 remain technical direction. DEC-016 supersedes only
+their interpretation as exhaustive Phase 0 prerequisites. Core/Phaser
+separation, strict TypeScript, browser tests, WebGL2, Tiled, and IndexedDB
+boundaries remain active safeguards.
+
+### Reference
+
+See `docs/PHASE_0_ARCHITECTURE.md`, `docs/PROJECT_BASELINE.md`, and
+`docs/ROADMAP.md`.
