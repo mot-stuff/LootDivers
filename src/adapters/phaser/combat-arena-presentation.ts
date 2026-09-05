@@ -352,7 +352,7 @@ export class CombatArenaPresentation {
         command.abilityId,
       );
     }
-    this.render(0);
+    this.render(0, true);
   }
 
   public dispose(): void {
@@ -394,7 +394,7 @@ export class CombatArenaPresentation {
     }
   }
 
-  private render(alpha: number): void {
+  private render(alpha: number, forceItemHud = false): void {
     const state = this.#simulation.diagnostics();
     const x = Phaser.Math.Linear(state.previousX, state.x, alpha);
     const y = Phaser.Math.Linear(state.previousY, state.y, alpha);
@@ -444,7 +444,7 @@ export class CombatArenaPresentation {
     );
 
     this.publishHud(state);
-    this.publishItemHud();
+    this.publishItemHud(forceItemHud);
   }
 
   private drawAttack(
@@ -734,10 +734,10 @@ export class CombatArenaPresentation {
     );
   }
 
-  private publishItemHud(): void {
+  private publishItemHud(force = false): void {
     const comparable = this.createItemHud(0);
     const key = JSON.stringify(comparable);
-    if (key === this.#lastItemHudKey) return;
+    if (!force && key === this.#lastItemHudKey) return;
     this.#lastItemHudKey = key;
     this.#itemHudRevision += 1;
     window.dispatchEvent(

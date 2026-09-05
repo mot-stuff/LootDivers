@@ -198,3 +198,80 @@ test("enemy loot can be picked, equipped, and used to reassign combat", async ({
   ).toEqual([expect.objectContaining({ abilityId: "ability:cinder-dart" })]);
   expect(failures).toEqual([]);
 });
+
+test("rejected final Basic Cleave replacement resyncs the controlled loadout", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__RARPG_COMBAT_TEST__?.diagnostics() ?? null),
+    )
+    .not.toBeNull();
+
+  await page.evaluate(() => {
+    const combat = window.__RARPG_COMBAT_TEST__;
+    combat?.setAutomationPaused(true);
+    combat?.reset();
+    combat?.advancePaused(76);
+    combat?.setAimDirection(1, 0);
+    combat?.requestAbilitySlot("lmb");
+    combat?.advancePaused(15);
+    combat?.requestAbilitySlot("lmb");
+    combat?.advancePaused(15);
+    combat?.setMovement(1, 0);
+    combat?.advancePaused(30);
+    combat?.setMovement(0, 0);
+  });
+
+  const itemHud = await page.evaluate(
+    () => window.__RARPG_COMBAT_TEST__?.itemHud() ?? null,
+  );
+  const stoneSlot = itemHud?.inventorySlots.find(
+    ({ item }) => item?.kind === "ability-stone",
+  );
+  if (stoneSlot?.item?.kind !== "ability-stone") {
+    throw new Error("First-kill Ability Stone was not picked up.");
+  }
+
+  await page.getByRole("button", { name: /Inventory/ }).click();
+  await page
+    .getByRole("button", {
+      name: `Inventory slot ${stoneSlot.index + 1}, Ability Stone`,
+    })
+    .click();
+  await page.getByRole("button", { name: "Create Cinder Dart" }).click();
+
+  const lmbAssignment = page.getByRole("combobox", {
+    name: "Assign Left click ability",
+  });
+  await expect(lmbAssignment).toHaveValue("ability:basic-cleave");
+  await lmbAssignment.selectOption("ability:cinder-dart");
+  await expect(lmbAssignment).toHaveValue("ability:basic-cleave");
+  expect(
+    await page.evaluate(
+      () =>
+        window.__RARPG_COMBAT_TEST__
+          ?.itemHud()
+          ?.loadout.find(({ slot }) => slot === "lmb")?.abilityId,
+    ),
+  ).toBe("ability:basic-cleave");
+
+  await page.getByRole("button", { name: "Close inventory" }).click();
+  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
+  await expect(canvas).toBeFocused();
+  await canvas.click({ position: { x: 100, y: 100 } });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.__RARPG_COMBAT_TEST__?.diagnostics()?.lastAbilityResult,
+      ),
+    )
+    .toMatchObject({
+      abilityId: "ability:basic-cleave",
+      accepted: true,
+    });
+  expect(failures).toEqual([]);
+});
