@@ -2,6 +2,12 @@ export const FOUNDATION_ID = "rarpg:browser-foundation";
 
 export * from "./ability-runtime-contracts";
 export {
+  CombatArenaSimulation,
+  DEFAULT_COMBAT_ARENA_CONFIG,
+  type CombatArenaConfig,
+  type CombatArenaDiagnostics,
+} from "./combat-arena";
+export {
   AbilityExecutionEngine,
   type AbilityExecutionDependencies,
 } from "./ability-runtime";

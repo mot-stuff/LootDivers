@@ -18,6 +18,7 @@ import {
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
+import type { CombatPresentationDiagnostics } from "./adapters/phaser/combat-arena-presentation";
 import type {
   FrameSampleSummary,
   RawFrameSamples,
@@ -66,6 +67,11 @@ declare global {
       setCullingProbe: (enabled: boolean) => void;
     };
     __RARPG_FIXTURE_FAILURE__?: SyntheticPresentationDiagnostics | null;
+    __RARPG_COMBAT_TEST__?: {
+      diagnostics: () => CombatPresentationDiagnostics | null;
+      reset: () => void;
+      setAimDirection: (x: number, y: number) => void;
+    };
   }
 }
 
@@ -83,6 +89,8 @@ const fixtureParameters = new URLSearchParams(window.location.search);
 const worldAutomation = fixtureParameters.has("automation");
 const fullFixture = fixtureParameters.has("fullFixture");
 const persistenceAutomation = fixtureParameters.has("persistenceTest");
+const combatPrototype =
+  !worldAutomation && !fullFixture && !persistenceAutomation;
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,
   cssHeight: 0,
@@ -170,6 +178,7 @@ function renderApp(): void {
       persistenceStatus={persistenceStatus}
       persistenceActions={persistenceActions}
       showPersistence={!worldAutomation || persistenceAutomation}
+      showCombatPrototype={combatPrototype}
     />,
     mount,
   );
@@ -201,7 +210,7 @@ const support = preflightWebGL2(canvas);
 if (!support.supported) {
   fail(support.reason);
 } else {
-  void bootPhaser(canvas, support.context, { fullFixture })
+  void bootPhaser(canvas, support.context, { fullFixture, combatPrototype })
     .then((renderer) => {
       const diagnostics = renderer.world.diagnostics();
       if (diagnostics.zoneId === null) {
@@ -243,6 +252,18 @@ if (!support.supported) {
             renderer.fixture.setCullingProbe(enabled);
           },
         };
+      }
+      if (combatPrototype) {
+        window.__RARPG_COMBAT_TEST__ = {
+          diagnostics: () => renderer.combat.diagnostics(),
+          reset: () => {
+            renderer.combat.reset();
+          },
+          setAimDirection: (x, y) => {
+            renderer.combat.setAimDirection(x, y);
+          },
+        };
+        canvas.focus({ preventScroll: true });
       }
       document.body.dataset.appState = "ready";
       publish({
