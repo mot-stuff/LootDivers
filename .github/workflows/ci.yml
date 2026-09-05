@@ -8,7 +8,12 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on PR branches, but NEVER on main: main runs
+  # include the droplet deploy, and canceling one mid-deploy kills the SSH
+  # session while docker compose is building (observed 2026-09-05 when a
+  # docs-only push canceled the first real API deploy). Main runs queue
+  # behind each other instead.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   gates:

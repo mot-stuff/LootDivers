@@ -420,22 +420,23 @@ resets it to `origin/main` on every later run, and runs Compose from
 
 ## Step 12 — Create the server `.env`
 
-On the droplet. The `.env` lives OUTSIDE the checkout (so deploys never
+On the droplet, as your admin user. Note: `/opt/lootdivers` is owned by
+`deploy` (Step 10), so plain redirection fails with `Permission denied` —
+write the file via sudo and hand it to `deploy`, who is the user that
+actually reads it. The `.env` lives OUTSIDE the checkout (so deploys never
 touch it):
 
 ```bash
-mkdir -p /opt/lootdivers
-cd /opt/lootdivers
-
 # Database password: generated once, never typed again (the compose file
 # passes it to Postgres and the API).
-echo "POSTGRES_PASSWORD=$(openssl rand -base64 32)" > .env
+sudo bash -c 'echo "POSTGRES_PASSWORD=$(openssl rand -base64 32)" > /opt/lootdivers/.env'
 
 # Your real domain (no placeholder!) — the API uses it for CORS and
 # cookie scope:
-echo "APP_DOMAIN=<yourdomain.com>" >> .env
+echo "APP_DOMAIN=<yourdomain.com>" | sudo tee -a /opt/lootdivers/.env
 
-chmod 600 .env
+sudo chown deploy:deploy /opt/lootdivers/.env
+sudo chmod 600 /opt/lootdivers/.env
 ```
 
 ## Step 13 — First start of the API stack
