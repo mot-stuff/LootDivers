@@ -113,6 +113,16 @@ declare global {
       generationState: () => ReturnType<
         IndexedDbSaveRepository["debugGenerationState"]
       >;
+      /**
+       * Reads back the committed, checksum-verified active save (null when
+       * none decodes). E2e specs poll this before reloading so an
+       * in-flight queued save can never race the navigation.
+       */
+      activeSave: () => Promise<{
+        zoneId: string;
+        revision: number;
+        source: "active" | "backup";
+      } | null>;
       reset: () => Promise<void>;
     };
   }
@@ -492,6 +502,18 @@ if (!support.supported) {
           corruptActive: () =>
             characterRepository.debugCorruptActiveGeneration(),
           generationState: () => characterRepository.debugGenerationState(),
+          activeSave: async () => {
+            try {
+              const loaded = await characterRepository.load();
+              return {
+                zoneId: loaded.state.zoneId,
+                revision: loaded.envelope.revision,
+                source: loaded.source,
+              };
+            } catch {
+              return null;
+            }
+          },
           reset: () => characterRepository.debugReset(),
         };
       }

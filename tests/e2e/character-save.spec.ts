@@ -23,16 +23,19 @@ async function combatReady(page: Page): Promise<void> {
     .not.toBeNull();
 }
 
-function generationCount(page: Page): Promise<number> {
+/**
+ * Reads the committed, checksum-verified active save back through the
+ * automation hook. Polling this (instead of counting generation keys)
+ * guarantees the queued IndexedDB write — including its generation-pointer
+ * promotion — has fully settled before the spec navigates away, so a slow
+ * CI runner cannot reload while the save is still in flight.
+ */
+function activeSaveZone(page: Page): Promise<string | null> {
   return page.evaluate(async () => {
     const hook = window.__RARPG_CHARACTER_SAVE_TEST__;
-    if (hook === undefined) return -1;
-    try {
-      const state = await hook.generationState();
-      return state.generations.length;
-    } catch {
-      return 0;
-    }
+    if (hook === undefined) return null;
+    const save = await hook.activeSave();
+    return save?.zoneId ?? null;
   });
 }
 
@@ -89,11 +92,10 @@ test("zone travel autosaves and Continue restores the character after reload", a
   expect(played!.inventoryCount).toBeGreaterThan(0);
   expect(played!.remainingLoot).toBe(0);
 
-  // Travel: the zone change is the autosave trigger (DEC-034). Two zone
-  // changes have happened by now (the automation reset re-entered Ashtrail,
-  // then this travel reaches Hollowdeep), so wait until both save
-  // generations landed — writes are serialized, which makes the Hollowdeep
-  // save the active generation.
+  // Travel: the zone change is the autosave trigger (DEC-034). Saves are
+  // FIFO-queued, so once the committed active save reads back as
+  // Hollowdeep, every earlier write (the automation reset's Ashtrail save)
+  // has settled too and reloading cannot race an in-flight write.
   await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;
     combat?.travelTo("zone:hollowdeep");
@@ -101,10 +103,10 @@ test("zone travel autosaves and Continue restores the character after reload", a
   });
   await expect(page.getByTestId("combat-zone")).toContainText("Hollowdeep");
   await expect
-    .poll(() => generationCount(page), {
-      message: "zone travel should persist a new save generation",
+    .poll(() => activeSaveZone(page), {
+      message: "zone travel should persist the Hollowdeep save",
     })
-    .toBe(2);
+    .toBe("zone:hollowdeep");
 
   // Reload without ?autostart: a real player boot with an existing save.
   await page.goto("/", { waitUntil: "networkidle" });
@@ -169,16 +171,18 @@ test("a corrupted save is treated as absent and never crashes boot", async ({
   await page.goto("/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
-  // One travel writes the only save generation.
+  // One travel writes the only save generation. Wait until the committed
+  // active save reads back as Hollowdeep so corruption below hits the
+  // settled write, not a generation whose pointer promotion is in flight.
   await page.evaluate(() => {
     window.__RARPG_COMBAT_TEST__?.travelTo("zone:hollowdeep");
   });
   await expect(page.getByTestId("combat-zone")).toContainText("Hollowdeep");
   await expect
-    .poll(() => generationCount(page), {
-      message: "zone travel should persist a save generation",
+    .poll(() => activeSaveZone(page), {
+      message: "zone travel should persist the Hollowdeep save",
     })
-    .toBe(1);
+    .toBe("zone:hollowdeep");
 
   // Kill the player so the pagehide safeguard cannot write a fresh valid
   // save during navigation, then corrupt the only stored generation.
