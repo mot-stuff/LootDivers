@@ -73,6 +73,10 @@ describe("content validation", () => {
     expect(result.content?.definitions.map(({ id }) => id)).toEqual([
       "fixture:root",
     ]);
+    expect(result.content?.abilities.map(({ id }) => id)).toEqual([
+      "fixture:ability-contract",
+      "fixture:ability-contract-child",
+    ]);
   });
 
   it("reports source-specific invalid shape diagnostics", async () => {
@@ -274,6 +278,73 @@ describe("content validation", () => {
       ]),
     );
   });
+
+  it("rejects malformed and unbounded ability shapes", async () => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability.timing = {
+        startupTicks: -1,
+        activeTicks: 0,
+        recoveryTicks: 0,
+      };
+      ability.effects = Array.from({ length: 65 }, () => ({
+        kind: "trigger-ability",
+        abilityId: "fixture:ability-contract-child",
+      }));
+    });
+    await expectDiagnostic("SHAPE_INVALID", "fixtures/ability-contract.json");
+  });
+
+  it.each([
+    ["tags", ["fixture:missing"], "TAG_UNKNOWN"],
+    [
+      "costs",
+      [{ resourceId: "fixture:missing", amount: 1, settlement: "pay" }],
+      "STAT_UNKNOWN",
+    ],
+    ["capturedStatIds", ["fixture:missing"], "STAT_UNKNOWN"],
+    [
+      "effects",
+      [
+        {
+          kind: "trigger-ability",
+          abilityId: "fixture:missing",
+        },
+      ],
+      "REFERENCE_MISSING",
+    ],
+  ])("rejects invalid ability %s references", async (field, value, code) => {
+    await mutate("fixtures/ability-contract.json", (ability) => {
+      ability[field] = value;
+    });
+    await expectDiagnostic(code, "fixtures/ability-contract.json");
+  });
+
+  it("requires live abilities to read stats live rather than capture them", async () => {
+    await mutate("fixtures/ability-contract-child.json", (ability) => {
+      ability.capturedStatIds = ["fixture:power"];
+    });
+    await expectDiagnostic(
+      "STAT_POLICY_INVALID",
+      "fixtures/ability-contract-child.json",
+      "/capturedStatIds",
+    );
+  });
+
+  it("detects authored trigger cycles", async () => {
+    await mutate("fixtures/ability-contract-child.json", (ability) => {
+      ability.effects = [
+        {
+          kind: "trigger-ability",
+          abilityId: "fixture:ability-contract",
+        },
+      ];
+    });
+    await expectDiagnostic(
+      "TRIGGER_CYCLE",
+      "fixtures/ability-contract-child.json",
+      "/effects/0/abilityId",
+    );
+  });
 });
 
 describe("content compilation", () => {
@@ -287,6 +358,7 @@ describe("content compilation", () => {
     ) as Record<string, unknown>;
 
     expect(result.files).toEqual([
+      "chunks/abilities.json",
       "chunks/registries.json",
       "chunks/technical-definitions.json",
       "manifest.json",

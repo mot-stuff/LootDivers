@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "contentVersion": "0.1.0",
+  "kind": "ability-definition",
+  "id": "fixture:ability-contract-child",
+  "tags": ["fixture:ability"],
+  "targeting": {
+    "mode": "self",
+    "range": 0
+  },
+  "timing": {
+    "startupTicks": 0,
+    "activeTicks": 0,
+    "recoveryTicks": 0
+  },
+  "costs": [],
+  "cooldown": {
+    "durationTicks": 0,
+    "startsOn": "complete"
+  },
+  "cancellation": {
+    "allowedDuring": [],
+    "refund": "none",
+    "cooldown": "retain"
+  },
+  "statPolicy": "live",
+  "capturedStatIds": [],
+  "effects": []
+}

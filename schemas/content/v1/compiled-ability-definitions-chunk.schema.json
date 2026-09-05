@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rarpg.dev/schemas/content/v1/compiled-ability-definitions-chunk.schema.json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "schemaVersion": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+      },
+      "contentVersion": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+      },
+      "kind": {
+        "type": "string",
+        "const": "ability-definition"
+      },
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+      },
+      "tags": {
+        "type": "array",
+        "maxItems": 32,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+        }
+      },
+      "targeting": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "self",
+              "entity",
+              "point",
+              "direction"
+            ]
+          },
+          "range": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
+          }
+        },
+        "required": [
+          "mode",
+          "range"
+        ]
+      },
+      "timing": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "startupTicks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 36000
+          },
+          "activeTicks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 36000
+          },
+          "recoveryTicks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 36000
+          }
+        },
+        "required": [
+          "startupTicks",
+          "activeTicks",
+          "recoveryTicks"
+        ]
+      },
+      "costs": {
+        "type": "array",
+        "maxItems": 16,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "resourceId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+            },
+            "amount": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1000000000
+            },
+            "settlement": {
+              "type": "string",
+              "enum": [
+                "pay",
+                "reserve"
+              ]
+            }
+          },
+          "required": [
+            "resourceId",
+            "amount",
+            "settlement"
+          ]
+        }
+      },
+      "cooldown": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "durationTicks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 36000
+          },
+          "startsOn": {
+            "type": "string",
+            "enum": [
+              "pay",
+              "active",
+              "complete"
+            ]
+          }
+        },
+        "required": [
+          "durationTicks",
+          "startsOn"
+        ]
+      },
+      "cancellation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allowedDuring": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "startup",
+                "active",
+                "recovery"
+              ]
+            }
+          },
+          "refund": {
+            "type": "string",
+            "enum": [
+              "none",
+              "reserved",
+              "all"
+            ]
+          },
+          "cooldown": {
+            "type": "string",
+            "enum": [
+              "retain",
+              "clear"
+            ]
+          }
+        },
+        "required": [
+          "allowedDuring",
+          "refund",
+          "cooldown"
+        ]
+      },
+      "statPolicy": {
+        "type": "string",
+        "enum": [
+          "snapshot",
+          "live"
+        ]
+      },
+      "capturedStatIds": {
+        "type": "array",
+        "maxItems": 32,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+        }
+      },
+      "effects": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "modify-resource"
+                },
+                "resourceId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+                },
+                "amount": {
+                  "type": "number",
+                  "minimum": -1000000000,
+                  "maximum": 1000000000
+                },
+                "recipient": {
+                  "type": "string",
+                  "enum": [
+                    "source",
+                    "target"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "resourceId",
+                "amount",
+                "recipient"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "trigger-ability"
+                },
+                "abilityId": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+                }
+              },
+              "required": [
+                "kind",
+                "abilityId"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "custom"
+                },
+                "executorKind": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*:[a-z0-9][a-z0-9._/-]*$"
+                },
+                "parameters": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 256
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -1000000000,
+                            "maximum": 1000000000
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "value"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "executorKind",
+                "parameters"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "required": [
+      "schemaVersion",
+      "contentVersion",
+      "kind",
+      "id",
+      "tags",
+      "targeting",
+      "timing",
+      "costs",
+      "cooldown",
+      "cancellation",
+      "statPolicy",
+      "capturedStatIds",
+      "effects"
+    ]
+  }
+}

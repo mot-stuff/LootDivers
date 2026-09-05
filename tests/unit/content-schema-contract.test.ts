@@ -7,11 +7,14 @@ import { describe, expect, it } from "vitest";
 import {
   ASSET_PATH_PATTERN,
   STABLE_ID_PATTERN,
+  type AbilityContentDefinition,
+  type CompiledAbilityDefinitionsChunk,
   type CompiledContentManifest,
   type CompiledRegistriesChunk,
 } from "../../src/content/contracts.ts";
 import { checkSchemaArtifacts } from "../../src/content/pipeline.ts";
 import {
+  abilityDefinitionSchema,
   assetRegistrySchema,
   compiledManifestSchema,
   compiledRegistriesChunkSchema,
@@ -139,6 +142,49 @@ describe("schema and TypeScript contract alignment", () => {
     expect(ajv.compile(compiledRegistriesChunkSchema)(registries)).toBe(true);
     expect(
       ajv.compile(compiledManifestSchema)({ ...manifest, chunks: "wrong" }),
+    ).toBe(false);
+  });
+
+  it("keeps the ability TypeScript union aligned with its strict schema", () => {
+    const ability: AbilityContentDefinition = {
+      schemaVersion: "1.0.0",
+      contentVersion: "0.1.0",
+      kind: "ability-definition",
+      id: "fixture:schema",
+      tags: ["fixture:ability"],
+      targeting: { mode: "point", range: 12 },
+      timing: { startupTicks: 1, activeTicks: 2, recoveryTicks: 3 },
+      costs: [{ resourceId: "fixture:mana", amount: 4, settlement: "reserve" }],
+      cooldown: { durationTicks: 5, startsOn: "active" },
+      cancellation: {
+        allowedDuring: ["startup"],
+        refund: "reserved",
+        cooldown: "retain",
+      },
+      statPolicy: "snapshot",
+      capturedStatIds: ["fixture:power"],
+      effects: [
+        {
+          kind: "custom",
+          executorKind: "fixture:executor",
+          parameters: [{ key: "scale", value: 2 }],
+        },
+      ],
+    };
+    const compiled: CompiledAbilityDefinitionsChunk = [ability];
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    const validate = ajv.compile(abilityDefinitionSchema);
+
+    expect(compiled).toHaveLength(1);
+    expect(validate(ability)).toBe(true);
+    expect(validate({ ...ability, arbitraryScript: "doAnything()" })).toBe(
+      false,
+    );
+    expect(
+      validate({
+        ...ability,
+        timing: { ...ability.timing, startupTicks: 1.5 },
+      }),
     ).toBe(false);
   });
 });

@@ -2,5 +2,5 @@
   "schemaVersion": "1.0.0",
   "contentVersion": "0.1.0",
   "kind": "tag-registry",
-  "entries": [{ "id": "fixture:synthetic" }]
+  "entries": [{ "id": "fixture:synthetic" }, { "id": "fixture:ability" }]
 }

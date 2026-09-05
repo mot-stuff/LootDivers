@@ -7,6 +7,16 @@
       "id": "fixture:scalar",
       "minimum": 0,
       "maximum": 10
+    },
+    {
+      "id": "fixture:mana",
+      "minimum": 0,
+      "maximum": 100
+    },
+    {
+      "id": "fixture:power",
+      "minimum": 0,
+      "maximum": 100
     }
   ]
 }

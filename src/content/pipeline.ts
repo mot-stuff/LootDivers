@@ -18,10 +18,12 @@ import Ajv2020, {
 } from "ajv/dist/2020.js";
 
 import {
+  type AbilityContentDefinition,
   ASSET_PATH_PATTERN,
   SUPPORTED_COMPILER_VERSION,
   SUPPORTED_SCHEMA_VERSION,
   type AssetDefinition,
+  type CompiledAbilityDefinitionsChunk,
   type CompiledContentManifest,
   type CompiledRegistriesChunk,
   type CompiledTechnicalDefinitionsChunk,
@@ -35,6 +37,7 @@ import {
   type ValidatedContent,
 } from "./contracts.ts";
 import {
+  compiledAbilityDefinitionsChunkSchema,
   compiledManifestSchema,
   compiledRegistriesChunkSchema,
   compiledTechnicalDefinitionsChunkSchema,
@@ -405,7 +408,9 @@ export async function validateContentDirectory(
   const stats: StatDefinition[] = [];
   const tags: TagDefinition[] = [];
   const definitions: TechnicalDefinition[] = [];
+  const abilities: AbilityContentDefinition[] = [];
   const definitionSources = new Map<StableId, string>();
+  const abilitySources = new Map<StableId, string>();
   const statSources = new Map<StableId, SourcePointer>();
 
   const registryDocuments = new Map<string, SourcePointer[]>();
@@ -473,6 +478,17 @@ export async function validateContentDirectory(
       if (!definitionSources.has(value.id)) {
         definitionSources.set(value.id, source);
       }
+    } else if (value.kind === "ability-definition") {
+      addUnique(
+        { source, path: "/id", value },
+        "ability",
+        abilities,
+        idSources,
+        diagnostics,
+      );
+      if (!abilitySources.has(value.id)) {
+        abilitySources.set(value.id, source);
+      }
     }
   }
 
@@ -513,6 +529,7 @@ export async function validateContentDirectory(
   const statById = new Map(stats.map((entry) => [entry.id, entry]));
   const tagIds = new Set(tags.map((entry) => entry.id));
   const definitionIds = new Set(definitions.map((entry) => entry.id));
+  const abilityIds = new Set(abilities.map((entry) => entry.id));
 
   for (const stat of stats) {
     if (stat.minimum > stat.maximum) {
@@ -628,6 +645,159 @@ export async function validateContentDirectory(
     });
   }
 
+  for (const ability of abilities) {
+    const source = abilitySources.get(ability.id) ?? "<unknown>";
+    ability.tags.forEach((id, index) => {
+      if (!tagIds.has(id)) {
+        diagnostics.push(
+          diagnostic(
+            "TAG_UNKNOWN",
+            source,
+            `/tags/${index}`,
+            `Unknown tag ID "${id}".`,
+          ),
+        );
+      }
+    });
+    const usedCosts = new Set<StableId>();
+    ability.costs.forEach((cost, index) => {
+      if (usedCosts.has(cost.resourceId)) {
+        diagnostics.push(
+          diagnostic(
+            "DUPLICATE_VALUE",
+            source,
+            `/costs/${index}/resourceId`,
+            `Resource ID "${cost.resourceId}" is repeated in ability costs.`,
+          ),
+        );
+      }
+      usedCosts.add(cost.resourceId);
+      if (!statById.has(cost.resourceId)) {
+        diagnostics.push(
+          diagnostic(
+            "STAT_UNKNOWN",
+            source,
+            `/costs/${index}/resourceId`,
+            `Unknown resource stat ID "${cost.resourceId}".`,
+          ),
+        );
+      }
+    });
+    ability.capturedStatIds.forEach((id, index) => {
+      if (!statById.has(id)) {
+        diagnostics.push(
+          diagnostic(
+            "STAT_UNKNOWN",
+            source,
+            `/capturedStatIds/${index}`,
+            `Unknown captured stat ID "${id}".`,
+          ),
+        );
+      }
+    });
+    if (ability.statPolicy === "live" && ability.capturedStatIds.length > 0) {
+      diagnostics.push(
+        diagnostic(
+          "STAT_POLICY_INVALID",
+          source,
+          "/capturedStatIds",
+          "Live-stat abilities must not declare captured stat IDs.",
+        ),
+      );
+    }
+    if (ability.targeting.mode === "self" && ability.targeting.range !== 0) {
+      diagnostics.push(
+        diagnostic(
+          "TARGETING_INVALID",
+          source,
+          "/targeting/range",
+          "Self-targeted abilities must use range 0.",
+        ),
+      );
+    }
+    ability.effects.forEach((effect, index) => {
+      if (effect.kind === "modify-resource") {
+        if (!statById.has(effect.resourceId)) {
+          diagnostics.push(
+            diagnostic(
+              "STAT_UNKNOWN",
+              source,
+              `/effects/${index}/resourceId`,
+              `Unknown resource stat ID "${effect.resourceId}".`,
+            ),
+          );
+        }
+      } else if (
+        effect.kind === "trigger-ability" &&
+        !abilityIds.has(effect.abilityId)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "REFERENCE_MISSING",
+            source,
+            `/effects/${index}/abilityId`,
+            `Triggered ability ID "${effect.abilityId}" does not exist.`,
+          ),
+        );
+      } else if (effect.kind === "custom") {
+        const keys = new Set<string>();
+        effect.parameters.forEach((parameter, parameterIndex) => {
+          if (keys.has(parameter.key)) {
+            diagnostics.push(
+              diagnostic(
+                "DUPLICATE_VALUE",
+                source,
+                `/effects/${index}/parameters/${parameterIndex}/key`,
+                `Custom parameter key "${parameter.key}" is repeated.`,
+              ),
+            );
+          }
+          keys.add(parameter.key);
+        });
+      }
+    });
+  }
+
+  const abilityById = new Map(
+    abilities.map((ability) => [ability.id, ability]),
+  );
+  const visitState = new Map<StableId, "visiting" | "visited">();
+  for (const root of sortById(abilities)) {
+    if (visitState.get(root.id) !== undefined) continue;
+    const stack: { ability: AbilityContentDefinition; nextEffect: number }[] = [
+      { ability: root, nextEffect: 0 },
+    ];
+    visitState.set(root.id, "visiting");
+    while (stack.length > 0) {
+      const frame = stack[stack.length - 1];
+      if (frame === undefined) break;
+      const effectIndex = frame.nextEffect;
+      const effect = frame.ability.effects[effectIndex];
+      if (effect === undefined) {
+        visitState.set(frame.ability.id, "visited");
+        stack.pop();
+        continue;
+      }
+      frame.nextEffect += 1;
+      if (effect.kind !== "trigger-ability") continue;
+      const target = abilityById.get(effect.abilityId);
+      if (target === undefined) continue;
+      if (visitState.get(target.id) === "visiting") {
+        diagnostics.push(
+          diagnostic(
+            "TRIGGER_CYCLE",
+            abilitySources.get(frame.ability.id) ?? "<unknown>",
+            `/effects/${effectIndex}/abilityId`,
+            `Trigger edge "${frame.ability.id}" -> "${target.id}" forms a cycle.`,
+          ),
+        );
+      } else if (visitState.get(target.id) === undefined) {
+        visitState.set(target.id, "visiting");
+        stack.push({ ability: target, nextEffect: 0 });
+      }
+    }
+  }
+
   diagnostics.sort((left, right) =>
     compareCodeUnits(
       `${left.source}\0${left.path}\0${left.code}`,
@@ -659,6 +829,11 @@ export async function validateContentDirectory(
           compareCodeUnits(left.statId, right.statId),
         ),
         tags: [...definition.tags].sort(compareCodeUnits),
+      })),
+      abilities: sortById(abilities).map((ability) => ({
+        ...ability,
+        capturedStatIds: [...ability.capturedStatIds].sort(compareCodeUnits),
+        tags: [...ability.tags].sort(compareCodeUnits),
       })),
       sourceHash,
     },
@@ -705,6 +880,12 @@ export async function compileContent(
   };
   const definitionsChunk: CompiledTechnicalDefinitionsChunk =
     content.definitions;
+  const abilitiesChunk: CompiledAbilityDefinitionsChunk = content.abilities;
+  assertGeneratedContract(
+    compiledAbilityDefinitionsChunkSchema,
+    abilitiesChunk,
+    "ability definitions chunk",
+  );
   assertGeneratedContract(
     compiledRegistriesChunkSchema,
     registriesChunk,
@@ -718,8 +899,13 @@ export async function compileContent(
 
   const chunks: readonly [
     string,
-    CompiledRegistriesChunk | CompiledTechnicalDefinitionsChunk,
+    (
+      | CompiledAbilityDefinitionsChunk
+      | CompiledRegistriesChunk
+      | CompiledTechnicalDefinitionsChunk
+    ),
   ][] = [
+    ["abilities", abilitiesChunk],
     ["registries", registriesChunk],
     ["technical-definitions", definitionsChunk],
   ] as const;

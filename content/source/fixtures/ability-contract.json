@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0.0",
+  "contentVersion": "0.1.0",
+  "kind": "ability-definition",
+  "id": "fixture:ability-contract",
+  "tags": ["fixture:ability"],
+  "targeting": {
+    "mode": "self",
+    "range": 0
+  },
+  "timing": {
+    "startupTicks": 2,
+    "activeTicks": 1,
+    "recoveryTicks": 3
+  },
+  "costs": [
+    {
+      "resourceId": "fixture:mana",
+      "amount": 10,
+      "settlement": "reserve"
+    }
+  ],
+  "cooldown": {
+    "durationTicks": 12,
+    "startsOn": "active"
+  },
+  "cancellation": {
+    "allowedDuring": ["startup", "recovery"],
+    "refund": "reserved",
+    "cooldown": "retain"
+  },
+  "statPolicy": "snapshot",
+  "capturedStatIds": ["fixture:power"],
+  "effects": [
+    {
+      "kind": "modify-resource",
+      "resourceId": "fixture:mana",
+      "amount": 1,
+      "recipient": "source"
+    },
+    {
+      "kind": "trigger-ability",
+      "abilityId": "fixture:ability-contract-child"
+    }
+  ]
+}

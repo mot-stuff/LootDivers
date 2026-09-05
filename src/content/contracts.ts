@@ -67,7 +67,62 @@ export interface TechnicalDefinition extends VersionedDocument {
   readonly references: readonly StableId[];
 }
 
+export interface AbilityCostContent {
+  readonly resourceId: StableId;
+  readonly amount: number;
+  readonly settlement: "pay" | "reserve";
+}
+
+export type AbilityEffectContent =
+  | {
+      readonly kind: "modify-resource";
+      readonly resourceId: StableId;
+      readonly amount: number;
+      readonly recipient: "source" | "target";
+    }
+  | {
+      readonly kind: "trigger-ability";
+      readonly abilityId: StableId;
+    }
+  | {
+      readonly kind: "custom";
+      readonly executorKind: StableId;
+      readonly parameters: readonly {
+        readonly key: string;
+        readonly value: string | number | boolean;
+      }[];
+    };
+
+export interface AbilityContentDefinition extends VersionedDocument {
+  readonly kind: "ability-definition";
+  readonly id: StableId;
+  readonly tags: readonly StableId[];
+  readonly targeting: {
+    readonly mode: "self" | "entity" | "point" | "direction";
+    readonly range: number;
+  };
+  readonly timing: {
+    readonly startupTicks: number;
+    readonly activeTicks: number;
+    readonly recoveryTicks: number;
+  };
+  readonly costs: readonly AbilityCostContent[];
+  readonly cooldown: {
+    readonly durationTicks: number;
+    readonly startsOn: "pay" | "active" | "complete";
+  };
+  readonly cancellation: {
+    readonly allowedDuring: readonly ("startup" | "active" | "recovery")[];
+    readonly refund: "none" | "reserved" | "all";
+    readonly cooldown: "retain" | "clear";
+  };
+  readonly statPolicy: "snapshot" | "live";
+  readonly capturedStatIds: readonly StableId[];
+  readonly effects: readonly AbilityEffectContent[];
+}
+
 export type ContentDocument =
+  | AbilityContentDefinition
   | AssetRegistry
   | ContentProject
   | StatRegistry
@@ -87,6 +142,7 @@ export interface ValidatedContent {
   readonly stats: readonly StatDefinition[];
   readonly tags: readonly TagDefinition[];
   readonly definitions: readonly TechnicalDefinition[];
+  readonly abilities: readonly AbilityContentDefinition[];
   readonly sourceHash: string;
 }
 
@@ -112,3 +168,5 @@ export interface CompiledRegistriesChunk {
 }
 
 export type CompiledTechnicalDefinitionsChunk = readonly TechnicalDefinition[];
+export type CompiledAbilityDefinitionsChunk =
+  readonly AbilityContentDefinition[];
