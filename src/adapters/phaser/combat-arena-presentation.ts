@@ -206,14 +206,24 @@ export class CombatArenaPresentation {
       this.#renderedFacingPoint,
     );
 
+    const viewportWidth =
+      this.scene.cameras.main.width / this.scene.cameras.main.zoom;
+    const viewportHeight =
+      this.scene.cameras.main.height / this.scene.cameras.main.zoom;
+    const hudMargin = 24;
+    const barWidth = 310;
+    const barHeight = 42;
+    const barX = viewportWidth - barWidth - hudMargin;
+    const barY = viewportHeight - barHeight - hudMargin;
+
     this.#feedbackGraphics.clear();
     this.#feedbackGraphics.fillStyle(0x07111e, 0.9);
-    this.#feedbackGraphics.fillRoundedRect(626, 472, 310, 42, 8);
+    this.#feedbackGraphics.fillRoundedRect(barX, barY, barWidth, barHeight, 8);
     this.#feedbackGraphics.fillStyle(state.dodgeReady ? 0x57d895 : 0x4f86b8, 1);
     this.#feedbackGraphics.fillRoundedRect(
-      634,
-      480,
-      294 * state.cooldownProgress,
+      barX + 8,
+      barY + 8,
+      (barWidth - 16) * state.cooldownProgress,
       26,
       5,
     );
@@ -222,7 +232,13 @@ export class CombatArenaPresentation {
       state.dodgeReady ? 0xa7f3cf : 0x76b8ff,
       1,
     );
-    this.#feedbackGraphics.strokeRoundedRect(626, 472, 310, 42, 8);
+    this.#feedbackGraphics.strokeRoundedRect(
+      barX,
+      barY,
+      barWidth,
+      barHeight,
+      8,
+    );
 
     const focusStatus = this.#pausedForUi
       ? "PAUSED · click arena to play"
@@ -230,6 +246,7 @@ export class CombatArenaPresentation {
     const dodgeStatus = state.dodgeReady
       ? "READY"
       : `${(state.cooldownTicksRemaining / 60).toFixed(1)}s`;
+    this.#statusText.setPosition(hudMargin, viewportHeight - 70);
     this.#statusText.setText(
       `WASD move · SPACE dodge · R reset · Mouse aim\n${focusStatus}                                  DODGE ${dodgeStatus}`,
     );
