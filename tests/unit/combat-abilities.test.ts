@@ -38,6 +38,21 @@ describe("Phase 2 combat abilities", () => {
         ],
         targeting: { mode: "direction", range: 110 },
         timing: { startupTicks: 4, activeTicks: 3, recoveryTicks: 8 },
+        effects: [
+          expect.objectContaining({
+            parameters: [
+              {
+                key: "effect",
+                value: {
+                  kind: "cone-damage",
+                  damage: 25,
+                  range: 110,
+                  halfAngleDegrees: 55,
+                },
+              },
+            ],
+          }),
+        ],
       }),
       expect.objectContaining({
         id: CINDER_DART_ID,
@@ -63,8 +78,14 @@ describe("Phase 2 combat abilities", () => {
     expect(simulation.diagnostics().mana).toBe(85);
     expect(simulation.requestAbility(CINDER_DART_ID)).toMatchObject({
       accepted: false,
+      reason: "ability-busy",
+    });
+    step(simulation, 16);
+    expect(simulation.requestAbility(CINDER_DART_ID)).toMatchObject({
+      accepted: false,
       reason: "cooldown-active",
     });
+    step(simulation, 14);
     expect(
       simulation.requestAbility(WINTER_PULSE_ID, {
         kind: "point",
@@ -72,10 +93,11 @@ describe("Phase 2 combat abilities", () => {
         y: 400,
       }).accepted,
     ).toBe(true);
+    step(simulation, 24);
     expect(simulation.requestAbility(DEFIANT_SIGNAL_ID).accepted).toBe(true);
-    expect(simulation.diagnostics().mana).toBe(40);
+    expect(simulation.diagnostics().mana).toBe(45.4);
     step(simulation, 30);
-    expect(simulation.diagnostics().mana).toBe(43);
+    expect(simulation.diagnostics().mana).toBe(48.4);
 
     simulation.reset();
     for (let cast = 0; cast < 8; cast += 1) {
@@ -93,6 +115,52 @@ describe("Phase 2 combat abilities", () => {
     expect(sweptCircleHitFraction(0, 0, 100, 0, 2, 50, 10, 2)).toBeNull();
     expect(pointInArea(0, 0, 100, 110, 0, 10)).toBe(true);
     expect(pointInArea(0, 0, 100, 111, 0, 10)).toBe(false);
+  });
+
+  it("executes adjusted typed effect parameters without arena conditionals", () => {
+    const abilityDefinitions = COMBAT_ABILITY_DEFINITIONS.map((definition) =>
+      definition.id === CINDER_DART_ID
+        ? {
+            ...definition,
+            effects: definition.effects.map((effect) => {
+              const parameter = effect.parameters[0];
+              return parameter?.value.kind === "projectile"
+                ? {
+                    ...effect,
+                    parameters: [
+                      {
+                        key: "effect" as const,
+                        value: {
+                          ...parameter.value,
+                          damage: 9,
+                          radius: 11,
+                          maximumRange: 240,
+                        },
+                      },
+                    ],
+                  }
+                : effect;
+            }),
+          }
+        : definition,
+    );
+    const simulation = new CombatArenaSimulation({
+      ...new CombatArenaSimulation().config,
+      abilityDefinitions,
+      enemy: {
+        ...new CombatArenaSimulation().config.enemy,
+        spawnX: 750,
+        spawnY: 400,
+      },
+    });
+
+    simulation.requestAbility(CINDER_DART_ID);
+    step(simulation, 7);
+    expect(simulation.diagnostics().projectiles).toEqual([
+      expect.objectContaining({ radius: 11 }),
+    ]);
+    step(simulation, 15);
+    expect(simulation.diagnostics().enemy.health).toBe(41);
   });
 
   it("refreshes statuses without stacking and expires before the expiry tick effects", () => {
@@ -125,7 +193,7 @@ describe("Phase 2 combat abilities", () => {
     });
     simulation.setAim(1, 0);
     simulation.requestAbility(DEFIANT_SIGNAL_ID);
-    step(simulation, 6);
+    step(simulation, 15);
     expect(simulation.diagnostics().statuses).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ targetId: "player", statusId: "focused" }),
@@ -176,7 +244,7 @@ describe("Phase 2 combat abilities", () => {
       enemy: { ...base.enemy, spawnX: 750, spawnY: 400 },
     });
     focused.requestAbility(DEFIANT_SIGNAL_ID);
-    step(focused, 6);
+    step(focused, 15);
     focused.requestAbility(WINTER_PULSE_ID, {
       kind: "point",
       x: 750,

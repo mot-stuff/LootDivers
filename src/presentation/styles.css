@@ -176,6 +176,7 @@ body.combat-mode #app,
   border-color: #63c7a1;
 }
 
+.combat-ability[data-state="busy"],
 .combat-ability[data-state="insufficient-mana"],
 .combat-ability[data-state="defeated"] {
   border-color: #59697c;
@@ -249,6 +250,7 @@ body.combat-mode #app,
   color: #ffd27d;
 }
 
+.combat-ability[data-state="busy"] .combat-ability-state,
 .combat-ability[data-state="insufficient-mana"] .combat-ability-state,
 .combat-ability[data-state="defeated"] .combat-ability-state {
   color: #c0cad6;

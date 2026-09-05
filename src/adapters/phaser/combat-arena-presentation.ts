@@ -8,7 +8,6 @@ import {
   FIXED_STEP_SECONDS,
   FIXED_TICKS_PER_SECOND,
   FixedStepRunner,
-  MANA_RESOURCE_ID,
   WINTER_PULSE_ID,
   definitionById,
   type CombatArenaDiagnostics,
@@ -380,7 +379,10 @@ export class CombatArenaPresentation {
     if (state.attackPhase === "idle" || state.attackPhase === "recovery") {
       return;
     }
-    const attack = this.#simulation.config.primaryAttack;
+    const attack = definitionById(BASIC_CLEAVE_ID)?.effects.find(
+      (effect) => effect.parameters[0]?.value.kind === "cone-damage",
+    )?.parameters[0]?.value;
+    if (attack?.kind !== "cone-damage") return;
     const centerAngle = Math.atan2(state.attackAimY, state.attackAimX);
     const halfAngle = (attack.halfAngleDegrees * Math.PI) / 180;
     const points = [new Phaser.Math.Vector2(playerPoint.x, playerPoint.y - 8)];
@@ -565,25 +567,26 @@ export class CombatArenaPresentation {
       placeholderExperienceMaximum: 100,
       abilities: HUD_ABILITIES.map((ability) => {
         const definition = definitionById(ability.id);
-        const manaCost =
-          definition?.costs.find((cost) => cost.resourceId === MANA_RESOURCE_ID)
-            ?.amount ?? 0;
+        const activation = state.abilities.find(
+          (candidate) => candidate.abilityId === ability.id,
+        );
+        const manaCost = activation?.manaCost ?? 0;
         const cooldownRemainingSeconds =
-          (state.cooldowns[ability.id] ?? 0) / FIXED_TICKS_PER_SECOND;
+          (activation?.cooldownTicksRemaining ?? 0) / FIXED_TICKS_PER_SECOND;
         const cooldownMaximumSeconds =
           (definition?.cooldown.durationTicks ?? 0) / FIXED_TICKS_PER_SECOND;
+        const hudState =
+          activation?.kind === "insufficient-resource"
+            ? ("insufficient-mana" as const)
+            : activation?.kind === "unknown"
+              ? ("busy" as const)
+              : (activation?.kind ?? "ready");
         return {
           ...ability,
           manaCost,
           cooldownRemainingSeconds,
           cooldownMaximumSeconds,
-          state: state.playerDead
-            ? ("defeated" as const)
-            : cooldownRemainingSeconds > 0
-              ? ("cooldown" as const)
-              : state.mana < manaCost
-                ? ("insufficient-mana" as const)
-                : ("ready" as const),
+          state: hudState,
         };
       }),
       activeStatuses: state.statuses.map((status) => ({

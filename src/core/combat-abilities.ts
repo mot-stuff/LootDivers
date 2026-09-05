@@ -1,5 +1,6 @@
 import type {
   AbilityDefinition,
+  CustomAbilityEffect,
   AbilityTarget,
 } from "./ability-runtime-contracts";
 import { contentId, type ContentId } from "./ids";
@@ -7,6 +8,7 @@ import { contentId, type ContentId } from "./ids";
 export const MANA_RESOURCE_ID = contentId("combat:mana");
 export const ABILITY_DAMAGE_EXECUTOR_ID = contentId("combat:ability-effect");
 export const OUTGOING_DAMAGE_STAT_ID = contentId("combat:outgoing-damage");
+export const MOVE_SPEED_STAT_ID = contentId("combat:move-speed");
 
 export const BASIC_CLEAVE_ID = contentId("ability:basic-cleave");
 export const CINDER_DART_ID = contentId("ability:cinder-dart");
@@ -14,6 +16,7 @@ export const WINTER_PULSE_ID = contentId("ability:winter-pulse");
 export const DEFIANT_SIGNAL_ID = contentId("ability:defiant-signal");
 
 export type CombatAbilityId = ContentId;
+export type CombatStatusId = "chilled" | "focused" | "weakened";
 
 const cancellation = {
   allowedDuring: [] as const,
@@ -21,18 +24,84 @@ const cancellation = {
   cooldown: "retain" as const,
 };
 
-function effect(kind: "cleave" | "projectile" | "area" | "signal") {
+export interface ConeDamageEffectParameters {
+  readonly kind: "cone-damage";
+  readonly damage: number;
+  readonly range: number;
+  readonly halfAngleDegrees: number;
+}
+
+export interface ProjectileEffectParameters {
+  readonly kind: "projectile";
+  readonly damage: number;
+  readonly radius: number;
+  readonly speedPerSecond: number;
+  readonly maximumRange: number;
+}
+
+export interface AreaDamageEffectParameters {
+  readonly kind: "area-damage";
+  readonly damage: number;
+  readonly radius: number;
+  readonly feedbackTicks: number;
+}
+
+export interface StatusModifierParameters {
+  readonly statId: ContentId;
+  readonly multiplier: number;
+}
+
+export interface AreaStatusEffectParameters {
+  readonly kind: "area-status";
+  readonly statusId: CombatStatusId;
+  readonly radius: number;
+  readonly durationTicks: number;
+  readonly feedbackTicks: number;
+  readonly modifier: StatusModifierParameters;
+}
+
+export interface SelfStatusEffectParameters {
+  readonly kind: "self-status";
+  readonly statusId: CombatStatusId;
+  readonly durationTicks: number;
+  readonly modifier: StatusModifierParameters;
+}
+
+export type CombatEffectParameters =
+  | ConeDamageEffectParameters
+  | ProjectileEffectParameters
+  | AreaDamageEffectParameters
+  | AreaStatusEffectParameters
+  | SelfStatusEffectParameters;
+
+export interface CombatEffectParameter {
+  readonly key: "effect";
+  readonly value: CombatEffectParameters;
+}
+
+export type CombatAbilityEffect = CustomAbilityEffect<
+  readonly CombatEffectParameter[]
+>;
+
+export interface CombatAbilityDefinition extends Omit<
+  AbilityDefinition,
+  "effects"
+> {
+  readonly effects: readonly CombatAbilityEffect[];
+}
+
+function effect(parameters: CombatEffectParameters): CombatAbilityEffect {
   return {
-    kind: "custom" as const,
+    kind: "custom",
     executorKind: ABILITY_DAMAGE_EXECUTOR_ID,
-    parameters: [{ key: "kind", value: kind }],
+    parameters: [{ key: "effect", value: parameters }],
   };
 }
 
 const tags = (...values: readonly string[]) =>
   values.map((value) => contentId(`tag:${value}`));
 
-export const COMBAT_ABILITY_DEFINITIONS: readonly AbilityDefinition[] = [
+export const COMBAT_ABILITY_DEFINITIONS: readonly CombatAbilityDefinition[] = [
   {
     id: BASIC_CLEAVE_ID,
     tags: tags("attack", "melee", "aoe", "physical", "primary"),
@@ -42,7 +111,14 @@ export const COMBAT_ABILITY_DEFINITIONS: readonly AbilityDefinition[] = [
     cooldown: { durationTicks: 0, startsOn: "pay" },
     cancellation,
     statCaptures: [{ subject: "source", statId: OUTGOING_DAMAGE_STAT_ID }],
-    effects: [effect("cleave")],
+    effects: [
+      effect({
+        kind: "cone-damage",
+        damage: 25,
+        range: 110,
+        halfAngleDegrees: 55,
+      }),
+    ],
   },
   {
     id: CINDER_DART_ID,
@@ -53,7 +129,15 @@ export const COMBAT_ABILITY_DEFINITIONS: readonly AbilityDefinition[] = [
     cooldown: { durationTicks: 30, startsOn: "pay" },
     cancellation,
     statCaptures: [{ subject: "source", statId: OUTGOING_DAMAGE_STAT_ID }],
-    effects: [effect("projectile")],
+    effects: [
+      effect({
+        kind: "projectile",
+        damage: 30,
+        radius: 6,
+        speedPerSecond: 600,
+        maximumRange: 600,
+      }),
+    ],
   },
   {
     id: WINTER_PULSE_ID,
@@ -64,7 +148,22 @@ export const COMBAT_ABILITY_DEFINITIONS: readonly AbilityDefinition[] = [
     cooldown: { durationTicks: 150, startsOn: "pay" },
     cancellation,
     statCaptures: [{ subject: "source", statId: OUTGOING_DAMAGE_STAT_ID }],
-    effects: [effect("area")],
+    effects: [
+      effect({
+        kind: "area-damage",
+        damage: 20,
+        radius: 100,
+        feedbackTicks: 18,
+      }),
+      effect({
+        kind: "area-status",
+        statusId: "chilled",
+        radius: 100,
+        durationTicks: 120,
+        feedbackTicks: 0,
+        modifier: { statId: MOVE_SPEED_STAT_ID, multiplier: 0.7 },
+      }),
+    ],
   },
   {
     id: DEFIANT_SIGNAL_ID,
@@ -75,15 +174,31 @@ export const COMBAT_ABILITY_DEFINITIONS: readonly AbilityDefinition[] = [
     cooldown: { durationTicks: 300, startsOn: "pay" },
     cancellation,
     statCaptures: [],
-    effects: [effect("signal")],
+    effects: [
+      effect({
+        kind: "self-status",
+        statusId: "focused",
+        durationTicks: 180,
+        modifier: { statId: OUTGOING_DAMAGE_STAT_ID, multiplier: 1.2 },
+      }),
+      effect({
+        kind: "area-status",
+        statusId: "weakened",
+        radius: 180,
+        durationTicks: 180,
+        feedbackTicks: 18,
+        modifier: { statId: OUTGOING_DAMAGE_STAT_ID, multiplier: 0.8 },
+      }),
+    ],
   },
 ] as const;
 
 export interface StatusInstance {
   readonly targetId: string;
-  readonly statusId: "chilled" | "focused" | "weakened";
+  readonly statusId: CombatStatusId;
   readonly appliedTick: number;
   readonly expiresAtTick: number;
+  readonly modifier: StatusModifierParameters;
 }
 
 export class RefreshingStatusStore {
@@ -94,12 +209,17 @@ export class RefreshingStatusStore {
     statusId: StatusInstance["statusId"],
     tick: number,
     durationTicks: number,
+    modifier: StatusModifierParameters = {
+      statId: OUTGOING_DAMAGE_STAT_ID,
+      multiplier: 1,
+    },
   ): StatusInstance {
     const status = {
       targetId,
       statusId,
       appliedTick: tick,
       expiresAtTick: tick + durationTicks,
+      modifier,
     };
     this.#statuses.set(`${targetId}:${statusId}`, status);
     return status;
@@ -124,6 +244,15 @@ export class RefreshingStatusStore {
       0,
       (this.#statuses.get(`${targetId}:${statusId}`)?.expiresAtTick ?? tick) -
         tick,
+    );
+  }
+
+  public multiplier(targetId: string, statId: ContentId, fallback = 1): number {
+    return (
+      [...this.#statuses.values()].find(
+        (status) =>
+          status.targetId === targetId && status.modifier.statId === statId,
+      )?.modifier.multiplier ?? fallback
     );
   }
 
@@ -195,6 +324,8 @@ export function targetMatches(
   return target.kind === mode;
 }
 
-export function definitionById(id: ContentId): AbilityDefinition | undefined {
+export function definitionById(
+  id: ContentId,
+): CombatAbilityDefinition | undefined {
   return COMBAT_ABILITY_DEFINITIONS.find((definition) => definition.id === id);
 }

@@ -139,11 +139,15 @@ function CombatActionBar({ model }: CombatVitalsProps) {
           const stateText =
             ability.state === "cooldown"
               ? `Cooldown ${formatSeconds(ability.cooldownRemainingSeconds)}`
-              : ability.state === "insufficient-mana"
-                ? `Need ${ability.manaCost} mana`
-                : ability.state === "defeated"
-                  ? "Defeated"
-                  : "Ready";
+              : ability.state === "executing"
+                ? "Executing"
+                : ability.state === "busy"
+                  ? "Busy"
+                  : ability.state === "insufficient-mana"
+                    ? `Need ${ability.manaCost} mana`
+                    : ability.state === "defeated"
+                      ? "Defeated"
+                      : "Ready";
           const costText =
             ability.manaCost > 0 ? `${ability.manaCost} mana` : "Free";
           const cooldownText =

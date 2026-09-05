@@ -1173,11 +1173,18 @@ targets, tag-bearing definitions, and bounded custom executors.
 
 Choose option 3. Four immutable TypeScript definitions share the existing
 request, validation, payment, startup, active, recovery, and completion
-pipeline. A registered combat executor maps active-stage effects to deterministic
-cone damage, swept projectiles, point areas, and refreshing statuses. The arena
-owns current prototype state and exposes read models/events to Phaser and
-Preact. Novel future mechanics may add narrow executor kinds when shared
-primitives cannot express them clearly.
+pipeline. A registered combat executor interprets a finite typed vocabulary of
+cone damage, projectile, area damage, area status, and self status effects.
+Damage, geometry, travel, duration, and modifier values live in those effect
+parameters rather than ability-id branches. The arena owns current prototype
+state and exposes read models/events to Phaser and Preact. Novel future mechanics
+may add narrow executor kinds when shared primitives cannot express them clearly.
+
+Player ability requests share one authoritative activation check. Death rejects
+all requests, and one player execution may occupy startup, active, or recovery
+at a time with no queue; movement and cooldown-only dodge remain independent.
+The same framework-independent activation and current-execution read model drives
+the HUD's executing, busy, defeated, Mana, and cooldown states.
 
 The Phase 2 set is Basic Cleave (left click), Cinder Dart (Q), Winter Pulse (E),
 and Defiant Signal (F). Mana is stored in integer tenths, statuses refresh

@@ -8,6 +8,7 @@ export {
   COMBAT_ABILITY_DEFINITIONS,
   DEFIANT_SIGNAL_ID,
   MANA_RESOURCE_ID,
+  MOVE_SPEED_STAT_ID,
   OUTGOING_DAMAGE_STAT_ID,
   RefreshingStatusStore,
   WINTER_PULSE_ID,
@@ -17,6 +18,11 @@ export {
   sweptCircleHitFraction,
   targetMatches,
   type CombatAbilityId,
+  type CombatAbilityDefinition,
+  type CombatAbilityEffect,
+  type CombatEffectParameter,
+  type CombatEffectParameters,
+  type CombatStatusId,
   type StatusInstance,
 } from "./combat-abilities";
 export {
@@ -27,10 +33,11 @@ export {
   type CombatArenaDiagnostics,
   type CombatArenaEvent,
   type CombatArenaEventReader,
+  type CombatAbilityActivationKind,
+  type CombatAbilityActivationReadModel,
   type CombatAreaFeedbackReadModel,
   type CombatProjectileReadModel,
   type CombatTargetReadModel,
-  type PrimaryAttackConfig,
 } from "./combat-arena";
 export {
   HealthPool,

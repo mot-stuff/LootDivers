@@ -23,7 +23,12 @@ export interface CanvasViewportReadModel {
 }
 
 export type CombatAbilityHudState =
-  "ready" | "cooldown" | "insufficient-mana" | "defeated";
+  | "ready"
+  | "executing"
+  | "busy"
+  | "cooldown"
+  | "insufficient-mana"
+  | "defeated";
 
 export interface CombatAbilityHudReadModel {
   readonly id: string;

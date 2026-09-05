@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BASIC_CLEAVE_ID,
+  CINDER_DART_ID,
   CombatArenaSimulation,
   DEFAULT_COMBAT_ARENA_CONFIG,
+  DEFIANT_SIGNAL_ID,
   FIXED_STEP_SECONDS,
+  WINTER_PULSE_ID,
+  definitionById,
 } from "../../src/core";
 
 function step(simulation: CombatArenaSimulation, count: number): void {
@@ -103,7 +108,7 @@ describe("CombatArenaSimulation", () => {
     simulation.setAim(1, 0);
     simulation.requestPrimaryAttack();
 
-    step(simulation, DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack.startupTicks);
+    step(simulation, definitionById(BASIC_CLEAVE_ID)?.timing.startupTicks ?? 0);
     expect(simulation.diagnostics()).toMatchObject({
       attackPhase: "active",
       attackAimX: 1,
@@ -125,7 +130,8 @@ describe("CombatArenaSimulation", () => {
 
   it("uses configured startup, active, and recovery tick windows", () => {
     const simulation = new CombatArenaSimulation();
-    const attack = DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack;
+    const attack = definitionById(BASIC_CLEAVE_ID)?.timing;
+    if (attack === undefined) throw new Error("Basic Cleave is not defined.");
     simulation.requestPrimaryAttack();
 
     step(simulation, attack.startupTicks);
@@ -161,8 +167,8 @@ describe("CombatArenaSimulation", () => {
     simulation.requestPrimaryAttack();
     step(
       simulation,
-      DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack.startupTicks +
-        DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack.activeTicks,
+      (definitionById(BASIC_CLEAVE_ID)?.timing.startupTicks ?? 0) +
+        (definitionById(BASIC_CLEAVE_ID)?.timing.activeTicks ?? 0),
     );
 
     expect(simulation.diagnostics()).toMatchObject({
@@ -243,6 +249,113 @@ describe("CombatArenaSimulation", () => {
         damageAttemptCount: 0,
       },
       eventCount: 0,
+    });
+  });
+
+  it("rejects every ability after death through authoritative activation state", () => {
+    const simulation = new CombatArenaSimulation();
+    simulation.applyPlayerDamage({ amount: 1_000, sourceId: "enemy" });
+    const before = simulation.diagnostics();
+
+    for (const abilityId of [
+      BASIC_CLEAVE_ID,
+      CINDER_DART_ID,
+      WINTER_PULSE_ID,
+      DEFIANT_SIGNAL_ID,
+    ]) {
+      expect(simulation.abilityActivation(abilityId)).toMatchObject({
+        kind: "defeated",
+        canActivate: false,
+        rejectionReason: "player-defeated",
+        currentExecution: null,
+      });
+      expect(simulation.requestAbility(abilityId)).toMatchObject({
+        accepted: false,
+        reason: "player-defeated",
+      });
+    }
+    simulation.requestPrimaryAttack();
+
+    expect(simulation.diagnostics()).toMatchObject({
+      mana: before.mana,
+      cooldowns: before.cooldowns,
+      currentExecution: null,
+      projectiles: [],
+      areaFeedback: [],
+      statuses: [],
+      lastAbilityResult: {
+        abilityId: BASIC_CLEAVE_ID,
+        accepted: false,
+        reason: "player-defeated",
+      },
+    });
+  });
+
+  it("allows only one startup, active, or recovery execution with no queue", () => {
+    const phaseCases = [
+      { steps: 0, stage: "startup" },
+      { steps: 4, stage: "active" },
+      { steps: 7, stage: "recovery" },
+    ] as const;
+
+    for (const phaseCase of phaseCases) {
+      const simulation = new CombatArenaSimulation();
+      expect(simulation.requestAbility(BASIC_CLEAVE_ID).accepted).toBe(true);
+      step(simulation, phaseCase.steps);
+      expect(simulation.diagnostics().currentExecution?.stage).toBe(
+        phaseCase.stage,
+      );
+      expect(simulation.abilityActivation(CINDER_DART_ID)).toMatchObject({
+        kind: "busy",
+        canActivate: false,
+        rejectionReason: "ability-busy",
+      });
+      expect(simulation.requestAbility(CINDER_DART_ID)).toMatchObject({
+        accepted: false,
+        reason: "ability-busy",
+      });
+      expect(simulation.diagnostics().mana).toBe(100);
+      step(simulation, 15 - phaseCase.steps);
+      expect(simulation.diagnostics().currentExecution).toBeNull();
+      expect(simulation.requestAbility(CINDER_DART_ID).accepted).toBe(true);
+    }
+
+    for (const abilityId of [
+      CINDER_DART_ID,
+      WINTER_PULSE_ID,
+      DEFIANT_SIGNAL_ID,
+    ]) {
+      const simulation = new CombatArenaSimulation();
+      const target =
+        abilityId === WINTER_PULSE_ID
+          ? ({ kind: "point", x: 600, y: 400 } as const)
+          : undefined;
+      expect(simulation.requestAbility(abilityId, target).accepted).toBe(true);
+      expect(simulation.requestAbility(BASIC_CLEAVE_ID)).toMatchObject({
+        accepted: false,
+        reason: "ability-busy",
+      });
+      expect(simulation.diagnostics().currentExecution?.abilityId).toBe(
+        abilityId,
+      );
+    }
+  });
+
+  it("keeps movement unrestricted during an ability execution", () => {
+    const simulation = new CombatArenaSimulation();
+    simulation.setMovement(1, 0);
+    expect(simulation.requestAbility(BASIC_CLEAVE_ID).accepted).toBe(true);
+
+    step(simulation, 1);
+
+    expect(simulation.diagnostics()).toMatchObject({
+      x:
+        DEFAULT_COMBAT_ARENA_CONFIG.width / 2 +
+        DEFAULT_COMBAT_ARENA_CONFIG.moveSpeed * FIXED_STEP_SECONDS,
+      currentExecution: {
+        abilityId: BASIC_CLEAVE_ID,
+        stage: "startup",
+      },
     });
   });
 });

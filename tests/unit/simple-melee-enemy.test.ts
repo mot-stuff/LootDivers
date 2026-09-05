@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BASIC_CLEAVE_ID,
   CombatArenaSimulation,
   DEFAULT_COMBAT_ARENA_CONFIG,
   FIXED_STEP_SECONDS,
+  definitionById,
   type CombatArenaConfig,
   type SimpleMeleeEnemyConfig,
 } from "../../src/core";
@@ -157,7 +159,8 @@ describe("simple melee enemy integration", () => {
       attackWindupTicks: 20,
       attackIntervalTicks: 40,
     });
-    const attack = simulation.config.primaryAttack;
+    const attack = definitionById(BASIC_CLEAVE_ID)?.timing;
+    if (attack === undefined) throw new Error("Basic Cleave is not defined.");
     simulation.setAim(1, 0);
 
     for (let attackIndex = 0; attackIndex < 4; attackIndex += 1) {

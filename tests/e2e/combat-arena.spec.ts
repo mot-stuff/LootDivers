@@ -206,8 +206,11 @@ test("ability automation exposes projectile, area, and status presentation paths
     page.getByRole("progressbar", { name: "Player mana" }),
   ).toHaveAttribute("aria-valuenow", "85.7");
   const cinderDart = page.locator('[data-ability-id="ability:cinder-dart"]');
-  await expect(cinderDart).toHaveAttribute("data-state", "cooldown");
-  await expect(cinderDart).toContainText("Cooldown 0.4s");
+  await expect(cinderDart).toHaveAttribute("data-state", "executing");
+  await expect(cinderDart).toContainText("Executing");
+  await expect(
+    page.locator('[data-ability-id="ability:winter-pulse"]'),
+  ).toHaveAttribute("data-state", "busy");
 
   await page.evaluate(() => {
     const combat = window.__RARPG_COMBAT_TEST__;
@@ -271,6 +274,156 @@ test("ability automation exposes projectile, area, and status presentation paths
   await expect(
     page.getByLabel(/Left click, Basic Cleave, Free, No cooldown/),
   ).toBeVisible();
+  expect(failures).toEqual([]);
+});
+
+test("focused canvas Q, E, and F drive authoritative ability presentation", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
+  await canvas.focus();
+  await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
+
+  await page.keyboard.press("q");
+  await expect
+    .poll(async () => {
+      const state = await diagnostics(page);
+      return state === null
+        ? null
+        : {
+            manaSpent: state.mana < 100,
+            cooldownStarted:
+              (state.abilities.find(
+                (ability) => ability.abilityId === "ability:cinder-dart",
+              )?.cooldownTicksRemaining ?? 0) > 0,
+            projectileRendered: state.renderedProjectileCount > 0,
+          };
+    })
+    .toEqual({
+      manaSpent: true,
+      cooldownStarted: true,
+      projectileRendered: true,
+    });
+
+  await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
+  await canvas.focus();
+  const pulseOrigin = await diagnostics(page);
+  const canvasBox = await canvas.boundingBox();
+  const canvasSize = await canvas.evaluate((element) => ({
+    width: (element as HTMLCanvasElement).width,
+    height: (element as HTMLCanvasElement).height,
+  }));
+  if (pulseOrigin === null || canvasBox === null) {
+    throw new Error("Combat pulse diagnostics were unavailable.");
+  }
+  await page.mouse.move(
+    canvasBox.x +
+      (pulseOrigin.enemyCanvasX / canvasSize.width) * canvasBox.width,
+    canvasBox.y +
+      (pulseOrigin.enemyCanvasY / canvasSize.height) * canvasBox.height,
+  );
+  await page.keyboard.press("e");
+  await expect
+    .poll(async () => {
+      const state = await diagnostics(page);
+      return state === null
+        ? null
+        : {
+            manaSpent: state.mana < 100,
+            cooldownStarted:
+              (state.abilities.find(
+                (ability) => ability.abilityId === "ability:winter-pulse",
+              )?.cooldownTicksRemaining ?? 0) > 0,
+            areaRendered: state.renderedAreaCount > 0,
+            chilledRendered: state.statuses.some(
+              (status) => status.statusId === "chilled",
+            ),
+          };
+    })
+    .toEqual({
+      manaSpent: true,
+      cooldownStarted: true,
+      areaRendered: true,
+      chilledRendered: true,
+    });
+
+  await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
+  await canvas.focus();
+  await page.keyboard.press("f");
+  await expect
+    .poll(async () => {
+      const state = await diagnostics(page);
+      return state === null
+        ? null
+        : {
+            manaSpent: state.mana < 100,
+            cooldownStarted:
+              (state.abilities.find(
+                (ability) => ability.abilityId === "ability:defiant-signal",
+              )?.cooldownTicksRemaining ?? 0) > 0,
+            areaRendered: state.renderedAreaCount > 0,
+            focusedRendered: state.statuses.some(
+              (status) => status.statusId === "focused",
+            ),
+          };
+    })
+    .toEqual({
+      manaSpent: true,
+      cooldownStarted: true,
+      areaRendered: true,
+      focusedRendered: true,
+    });
+  expect(failures).toEqual([]);
+});
+
+test("focused canvas ability keys are rejected after player death", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
+  await canvas.focus();
+  await page.evaluate(() => {
+    window.__RARPG_COMBAT_TEST__?.reset();
+    window.__RARPG_COMBAT_TEST__?.applyPlayerDamage(1_000);
+  });
+
+  await page.keyboard.press("q");
+  await page.keyboard.press("e");
+  await page.keyboard.press("f");
+  await expect
+    .poll(async () => {
+      const state = await diagnostics(page);
+      return state === null
+        ? null
+        : {
+            mana: state.mana,
+            cooldowns: state.cooldowns,
+            result: state.lastAbilityResult,
+            currentExecution: state.currentExecution,
+          };
+    })
+    .toMatchObject({
+      mana: 100,
+      cooldowns: {
+        "ability:basic-cleave": 0,
+        "ability:cinder-dart": 0,
+        "ability:winter-pulse": 0,
+        "ability:defiant-signal": 0,
+      },
+      result: {
+        abilityId: "ability:defiant-signal",
+        accepted: false,
+        reason: "player-defeated",
+      },
+      currentExecution: null,
+    });
+  await expect(
+    page.getByTestId("combat-action-hud").locator('[data-state="defeated"]'),
+  ).toHaveCount(4);
   expect(failures).toEqual([]);
 });
 

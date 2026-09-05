@@ -3,9 +3,11 @@ import { AbilityExecutionEngine } from "./ability-runtime";
 import type {
   AbilityCooldownHandle,
   AbilityExecutionSnapshot,
+  AbilityRejectionReason,
   AbilityRequestResult,
   AbilityStatRead,
   AbilityTarget,
+  CustomAbilityEffect,
   ResourcePaymentHandle,
   ResourceReservationHandle,
 } from "./ability-runtime-contracts";
@@ -13,17 +15,20 @@ import {
   ABILITY_DAMAGE_EXECUTOR_ID,
   BASIC_CLEAVE_ID,
   CINDER_DART_ID,
+  COMBAT_ABILITY_DEFINITIONS,
   DEFIANT_SIGNAL_ID,
   MANA_RESOURCE_ID,
+  MOVE_SPEED_STAT_ID,
   OUTGOING_DAMAGE_STAT_ID,
   RefreshingStatusStore,
   WINTER_PULSE_ID,
   damageAfterModifier,
-  definitionById,
   pointInArea,
   sweptCircleHitFraction,
   targetMatches,
+  type CombatEffectParameter,
   type CombatAbilityId,
+  type CombatAbilityDefinition,
 } from "./combat-abilities";
 import { HealthPool, type DamageRequest, type DamageResult } from "./health";
 import { PresentationKind, TechnicalEntityLifecycle } from "./entity-lifecycle";
@@ -37,15 +42,6 @@ import {
 
 export type AttackPhase = "idle" | "startup" | "active" | "recovery";
 
-export interface PrimaryAttackConfig {
-  readonly startupTicks: number;
-  readonly activeTicks: number;
-  readonly recoveryTicks: number;
-  readonly damage: number;
-  readonly range: number;
-  readonly halfAngleDegrees: number;
-}
-
 export interface CombatArenaConfig {
   readonly width: number;
   readonly height: number;
@@ -55,7 +51,7 @@ export interface CombatArenaConfig {
   readonly dodgeSpeed: number;
   readonly dodgeDurationSeconds: number;
   readonly dodgeCooldownSeconds: number;
-  readonly primaryAttack: PrimaryAttackConfig;
+  readonly abilityDefinitions: readonly CombatAbilityDefinition[];
   readonly enemy: SimpleMeleeEnemyConfig;
 }
 
@@ -121,6 +117,25 @@ export interface CombatAreaFeedbackReadModel {
   readonly ticksRemaining: number;
 }
 
+export type CombatAbilityActivationKind =
+  | "ready"
+  | "unknown"
+  | "executing"
+  | "busy"
+  | "defeated"
+  | "cooldown"
+  | "insufficient-resource";
+
+export interface CombatAbilityActivationReadModel {
+  readonly abilityId: CombatAbilityId;
+  readonly kind: CombatAbilityActivationKind;
+  readonly canActivate: boolean;
+  readonly rejectionReason?: AbilityRejectionReason;
+  readonly cooldownTicksRemaining: number;
+  readonly manaCost: number;
+  readonly currentExecution: AbilityExecutionSnapshot | null;
+}
+
 export interface CombatArenaEventReader {
   drainEvents(): readonly CombatArenaEvent[];
 }
@@ -154,6 +169,8 @@ export interface CombatArenaDiagnostics {
   readonly mana: number;
   readonly maxMana: number;
   readonly cooldowns: Readonly<Record<CombatAbilityId, number>>;
+  readonly abilities: readonly CombatAbilityActivationReadModel[];
+  readonly currentExecution: AbilityExecutionSnapshot | null;
   readonly statuses: readonly {
     readonly targetId: string;
     readonly statusId: "chilled" | "focused" | "weakened";
@@ -180,14 +197,7 @@ export const DEFAULT_COMBAT_ARENA_CONFIG: CombatArenaConfig = {
   dodgeSpeed: 650,
   dodgeDurationSeconds: 0.18,
   dodgeCooldownSeconds: 0.8,
-  primaryAttack: {
-    startupTicks: 4,
-    activeTicks: 3,
-    recoveryTicks: 8,
-    damage: 25,
-    range: 110,
-    halfAngleDegrees: 55,
-  },
+  abilityDefinitions: COMBAT_ABILITY_DEFINITIONS,
   enemy: {
     id: "enemy:melee-prototype",
     spawnX: 860,
@@ -226,6 +236,10 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     directionY: number;
     distance: number;
     damage: number;
+    radius: number;
+    speedPerSecond: number;
+    maximumRange: number;
+    abilityId: CombatAbilityId;
   }[] = [];
   readonly #areaFeedback: {
     id: number;
@@ -244,7 +258,14 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   #nextFeedbackId = 1;
   #lastAbilityResult: CombatArenaDiagnostics["lastAbilityResult"] = null;
   #pendingCleave:
-    | { readonly damageMultiplier: number; readonly resolveAtTick: number }
+    | {
+        readonly damage: number;
+        readonly range: number;
+        readonly halfAngleDegrees: number;
+        readonly aimX: number;
+        readonly aimY: number;
+        readonly resolveAtTick: number;
+      }
     | undefined;
   #tick = 0;
   #movementX = 0;
@@ -311,22 +332,88 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   public requestPrimaryAttack(): void {
-    if (
-      !this.#playerHealth.health.dead &&
-      this.#attackPhase === "idle" &&
-      this.#dodgeTicksRemaining === 0
-    ) {
+    if (this.#dodgeTicksRemaining === 0) {
       this.beginAttack();
     }
+  }
+
+  public abilityActivation(
+    abilityId: CombatAbilityId,
+  ): CombatAbilityActivationReadModel {
+    const definition = this.definitionById(abilityId);
+    const currentExecution = this.currentExecution();
+    const cooldownTicksRemaining = this.cooldownRemaining(abilityId);
+    const manaCost =
+      definition?.costs
+        .filter((cost) => cost.resourceId === MANA_RESOURCE_ID)
+        .reduce((total, cost) => total + cost.amount, 0) ?? 0;
+    const unavailable = (
+      kind: Exclude<CombatAbilityActivationKind, "ready">,
+      rejectionReason: AbilityRejectionReason,
+    ): CombatAbilityActivationReadModel => ({
+      abilityId,
+      kind,
+      canActivate: false,
+      rejectionReason,
+      cooldownTicksRemaining,
+      manaCost,
+      currentExecution,
+    });
+
+    if (this.#playerHealth.health.dead) {
+      return unavailable("defeated", "player-defeated");
+    }
+    if (definition === undefined) {
+      return unavailable("unknown", "ability-unknown");
+    }
+    if (currentExecution !== null) {
+      return unavailable(
+        currentExecution.abilityId === abilityId ? "executing" : "busy",
+        "ability-busy",
+      );
+    }
+    if (cooldownTicksRemaining > 0) {
+      return unavailable("cooldown", "cooldown-active");
+    }
+    if (definition !== undefined && this.#manaSubunits < manaCost * 10) {
+      return unavailable("insufficient-resource", "insufficient-resource");
+    }
+    return {
+      abilityId,
+      kind: "ready",
+      canActivate: true,
+      cooldownTicksRemaining,
+      manaCost,
+      currentExecution: null,
+    };
   }
 
   public requestAbility(
     abilityId: CombatAbilityId,
     target?: AbilityTarget,
   ): AbilityRequestResult {
+    const activation = this.abilityActivation(abilityId);
+    if (!activation.canActivate) {
+      const result: AbilityRequestResult = {
+        accepted: false,
+        reason: activation.rejectionReason ?? "ability-busy",
+        history: [
+          { stage: "request", tick: this.#tick },
+          { stage: "validate", tick: this.#tick },
+          { stage: "reject", tick: this.#tick },
+        ],
+      };
+      this.#lastAbilityResult = {
+        abilityId,
+        accepted: false,
+        reason: result.reason,
+      };
+      return result;
+    }
+    const definition = this.definitionById(abilityId);
     const resolvedTarget =
       target ??
-      (abilityId === DEFIANT_SIGNAL_ID
+      (definition?.targeting.mode === "self"
         ? { kind: "self" as const }
         : { kind: "direction" as const, x: this.#facingX, y: this.#facingY });
     const result = this.#abilityEngine.request({
@@ -345,6 +432,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       );
     }
     if (abilityId === BASIC_CLEAVE_ID && result.accepted) {
+      this.#attackHitTargets.clear();
       this.#attackExecutionId = result.execution.executionId;
       this.#attackCount += 1;
       this.#attackAimX =
@@ -358,7 +446,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       this.#attackHitCount = 0;
       this.#attackPhase = "startup";
       this.#attackPhaseTicksRemaining =
-        definitionById(BASIC_CLEAVE_ID)?.timing.startupTicks ?? 0;
+        this.definitionById(BASIC_CLEAVE_ID)?.timing.startupTicks ?? 0;
       this.#events.push({
         type: "attack-started",
         tick: this.#tick,
@@ -417,7 +505,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       this.#pendingCleave !== undefined &&
       this.#tick >= this.#pendingCleave.resolveAtTick
     ) {
-      this.applyAttackHits(this.#pendingCleave.damageMultiplier);
+      this.applyAttackHits(this.#pendingCleave);
       this.#pendingCleave = undefined;
     }
     if (!this.#playerHealth.health.dead) {
@@ -467,15 +555,14 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       },
       (request) => this.applyPlayerDamage(request),
       {
-        moveSpeedMultiplier: this.#statuses.has(this.config.enemy.id, "chilled")
-          ? 0.7
-          : 1,
-        outgoingDamageMultiplier: this.#statuses.has(
+        moveSpeedMultiplier: this.#statuses.multiplier(
           this.config.enemy.id,
-          "weakened",
-        )
-          ? 0.8
-          : 1,
+          MOVE_SPEED_STAT_ID,
+        ),
+        outgoingDamageMultiplier: this.#statuses.multiplier(
+          this.config.enemy.id,
+          OUTGOING_DAMAGE_STAT_ID,
+        ),
       },
     );
     if (this.#dodgeTicksRemaining > 0) {
@@ -575,6 +662,13 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         [WINTER_PULSE_ID]: this.cooldownRemaining(WINTER_PULSE_ID),
         [DEFIANT_SIGNAL_ID]: this.cooldownRemaining(DEFIANT_SIGNAL_ID),
       },
+      abilities: [
+        BASIC_CLEAVE_ID,
+        CINDER_DART_ID,
+        WINTER_PULSE_ID,
+        DEFIANT_SIGNAL_ID,
+      ].map((abilityId) => this.abilityActivation(abilityId)),
+      currentExecution: this.currentExecution(),
       statuses: this.#statuses.values().map((status) => ({
         targetId: status.targetId,
         statusId: status.statusId,
@@ -584,8 +678,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         id: projectile.id,
         x: projectile.x,
         y: projectile.y,
-        radius: 6,
-        abilityId: CINDER_DART_ID,
+        radius: projectile.radius,
+        abilityId: projectile.abilityId,
       })),
       areaFeedback: this.#areaFeedback.map((feedback) => ({
         id: feedback.id,
@@ -613,7 +707,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   private beginAttack(): void {
-    this.#attackHitTargets.clear();
     this.requestAbility(BASIC_CLEAVE_ID, {
       kind: "direction",
       x: this.#facingX,
@@ -631,7 +724,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
           next.stage === "recovery"
             ? next.stage
             : "idle";
-        const definition = definitionById(BASIC_CLEAVE_ID);
+        const definition = this.definitionById(BASIC_CLEAVE_ID);
         const duration =
           next.stage === "startup"
             ? definition?.timing.startupTicks
@@ -654,11 +747,16 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     }
   }
 
-  private applyAttackHits(damageMultiplier = 1): void {
+  private applyAttackHits(attack: {
+    readonly damage: number;
+    readonly range: number;
+    readonly halfAngleDegrees: number;
+    readonly aimX: number;
+    readonly aimY: number;
+  }): void {
     const transformIndex = this.playerTransformIndex();
     const playerX = this.#lifecycle.transforms.x[transformIndex] ?? 0;
     const playerY = this.#lifecycle.transforms.y[transformIndex] ?? 0;
-    const attack = this.config.primaryAttack;
     const minimumDot = Math.cos((attack.halfAngleDegrees * Math.PI) / 180);
 
     const target = this.#enemy.diagnostics();
@@ -674,14 +772,14 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     const dot =
       distance === 0
         ? 1
-        : (deltaX * this.#attackAimX + deltaY * this.#attackAimY) / distance;
+        : (deltaX * attack.aimX + deltaY * attack.aimY) / distance;
     if (dot < minimumDot) {
       return;
     }
 
     this.#attackHitTargets.add(target.id);
     const result = this.#enemy.applyDamage({
-      amount: damageAfterModifier(attack.damage, damageMultiplier),
+      amount: attack.damage,
       sourceId: "player",
     });
     if (result.applied > 0) {
@@ -707,7 +805,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
   private createAbilityEngine(): AbilityExecutionEngine {
     return new AbilityExecutionEngine({
-      definitions: { get: definitionById },
+      definitions: { get: (id) => this.definitionById(id) },
       resources: {
         canSpend: (_entityId, resourceId, amount) =>
           resourceId === MANA_RESOURCE_ID && this.#manaSubunits >= amount * 10,
@@ -766,10 +864,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       },
       stats: {
         read: (_entityId, statId) =>
-          statId === OUTGOING_DAMAGE_STAT_ID &&
-          this.#statuses.has("player", "focused")
-            ? 1.2
-            : 1,
+          this.#statuses.multiplier("player", statId),
       },
       targets: {
         validate: (request, definition) => {
@@ -798,11 +893,15 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         get: (kind) =>
           kind === ABILITY_DAMAGE_EXECUTOR_ID
             ? {
-                execute: (_effect, context) => {
+                execute: (effect, context) => {
                   this.executeCombatAbility(
-                    context.ability.id,
+                    effect as CustomAbilityEffect<
+                      readonly CombatEffectParameter[]
+                    >,
                     context.target,
                     (read) => context.readStat(read),
+                    context.ability.id,
+                    context.effectIndex,
                   );
                 },
               }
@@ -813,25 +912,41 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   private executeCombatAbility(
-    abilityId: CombatAbilityId,
+    effect: CustomAbilityEffect<readonly CombatEffectParameter[]>,
     target: AbilityTarget,
     readStat: (read: AbilityStatRead) => number,
+    abilityId: CombatAbilityId,
+    effectIndex: number,
   ): void {
     const player = this.playerPosition();
-    const multiplier =
-      abilityId === DEFIANT_SIGNAL_ID
-        ? 1
-        : readStat({
+    const parameters = effect.parameters[0]?.value;
+    if (parameters === undefined) {
+      throw new Error(`Combat effect "${abilityId}" has no parameters.`);
+    }
+    const damageMultiplier =
+      parameters.kind === "cone-damage" ||
+      parameters.kind === "projectile" ||
+      parameters.kind === "area-damage"
+        ? readStat({
             subject: "source",
             statId: OUTGOING_DAMAGE_STAT_ID,
             policy: "snapshot",
-          });
-    if (abilityId === BASIC_CLEAVE_ID) {
+          })
+        : 1;
+    if (parameters.kind === "cone-damage" && target.kind === "direction") {
+      const length = Math.hypot(target.x, target.y);
       this.#pendingCleave = {
-        damageMultiplier: multiplier,
+        damage: damageAfterModifier(parameters.damage, damageMultiplier),
+        range: parameters.range,
+        halfAngleDegrees: parameters.halfAngleDegrees,
+        aimX: target.x / length,
+        aimY: target.y / length,
         resolveAtTick: this.#tick + 1,
       };
-    } else if (abilityId === CINDER_DART_ID && target.kind === "direction") {
+    } else if (
+      parameters.kind === "projectile" &&
+      target.kind === "direction"
+    ) {
       const length = Math.hypot(target.x, target.y);
       this.#projectiles.push({
         id: this.#nextProjectileId++,
@@ -840,52 +955,84 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         directionX: target.x / length,
         directionY: target.y / length,
         distance: 0,
-        damage: damageAfterModifier(30, multiplier),
-      });
-    } else if (abilityId === WINTER_PULSE_ID && target.kind === "point") {
-      this.#areaFeedback.push({
-        id: this.#nextFeedbackId++,
-        x: target.x,
-        y: target.y,
-        radius: 100,
+        damage: damageAfterModifier(parameters.damage, damageMultiplier),
+        radius: parameters.radius,
+        speedPerSecond: parameters.speedPerSecond,
+        maximumRange: parameters.maximumRange,
         abilityId,
-        expiresAtTick: this.#tick + 18,
       });
+    } else if (parameters.kind === "area-damage") {
+      const center = target.kind === "point" ? target : player;
+      this.addAreaFeedback(
+        abilityId,
+        center.x,
+        center.y,
+        parameters.radius,
+        parameters.feedbackTicks,
+      );
       const enemy = this.#enemy.diagnostics();
       if (
         !enemy.dead &&
-        pointInArea(target.x, target.y, 100, enemy.x, enemy.y, enemy.radius)
+        pointInArea(
+          center.x,
+          center.y,
+          parameters.radius,
+          enemy.x,
+          enemy.y,
+          enemy.radius,
+        )
       ) {
-        this.damageEnemy(damageAfterModifier(20, multiplier));
-        if (!this.#enemy.health.dead) {
-          this.#statuses.apply(enemy.id, "chilled", this.#tick, 120);
-        }
+        this.damageEnemy(
+          damageAfterModifier(parameters.damage, damageMultiplier),
+        );
       }
-    } else if (abilityId === DEFIANT_SIGNAL_ID) {
-      this.#statuses.apply("player", "focused", this.#tick, 180);
+    } else if (parameters.kind === "area-status") {
+      const center = target.kind === "point" ? target : player;
+      this.addAreaFeedback(
+        abilityId,
+        center.x,
+        center.y,
+        parameters.radius,
+        parameters.feedbackTicks,
+      );
       const enemy = this.#enemy.diagnostics();
       if (
         !enemy.dead &&
-        pointInArea(player.x, player.y, 180, enemy.x, enemy.y, enemy.radius)
+        pointInArea(
+          center.x,
+          center.y,
+          parameters.radius,
+          enemy.x,
+          enemy.y,
+          enemy.radius,
+        )
       ) {
-        this.#statuses.apply(enemy.id, "weakened", this.#tick, 180);
+        this.#statuses.apply(
+          enemy.id,
+          parameters.statusId,
+          this.#tick,
+          parameters.durationTicks,
+          parameters.modifier,
+        );
       }
-      this.#areaFeedback.push({
-        id: this.#nextFeedbackId++,
-        x: player.x,
-        y: player.y,
-        radius: 180,
+    } else if (parameters.kind === "self-status") {
+      this.#statuses.apply(
+        "player",
+        parameters.statusId,
+        this.#tick,
+        parameters.durationTicks,
+        parameters.modifier,
+      );
+    }
+    if (effectIndex === 0) {
+      this.#events.push({
+        type: "ability-activated",
+        tick: this.#tick,
         abilityId,
-        expiresAtTick: this.#tick + 18,
+        x: target.kind === "point" ? target.x : player.x,
+        y: target.kind === "point" ? target.y : player.y,
       });
     }
-    this.#events.push({
-      type: "ability-activated",
-      tick: this.#tick,
-      abilityId,
-      x: target.kind === "point" ? target.x : player.x,
-      y: target.kind === "point" ? target.y : player.y,
-    });
   }
 
   private advanceProjectiles(step: FixedStep): void {
@@ -893,8 +1040,8 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       const projectile = this.#projectiles[index];
       if (projectile === undefined) continue;
       const travel = Math.min(
-        600 * step.deltaSeconds,
-        600 - projectile.distance,
+        projectile.speedPerSecond * step.deltaSeconds,
+        projectile.maximumRange - projectile.distance,
       );
       const endX = projectile.x + projectile.directionX * travel;
       const endY = projectile.y + projectile.directionY * travel;
@@ -906,7 +1053,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
             projectile.y,
             endX,
             endY,
-            6,
+            projectile.radius,
             enemy.x,
             enemy.y,
             enemy.radius,
@@ -921,8 +1068,28 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       projectile.x = endX;
       projectile.y = endY;
       projectile.distance += travel;
-      if (projectile.distance >= 600) this.#projectiles.splice(index, 1);
+      if (projectile.distance >= projectile.maximumRange) {
+        this.#projectiles.splice(index, 1);
+      }
     }
+  }
+
+  private addAreaFeedback(
+    abilityId: CombatAbilityId,
+    x: number,
+    y: number,
+    radius: number,
+    feedbackTicks: number,
+  ): void {
+    if (feedbackTicks <= 0) return;
+    this.#areaFeedback.push({
+      id: this.#nextFeedbackId++,
+      x,
+      y,
+      radius,
+      abilityId,
+      expiresAtTick: this.#tick + feedbackTicks,
+    });
   }
 
   private damageEnemy(amount: number): void {
@@ -960,6 +1127,18 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     return Math.max(
       0,
       (this.#cooldownEnds.get(abilityId) ?? this.#tick) - this.#tick,
+    );
+  }
+
+  private currentExecution(): AbilityExecutionSnapshot | null {
+    return this.#activeExecutions.values().next().value ?? null;
+  }
+
+  private definitionById(
+    abilityId: CombatAbilityId,
+  ): CombatAbilityDefinition | undefined {
+    return this.config.abilityDefinitions.find(
+      (definition) => definition.id === abilityId,
     );
   }
 
@@ -1046,23 +1225,14 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         "Dodge cooldown must not be shorter than its duration.",
       );
     }
-    const attack = config.primaryAttack;
     if (
-      !Number.isSafeInteger(attack.startupTicks) ||
-      attack.startupTicks < 0 ||
-      !Number.isSafeInteger(attack.activeTicks) ||
-      attack.activeTicks < 1 ||
-      !Number.isSafeInteger(attack.recoveryTicks) ||
-      attack.recoveryTicks < 0 ||
-      !Number.isFinite(attack.damage) ||
-      attack.damage <= 0 ||
-      !Number.isFinite(attack.range) ||
-      attack.range <= 0 ||
-      !Number.isFinite(attack.halfAngleDegrees) ||
-      attack.halfAngleDegrees <= 0 ||
-      attack.halfAngleDegrees > 180
+      config.abilityDefinitions.length === 0 ||
+      new Set(config.abilityDefinitions.map(({ id }) => id)).size !==
+        config.abilityDefinitions.length
     ) {
-      throw new RangeError("Primary attack configuration is invalid.");
+      throw new RangeError(
+        "Combat ability definitions must be non-empty with unique ids.",
+      );
     }
   }
 }

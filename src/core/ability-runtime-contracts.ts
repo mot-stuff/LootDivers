@@ -71,13 +71,15 @@ export interface TriggerAbilityEffect {
   readonly abilityId: ContentId;
 }
 
-export interface CustomAbilityEffect {
+export interface CustomAbilityEffect<
+  TParameters = readonly {
+    readonly key: string;
+    readonly value: unknown;
+  }[],
+> {
   readonly kind: "custom";
   readonly executorKind: ContentId;
-  readonly parameters: readonly {
-    readonly key: string;
-    readonly value: string | number | boolean;
-  }[];
+  readonly parameters: TParameters;
 }
 
 export type AbilityEffect =
@@ -113,9 +115,11 @@ export interface AbilityRequest {
 
 export type AbilityRejectionReason =
   | "ability-unknown"
+  | "ability-busy"
   | "cooldown-active"
   | "executor-unavailable"
   | "insufficient-resource"
+  | "player-defeated"
   | "reentrant-mutation"
   | "target-invalid"
   | "trigger-budget-exhausted"
