@@ -107,18 +107,16 @@ test("real pointer movement inverse-projects screen aim into world facing", asyn
       if (facing === null) {
         return false;
       }
-      const screenX = facing.pointerCanvasX - facing.playerCanvasX;
-      const screenY = facing.pointerCanvasY - facing.playerCanvasY;
-      const difference = screenX / 0.65;
-      const sum = screenY / 0.34;
-      const worldX = (difference + sum) / 2;
-      const worldY = (sum - difference) / 2;
-      const length = Math.hypot(worldX, worldY);
-      return (
-        length > 0 &&
-        Math.abs(facing.facingX - worldX / length) < 0.01 &&
-        Math.abs(facing.facingY - worldY / length) < 0.01
-      );
+      const cursorX = facing.pointerCanvasX - facing.playerCanvasX;
+      const cursorY = facing.pointerCanvasY - facing.playerCanvasY;
+      const renderedX = facing.facingCanvasX - facing.playerCanvasX;
+      const renderedY = facing.facingCanvasY - facing.playerCanvasY;
+      const cursorLength = Math.hypot(cursorX, cursorY);
+      const renderedLength = Math.hypot(renderedX, renderedY);
+      const alignment =
+        (cursorX * renderedX + cursorY * renderedY) /
+        (cursorLength * renderedLength);
+      return cursorLength > 0 && renderedLength > 0 && alignment > 0.995;
     })
     .toBe(true);
   expect(failures).toEqual([]);

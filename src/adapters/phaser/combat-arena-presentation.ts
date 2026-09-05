@@ -19,6 +19,8 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly playerCanvasY: number;
   readonly pointerCanvasX: number;
   readonly pointerCanvasY: number;
+  readonly facingCanvasX: number;
+  readonly facingCanvasY: number;
 }
 
 export class CombatArenaPresentation {
@@ -29,6 +31,8 @@ export class CombatArenaPresentation {
   readonly #playerGraphics: Phaser.GameObjects.Graphics;
   readonly #feedbackGraphics: Phaser.GameObjects.Graphics;
   readonly #statusText: Phaser.GameObjects.Text;
+  readonly #renderedPlayerPoint = new Phaser.Math.Vector2();
+  readonly #renderedFacingPoint = new Phaser.Math.Vector2();
   #pausedForUi = true;
   #lastPointerX = ORIGIN_X + 150;
   #lastPointerY = ORIGIN_Y + 180;
@@ -84,9 +88,13 @@ export class CombatArenaPresentation {
     }
     const player = this.#simulation.diagnostics();
     const playerPoint = this.project(player.x, player.y);
+    const pointerPoint = this.scene.cameras.main.getWorldPoint(
+      this.#lastPointerX,
+      this.#lastPointerY,
+    );
     const aim = this.inverseProjectDelta(
-      this.#lastPointerX - playerPoint.x,
-      this.#lastPointerY - playerPoint.y,
+      pointerPoint.x - playerPoint.x,
+      pointerPoint.y - playerPoint.y,
     );
     this.#simulation.setAim(aim.x, aim.y);
 
@@ -99,15 +107,15 @@ export class CombatArenaPresentation {
   }
 
   public diagnostics(): CombatPresentationDiagnostics {
-    const state = this.#simulation.diagnostics();
-    const point = this.project(state.x, state.y);
     return {
-      ...state,
+      ...this.#simulation.diagnostics(),
       pausedForUi: this.#pausedForUi,
-      playerCanvasX: point.x,
-      playerCanvasY: point.y,
+      playerCanvasX: this.#renderedPlayerPoint.x,
+      playerCanvasY: this.#renderedPlayerPoint.y,
       pointerCanvasX: this.#lastPointerX,
       pointerCanvasY: this.#lastPointerY,
+      facingCanvasX: this.#renderedFacingPoint.x,
+      facingCanvasY: this.#renderedFacingPoint.y,
     };
   }
 
@@ -115,8 +123,12 @@ export class CombatArenaPresentation {
     this.#simulation.setAim(x, y);
     const state = this.#simulation.diagnostics();
     const target = this.project(state.x + x * 100, state.y + y * 100);
-    this.#lastPointerX = target.x;
-    this.#lastPointerY = target.y;
+    const canvasTarget = this.scene.cameras.main.matrixCombined.transformPoint(
+      target.x,
+      target.y,
+    );
+    this.#lastPointerX = canvasTarget.x;
+    this.#lastPointerY = canvasTarget.y;
   }
 
   public dispose(): void {
@@ -166,6 +178,8 @@ export class CombatArenaPresentation {
     const facingScreenX = (state.facingX - state.facingY) * ISO_X_SCALE;
     const facingScreenY = (state.facingX + state.facingY) * ISO_Y_SCALE;
     const facingLength = Math.hypot(facingScreenX, facingScreenY) || 1;
+    const facingEndX = point.x + (facingScreenX / facingLength) * 35;
+    const facingEndY = point.y - 8 + (facingScreenY / facingLength) * 35;
 
     this.#playerGraphics.clear();
     this.#playerGraphics.fillStyle(state.dodging ? 0xffffff : 0x5ce1e6, 0.24);
@@ -176,8 +190,19 @@ export class CombatArenaPresentation {
     this.#playerGraphics.lineBetween(
       point.x,
       point.y - 8,
-      point.x + (facingScreenX / facingLength) * 35,
-      point.y - 8 + (facingScreenY / facingLength) * 35,
+      facingEndX,
+      facingEndY,
+    );
+    const cameraMatrix = this.scene.cameras.main.matrixCombined;
+    cameraMatrix.transformPoint(
+      point.x,
+      point.y - 8,
+      this.#renderedPlayerPoint,
+    );
+    cameraMatrix.transformPoint(
+      facingEndX,
+      facingEndY,
+      this.#renderedFacingPoint,
     );
 
     this.#feedbackGraphics.clear();
