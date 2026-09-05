@@ -44,6 +44,7 @@ interface ExecutionRecord {
   lastTick: number;
   cooldown: AbilityCooldownHandle | undefined;
   workReserved: boolean;
+  settlementState: "open" | "settled";
 }
 
 interface QueuedTrigger {
@@ -129,6 +130,9 @@ export class AbilityExecutionEngine {
   public cancel(executionId: number, tick: number): AbilityExecutionSnapshot {
     this.enterTick(tick);
     const record = this.requireExecution(executionId);
+    if (record.stage === "cancel") {
+      return this.snapshot(record);
+    }
     if (record.lastTick === tick - 1) {
       this.advanceOneTick(record, tick);
       this.flushTriggerQueue();
@@ -305,6 +309,7 @@ export class AbilityExecutionEngine {
       lastTick: request.requestedAtTick,
       cooldown: undefined,
       workReserved,
+      settlementState: "open",
     };
     this.executions.set(executionId, record);
     if (definition.cooldown.startsOn === "pay") {
@@ -396,6 +401,8 @@ export class AbilityExecutionEngine {
   }
 
   private abortForBudget(record: ExecutionRecord, tick: number): void {
+    this.setStage(record, "cancel", tick);
+    this.markSettled(record);
     for (const settled of record.settledCosts) {
       if (settled.kind === "reservation") {
         this.dependencies.resources.release(settled.handle);
@@ -408,7 +415,7 @@ export class AbilityExecutionEngine {
       record.cooldown = undefined;
     }
     this.publishRejection(record, tick, "trigger-budget-exhausted");
-    this.transition(record, "cancel", tick);
+    this.publishStage(record, "cancel", tick);
   }
 
   private flushTriggerQueue(): void {
@@ -474,6 +481,7 @@ export class AbilityExecutionEngine {
   }
 
   private settleCancellation(record: ExecutionRecord): void {
+    if (!this.markSettled(record)) return;
     for (const settled of record.settledCosts) {
       if (settled.kind === "reservation") {
         if (
@@ -491,6 +499,7 @@ export class AbilityExecutionEngine {
   }
 
   private commitReservations(record: ExecutionRecord): void {
+    if (!this.markSettled(record)) return;
     for (const settled of record.settledCosts) {
       if (settled.kind === "reservation") {
         this.dependencies.resources.commit(settled.handle);
@@ -503,15 +512,37 @@ export class AbilityExecutionEngine {
     stage: AbilityStage,
     tick: number,
   ): void {
+    this.setStage(record, stage, tick);
+    this.publishStage(record, stage, tick);
+  }
+
+  private setStage(
+    record: ExecutionRecord,
+    stage: AbilityStage,
+    tick: number,
+  ): void {
     record.stage = stage;
     record.stageElapsedTicks = 0;
     record.history.push({ stage, tick });
+  }
+
+  private publishStage(
+    record: ExecutionRecord,
+    stage: AbilityStage,
+    tick: number,
+  ): void {
     this.dependencies.events.publish({
       executionId: record.executionId,
       abilityId: record.definition.id,
       stage,
       tick,
     });
+  }
+
+  private markSettled(record: ExecutionRecord): boolean {
+    if (record.settlementState === "settled") return false;
+    record.settlementState = "settled";
+    return true;
   }
 
   private startCooldown(record: ExecutionRecord, tick: number): void {

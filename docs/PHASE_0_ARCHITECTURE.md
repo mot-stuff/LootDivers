@@ -766,6 +766,8 @@ settlement, while delayed activation failures terminally cancel, refund/release
 all settlements, and execute no effects. Observable active transitions now
 re-check terminal state, so synchronous cancellation cannot execute effects or
 fall through to completion. Regression tests reproduce all three review probes.
+Budget-abort state and settlement ownership are committed before rejection
+callbacks, making synchronous cancellation idempotent and exactly-once settled.
 
 ### TASK-P0-010 — Establish persistence foundation
 

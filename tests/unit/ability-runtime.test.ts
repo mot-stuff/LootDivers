@@ -406,11 +406,23 @@ describe("ability runtime remediation contracts", () => {
     const second = fixture.engine.request(selfRequest(rejected.id, source));
     if (!first.accepted || !second.accepted)
       throw new Error("fixture rejected");
+    const reentrantCancellationStages: string[] = [];
+    fixture.setEventHook((event) => {
+      if (
+        event.abilityId === rejected.id &&
+        event.reason === "trigger-budget-exhausted"
+      ) {
+        reentrantCancellationStages.push(
+          fixture.engine.cancel(event.executionId, event.tick).stage,
+        );
+      }
+    });
 
     fixture.engine.advance(first.execution.executionId, 1);
     const cancelled = fixture.engine.advance(second.execution.executionId, 1);
 
     expect(cancelled.stage).toBe("cancel");
+    expect(reentrantCancellationStages).toEqual(["cancel"]);
     expect(fixture.resources.operations).toEqual(["reserve:1:25", "release:1"]);
     expect(fixture.resources.balance).toBe(100);
     expect(fixture.events).toContainEqual(
@@ -424,6 +436,11 @@ describe("ability runtime remediation contracts", () => {
         (event) => event.abilityId === rejected.id && event.stage === "active",
       ),
     ).toBe(false);
+    expect(
+      fixture.events.filter(
+        (event) => event.abilityId === rejected.id && event.stage === "cancel",
+      ),
+    ).toHaveLength(1);
   });
 
   it("does not execute or complete after an active observer cancels reentrantly", () => {
