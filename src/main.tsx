@@ -15,6 +15,7 @@ import {
   SystemSaveClock,
   WebCryptoSha256,
 } from "./adapters/browser/persistence-platform";
+import { probeAuthSession } from "./adapters/http/session-probe";
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
@@ -153,6 +154,14 @@ const combatPrototype =
  */
 const autostart = fixtureParameters.has("autostart");
 const showMainMenu = combatPrototype && !autostart;
+/**
+ * TASK-707 boot session probe: on the custom-domain origin only, ask the
+ * accounts API whether a session cookie is live. Fire-and-forget — local
+ * origins skip it entirely and a down API resolves to signed-out, so boot
+ * never blocks on the network. TASK-709's menu reads the settled state via
+ * `authSessionState()`.
+ */
+void probeAuthSession();
 document.body.classList.toggle("combat-mode", combatPrototype);
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,

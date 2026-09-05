@@ -1,0 +1,61 @@
+# Loot Divers API stack (TASK-707, DEC-032): postgres + api + caddy.
+#
+# Runs on the droplet from the deploy checkout:
+#   cd /opt/lootdivers/app/server
+#   docker compose --env-file /opt/lootdivers/.env up -d
+#
+# The env file lives OUTSIDE the checkout (runbook Part B step 12) and must
+# define POSTGRES_PASSWORD and APP_DOMAIN. Postgres data persists in the
+# named `pgdata` volume; the Cloudflare Origin certificate staged in Part A
+# step 9 is mounted read-only into Caddy from /opt/lootdivers/certs.
+
+name: lootdivers
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lootdivers
+      POSTGRES_USER: lootdivers
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in /opt/lootdivers/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lootdivers -d lootdivers"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      APP_DOMAIN: ${APP_DOMAIN:?set in /opt/lootdivers/.env}
+      DATABASE_URL: postgres://lootdivers:${POSTGRES_PASSWORD}@postgres:5432/lootdivers
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/lootdivers/certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

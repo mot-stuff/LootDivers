@@ -68,6 +68,56 @@ jobs:
           path: dist
           if-no-files-found: error
 
+  server-gates:
+    name: Server typecheck, lint, tests (TASK-707)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    # Real Postgres for the contract suite: the same tests that run against
+    # the in-memory store locally also run against PgStore here, so the SQL
+    # layer is CI-verified even though dev machines may lack Docker.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-test
+          POSTGRES_DB: lootdivers_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.20.0"
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci
+
+      - name: Server typecheck
+        run: npm run typecheck
+
+      - name: Server lint
+        run: npm run lint
+
+      - name: Server tests (MemoryStore + Postgres contract suites)
+        env:
+          TEST_DATABASE_URL: postgres://postgres:ci-test@localhost:5432/lootdivers_test
+        run: npm test
+
+      - name: Server Docker image builds
+        run: docker build -t lootdivers-api:ci .
+
   deploy:
     name: Deploy to Cloudflare Pages
     needs: gates
@@ -129,3 +179,40 @@ jobs:
           asset="$(basename "$(ls dist/assets/*.js | head -n 1)")"
           echo "checking /assets/${asset}"
           curl -fsSI "https://lootdivers.pages.dev/assets/${asset}" | head -n 1
+
+  deploy-api:
+    name: Deploy API to droplet (TASK-707)
+    needs: [gates, server-gates]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # SSH pull-and-restart as the low-privilege deploy user (DEC-032,
+      # runbook step 10). The script is piped over stdin so the very first
+      # deploy works before /opt/lootdivers/app exists — deploy.sh clones
+      # the repo itself when missing. Until the owner creates
+      # /opt/lootdivers/.env (runbook Part B step 12) the script exits 0
+      # with a SKIP message so main stays green; it self-arms once the
+      # file exists. All other deploy problems fail the job loudly.
+      - name: Deploy over SSH (pull-and-restart)
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_SSH_USER: ${{ secrets.DROPLET_SSH_USER }}
+          DROPLET_SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for name in DROPLET_HOST DROPLET_SSH_USER DROPLET_SSH_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::${name} repo secret is missing or empty (runbook Part A step 10d)"
+              exit 1
+            fi
+          done
+          mkdir -p ~/.ssh
+          printf '%s\n' "${DROPLET_SSH_KEY}" > ~/.ssh/lootdivers_deploy
+          chmod 600 ~/.ssh/lootdivers_deploy
+          ssh -i ~/.ssh/lootdivers_deploy \
+            -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=15 \
+            "${DROPLET_SSH_USER}@${DROPLET_HOST}" "bash -s" < server/deploy.sh

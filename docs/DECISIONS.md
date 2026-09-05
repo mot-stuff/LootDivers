@@ -2299,7 +2299,16 @@ Cloudflare Pages project on green main pushes, with `public/_headers`
 cache policy (immutable hashed assets; 4-hour revalidation for unhashed
 art — a refinement of the blanket-immutable wording above) and a
 pixel-verified lossless PNG pass that halved `public/assets/` (7.81 MB →
-3.91 MB). The backend half (TASK-707) remains unstarted pending TASK-705.
+3.91 MB). The backend half is implemented by TASK-707 (pending Director
+architecture review): `server/` workspace (Fastify + Postgres + Caddy in
+Docker Compose, ordered SQL migrations at startup, argon2id + hashed
+opaque session cookies, the Phase 8 kickoff §2 contract verbatim), the
+client `HttpSaveRepository` adapter behind the DEC-014 `SaveRepository`
+port with a custom-domain-only boot session probe, a CI server gate
+(typecheck/lint/contract tests against MemoryStore and a real Postgres
+service container) and an SSH pull-and-restart deploy job. Everything
+domain-shaped is parameterized on `APP_DOMAIN` (still an owner input);
+DEC-036 is recorded at acceptance per the packet.
 
 ### Date
 
@@ -2589,6 +2598,78 @@ couple the save format to per-tick simulation internals.
   chain is exercised by unit tests through an injected synthetic v1→v2.
 - TASK-707's backend adapter implements the same `SaveRepository` port and
   ships the same envelope bytes; no DTO change is expected.
+
+---
+
+# DEC-036
+
+## Accounts and character identity: server columns for identity, verbatim blob, custom-domain auth
+
+Date: 2026-09-05 (TASK-707; drafted in docs/tasks/PHASE8-KICKOFF.md
+sections 1.2-1.4; recorded at Director acceptance. DEC-035, the site
+architecture entry, lands with TASK-708 - entry numbers are IDs assigned
+at planning time and entries are kept in numeric order, so recording
+order can differ from merge order, as it did for this entry and DEC-037.)
+
+## Decision
+
+1. **Character identity is server columns, not blob fields.** `name`,
+   `class`, and `level` live as columns on `characters` (level as
+   client-supplied list metadata, bounded 1-1000); the DEC-014 envelope in
+   the `blob` column stays verbatim and unparsed per DEC-032. The future
+   auction house and the character-select list need server-visible identity;
+   nothing else about the blob's client ownership changes.
+2. **Name policy:** per-account, case-insensitive uniqueness (enforced by
+   `unique(user_id, lower(name))`), NOT global - global uniqueness is an
+   MMO-ism that invites squatting; a future auction house can display an
+   account-scoped discriminator. One naming rule shared client/server:
+   `^[A-Za-z][A-Za-z0-9'\- ]{2,15}$` after trimming, no consecutive
+   separators (3-16 chars, letter first). Class enum: `barbarian` only.
+   **Four character slots per account** in v1, enforced transactionally.
+3. **Auth model:** email/password with argon2id hashing; opaque 256-bit
+   session tokens stored SHA-256-hashed with a 30-day TTL and lazy expiry;
+   `HttpOnly; Secure; SameSite=Lax` host-only cookie on the API origin;
+   10/min rate limit on signup/login; every error is
+   `{ error: { code, message } }`.
+4. **Authenticated play is custom-domain-only:** `<domain>` and
+   `api.<domain>` are same-site, so the session cookie flows under
+   SameSite=Lax with credentialed CORS restricted to the apex and `www`
+   origins. `lootdivers.pages.dev`, localhost, and IP origins never probe
+   the network and stay local-save-only - automation and e2e paths are
+   untouched. The boot probe is fire-and-forget and failure-silent.
+5. **Local play remains a first-class path** (DEC-034 unchanged): the
+   `SaveRepository` port gained an HTTP sibling
+   (`src/adapters/http/http-save-repository.ts`); checksums, validation,
+   and migrations stay exclusively client-side. Menu wiring of the remote
+   gateway (login/character select) is TASK-709.
+6. **Deploy self-arming:** the `deploy-api` CI job runs on green main
+   pushes but `server/deploy.sh` exits 0 with a SKIP message while
+   `/opt/lootdivers/.env` does not exist (owner runbook Part B step 12),
+   so main stays green until the droplet is initialized and real deploys
+   begin automatically the moment it is. All other deploy failures are loud.
+
+## Alternatives considered
+
+- Global name uniqueness: rejected (squatting, no gameplay need in v1).
+- Name/class inside the blob only: rejected - the server could not render
+  a character list or future auction listings without parsing blobs,
+  violating DEC-032.
+- JWTs: rejected - opaque revocable server-side sessions are simpler and
+  strictly better at this scale.
+- Gating the API deploy on a repo variable the owner flips: rejected in
+  review - requires an admin UI step someone must remember; the
+  missing-env graceful skip self-arms instead.
+
+## Consequences
+
+- TASK-708's homepage and TASK-709's menu build against this contract
+  (`server/scripts/curl-conformance.sh` documents it executably).
+- The ledger-extraction path (DEC-032) is unharmed: gold stays in the
+  blob; `users`/`characters` UUIDs are the stable keys a future
+  `wallets`/`ledger_entries` pair will reference.
+- The exact domain string remains the owner input that arms production
+  CORS/cookies (`APP_DOMAIN`); until Part B completes, merged code
+  serves localhost development and CI only.
 
 ---
 

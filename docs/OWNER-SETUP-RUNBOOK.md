@@ -407,16 +407,16 @@ and **nothing running on the droplet yet**.
 
 # Part B — Do WHEN THE API SHIPS (TASK-707)
 
-Do not perform these now. Refreshed 2026-09-05 to match the layout the
-TASK-707 packet mandates (see `docs/tasks/PHASE8-KICKOFF.md`): a `server/`
-workspace in this repo containing the Fastify API, SQL migrations (run
-automatically when the API starts — you never run migrations by hand),
-`docker-compose.yml`, `Caddyfile`, `backup.sh`, and `deploy.sh`. The
-deploy workflow checks the repo out on the droplet at
-`/opt/lootdivers/app` and runs Compose from `/opt/lootdivers/app/server`.
-If TASK-707's implementation deviates, updating this Part B is inside
-that task's acceptance criteria — trust this file at the moment 707
-merges.
+Do not perform these now. Verified 2026-09-05 against the TASK-707
+implementation as shipped: the `server/` workspace in this repo contains
+the Fastify API, SQL migrations (run automatically when the API starts —
+you never run migrations by hand), `docker-compose.yml`, `Caddyfile`,
+`backup.sh`, and `deploy.sh`. The deploy workflow SSHes in as `deploy`
+and runs `server/deploy.sh`, which clones the repo to
+`/opt/lootdivers/app` on the first run (no manual checkout needed),
+resets it to `origin/main` on every later run, and runs Compose from
+`/opt/lootdivers/app/server` with your `/opt/lootdivers/.env`. The
+`server/.env.example` file documents both variables Step 12 creates.
 
 ## Step 12 — Create the server `.env`
 
@@ -471,10 +471,19 @@ sudo crontab -u deploy -e
 Occasionally copy a dump off the droplet (your machine or DO Spaces) —
 a backup that lives only on the server it backs up is half a backup.
 
+**Restore drill (do once after your first backup):** the exact commands
+are documented in the header of `server/backup.sh` — they restore the
+newest dump into a scratch `restore_drill` database, count the
+`characters` rows to prove the data is intact, and drop the scratch
+database. A backup you have never restored is a hope, not a backup.
+
 ## Step 15 — First automated deploy + API verification
 
-Trigger: merge the TASK-707 PR to main (or re-run the deploy workflow).
-Then verify from your Windows machine:
+Trigger: any push to main AFTER Step 12 is done. Until the `.env` from
+Step 12 exists, the deploy job prints a SKIP message and stays green (it
+deploys nothing); once the file exists, the next main push — or a re-run
+of the latest main workflow from the GitHub Actions tab — performs the
+real first deploy. Then verify from your Windows machine:
 
 ```powershell
 # Health endpoint through Cloudflare (proves DNS + proxy + Caddy + API + DB)
