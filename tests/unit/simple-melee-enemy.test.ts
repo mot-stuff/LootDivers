@@ -17,7 +17,7 @@ function createSimulation(
     ...DEFAULT_COMBAT_ARENA_CONFIG,
     enemy: {
       ...DEFAULT_COMBAT_ARENA_CONFIG.enemy,
-      spawnX: centerX + 60,
+      spawnX: centerX + DEFAULT_COMBAT_ARENA_CONFIG.enemy.meleeRange,
       spawnY: centerY,
       ...enemyOverrides,
     },

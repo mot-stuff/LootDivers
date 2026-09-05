@@ -2,8 +2,11 @@ import Phaser from "phaser";
 
 import {
   CombatArenaSimulation,
+  CINDER_DART_ID,
+  DEFIANT_SIGNAL_ID,
   FIXED_STEP_SECONDS,
   FixedStepRunner,
+  WINTER_PULSE_ID,
   type CombatArenaDiagnostics,
   type CombatArenaEvent,
   type DamageResult,
@@ -31,6 +34,9 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly impactCount: number;
   readonly deathFeedbackCount: number;
   readonly enemyStrikeFeedbackCount: number;
+  readonly renderedProjectileCount: number;
+  readonly renderedAreaCount: number;
+  readonly renderedStatusCount: number;
 }
 
 export class CombatArenaPresentation {
@@ -55,6 +61,9 @@ export class CombatArenaPresentation {
   #targetFlashUntil = 0;
   #playerFlashUntil = 0;
   #enemyStrikeUntil = 0;
+  #renderedProjectileCount = 0;
+  #renderedAreaCount = 0;
+  #renderedStatusCount = 0;
 
   public constructor(
     readonly scene: Phaser.Scene,
@@ -113,6 +122,19 @@ export class CombatArenaPresentation {
       pointerPoint.y - aimOriginY,
     );
     this.#simulation.setAim(aim.x, aim.y);
+    if (input.cinderDartRequested) {
+      this.#simulation.requestAbility(CINDER_DART_ID);
+    }
+    if (input.winterPulseRequested) {
+      this.#simulation.requestAbility(WINTER_PULSE_ID, {
+        kind: "point",
+        x: player.x + aim.x,
+        y: player.y + aim.y,
+      });
+    }
+    if (input.defiantSignalRequested) {
+      this.#simulation.requestAbility(DEFIANT_SIGNAL_ID);
+    }
 
     const result = this.#runner.advance();
     this.consumeEvents(this.#simulation.drainEvents());
@@ -147,6 +169,9 @@ export class CombatArenaPresentation {
       impactCount: this.#impactCount,
       deathFeedbackCount: this.#deathFeedbackCount,
       enemyStrikeFeedbackCount: this.#enemyStrikeFeedbackCount,
+      renderedProjectileCount: this.#renderedProjectileCount,
+      renderedAreaCount: this.#renderedAreaCount,
+      renderedStatusCount: this.#renderedStatusCount,
     };
   }
 
@@ -185,6 +210,18 @@ export class CombatArenaPresentation {
 
   public requestPrimaryAttack(): void {
     this.#simulation.requestPrimaryAttack();
+  }
+
+  public requestCinderDart(): void {
+    this.#simulation.requestAbility(CINDER_DART_ID);
+  }
+
+  public requestWinterPulse(x: number, y: number): void {
+    this.#simulation.requestAbility(WINTER_PULSE_ID, { kind: "point", x, y });
+  }
+
+  public requestDefiantSignal(): void {
+    this.#simulation.requestAbility(DEFIANT_SIGNAL_ID);
   }
 
   public advancePaused(steps: number): void {
@@ -256,6 +293,7 @@ export class CombatArenaPresentation {
 
     this.#combatGraphics.clear();
     this.drawAttack(state, point);
+    this.drawAbilityFeedback(state);
     this.drawEnemy(state, alpha);
 
     this.#playerGraphics.clear();
@@ -402,6 +440,53 @@ export class CombatArenaPresentation {
     );
   }
 
+  private drawAbilityFeedback(state: CombatArenaDiagnostics): void {
+    this.#renderedProjectileCount = state.projectiles.length;
+    this.#renderedAreaCount = state.areaFeedback.length;
+    this.#renderedStatusCount = state.statuses.length;
+    for (const area of state.areaFeedback) {
+      const point = this.project(area.x, area.y);
+      const color = area.abilityId === WINTER_PULSE_ID ? 0x80d8ff : 0xffd166;
+      this.#combatGraphics.fillStyle(color, 0.16);
+      this.#combatGraphics.fillEllipse(
+        point.x,
+        point.y,
+        area.radius * ISO_X_SCALE * 2,
+        area.radius * ISO_Y_SCALE * 2,
+      );
+      this.#combatGraphics.lineStyle(3, color, 0.9);
+      this.#combatGraphics.strokeEllipse(
+        point.x,
+        point.y,
+        area.radius * ISO_X_SCALE * 2,
+        area.radius * ISO_Y_SCALE * 2,
+      );
+    }
+    for (const projectile of state.projectiles) {
+      const point = this.project(projectile.x, projectile.y);
+      this.#combatGraphics.fillStyle(0xff6b35, 1);
+      this.#combatGraphics.fillCircle(point.x, point.y - 8, projectile.radius);
+      this.#combatGraphics.lineStyle(3, 0xffc15e, 0.8);
+      this.#combatGraphics.strokeCircle(
+        point.x,
+        point.y - 8,
+        projectile.radius + 3,
+      );
+    }
+    const enemyStatus = state.statuses.some(
+      (status) => status.targetId === state.enemy.id,
+    );
+    if (enemyStatus && !state.enemy.dead) {
+      const point = this.project(state.enemy.x, state.enemy.y);
+      this.#combatGraphics.lineStyle(3, 0x9adff5, 0.95);
+      this.#combatGraphics.strokeCircle(
+        point.x,
+        point.y - 8,
+        state.enemy.radius + 6,
+      );
+    }
+  }
+
   private consumeEvents(events: readonly CombatArenaEvent[]): void {
     for (const event of events) {
       if (event.type === "damage-applied") {
@@ -431,8 +516,8 @@ export class CombatArenaPresentation {
       playerHealth: state.playerHealth,
       playerMaxHealth: state.playerMaxHealth,
       playerDead: state.playerDead,
-      placeholderManaCurrent: 100,
-      placeholderManaMaximum: 100,
+      placeholderManaCurrent: state.mana,
+      placeholderManaMaximum: state.maxMana,
       placeholderExperienceCurrent: 0,
       placeholderExperienceMaximum: 100,
     };

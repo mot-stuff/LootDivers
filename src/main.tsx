@@ -75,6 +75,9 @@ declare global {
       setAutomationPaused: (paused: boolean) => void;
       requestDodge: () => void;
       requestPrimaryAttack: () => void;
+      requestCinderDart: () => void;
+      requestWinterPulse: (x: number, y: number) => void;
+      requestDefiantSignal: () => void;
       advancePaused: (steps: number) => void;
       applyPlayerDamage: (amount: number) => DamageResult;
     };
@@ -277,6 +280,15 @@ if (!support.supported) {
           },
           requestPrimaryAttack: () => {
             renderer.combat.requestPrimaryAttack();
+          },
+          requestCinderDart: () => {
+            renderer.combat.requestCinderDart();
+          },
+          requestWinterPulse: (x, y) => {
+            renderer.combat.requestWinterPulse(x, y);
+          },
+          requestDefiantSignal: () => {
+            renderer.combat.requestDefiantSignal();
           },
           advancePaused: (steps) => {
             renderer.combat.advancePaused(steps);

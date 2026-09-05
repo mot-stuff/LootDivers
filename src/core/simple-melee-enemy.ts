@@ -64,6 +64,7 @@ export class SimpleMeleeEnemy {
   #attackCount = 0;
   #damageAttemptCount = 0;
   #damageAppliedCount = 0;
+  #outgoingDamageMultiplier = 1;
 
   public constructor(readonly config: SimpleMeleeEnemyConfig) {
     validateConfig(config);
@@ -92,7 +93,12 @@ export class SimpleMeleeEnemy {
     step: FixedStep,
     target: MeleeEnemyTarget,
     applyPlayerDamage: PlayerDamageApplicator,
+    modifiers: {
+      readonly moveSpeedMultiplier: number;
+      readonly outgoingDamageMultiplier: number;
+    } = { moveSpeedMultiplier: 1, outgoingDamageMultiplier: 1 },
   ): void {
+    this.#outgoingDamageMultiplier = modifiers.outgoingDamageMultiplier;
     this.#previousX = this.#x;
     this.#previousY = this.#y;
     if (this.#health.health.dead) {
@@ -118,7 +124,9 @@ export class SimpleMeleeEnemy {
         this.cancelAttack("approaching");
       }
       const travel = Math.min(
-        this.config.moveSpeed * step.deltaSeconds,
+        this.config.moveSpeed *
+          modifiers.moveSpeedMultiplier *
+          step.deltaSeconds,
         distance - this.config.meleeRange,
       );
       this.#x += this.#facingX * travel;
@@ -164,6 +172,7 @@ export class SimpleMeleeEnemy {
     this.#attackCount = 0;
     this.#damageAttemptCount = 0;
     this.#damageAppliedCount = 0;
+    this.#outgoingDamageMultiplier = 1;
   }
 
   public diagnostics(): SimpleMeleeEnemyDiagnostics {
@@ -198,7 +207,9 @@ export class SimpleMeleeEnemy {
   private resolveAttack(applyPlayerDamage: PlayerDamageApplicator): void {
     this.#damageAttemptCount += 1;
     const result = applyPlayerDamage({
-      amount: this.config.attackDamage,
+      amount: Math.floor(
+        this.config.attackDamage * this.#outgoingDamageMultiplier,
+      ),
       sourceId: this.config.id,
     });
     if (result.applied > 0) {

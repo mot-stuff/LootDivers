@@ -8,6 +8,9 @@ export interface CombatInputSnapshot {
   readonly hasPointer: boolean;
   readonly dodgeRequested: boolean;
   readonly primaryAttackRequested: boolean;
+  readonly cinderDartRequested: boolean;
+  readonly winterPulseRequested: boolean;
+  readonly defiantSignalRequested: boolean;
   readonly resetRequested: boolean;
 }
 
@@ -18,6 +21,9 @@ export class CombatInputAdapter {
   #hasPointer = false;
   #dodgeRequested = false;
   #primaryAttackRequested = false;
+  #cinderDartRequested = false;
+  #winterPulseRequested = false;
+  #defiantSignalRequested = false;
   #resetRequested = false;
   readonly #keyDown = (event: KeyboardEvent): void => {
     if (!this.isGameplayFocused(event)) {
@@ -34,6 +40,17 @@ export class CombatInputAdapter {
     } else if (event.code === "KeyR") {
       if (!event.repeat) {
         this.#resetRequested = true;
+      }
+      event.preventDefault();
+    } else if (
+      event.code === "KeyQ" ||
+      event.code === "KeyE" ||
+      event.code === "KeyF"
+    ) {
+      if (!event.repeat) {
+        if (event.code === "KeyQ") this.#cinderDartRequested = true;
+        if (event.code === "KeyE") this.#winterPulseRequested = true;
+        if (event.code === "KeyF") this.#defiantSignalRequested = true;
       }
       event.preventDefault();
     }
@@ -104,10 +121,16 @@ export class CombatInputAdapter {
       hasPointer: this.#hasPointer,
       dodgeRequested: this.#dodgeRequested,
       primaryAttackRequested: this.#primaryAttackRequested,
+      cinderDartRequested: this.#cinderDartRequested,
+      winterPulseRequested: this.#winterPulseRequested,
+      defiantSignalRequested: this.#defiantSignalRequested,
       resetRequested: this.#resetRequested,
     };
     this.#dodgeRequested = false;
     this.#primaryAttackRequested = false;
+    this.#cinderDartRequested = false;
+    this.#winterPulseRequested = false;
+    this.#defiantSignalRequested = false;
     this.#resetRequested = false;
     return snapshot;
   }
@@ -125,6 +148,9 @@ export class CombatInputAdapter {
     this.#held.clear();
     this.#dodgeRequested = false;
     this.#primaryAttackRequested = false;
+    this.#cinderDartRequested = false;
+    this.#winterPulseRequested = false;
+    this.#defiantSignalRequested = false;
   }
 
   private isGameplayFocused(event: KeyboardEvent): boolean {

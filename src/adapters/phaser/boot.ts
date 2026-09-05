@@ -199,6 +199,18 @@ class TechnicalWorldScene extends Phaser.Scene {
     this.#combat?.requestPrimaryAttack();
   }
 
+  public requestCombatCinderDart(): void {
+    this.#combat?.requestCinderDart();
+  }
+
+  public requestCombatWinterPulse(x: number, y: number): void {
+    this.#combat?.requestWinterPulse(x, y);
+  }
+
+  public requestCombatDefiantSignal(): void {
+    this.#combat?.requestDefiantSignal();
+  }
+
   public advanceCombatPaused(steps: number): void {
     this.#combat?.advancePaused(steps);
   }
@@ -243,6 +255,9 @@ export interface PhaserBootResult {
     setAutomationPaused(paused: boolean): void;
     requestDodge(): void;
     requestPrimaryAttack(): void;
+    requestCinderDart(): void;
+    requestWinterPulse(x: number, y: number): void;
+    requestDefiantSignal(): void;
     advancePaused(steps: number): void;
     applyPlayerDamage(amount: number): DamageResult;
   };
@@ -310,6 +325,15 @@ export function bootPhaser(
                 },
                 requestPrimaryAttack: () => {
                   scene.requestCombatPrimaryAttack();
+                },
+                requestCinderDart: () => {
+                  scene.requestCombatCinderDart();
+                },
+                requestWinterPulse: (x, y) => {
+                  scene.requestCombatWinterPulse(x, y);
+                },
+                requestDefiantSignal: () => {
+                  scene.requestCombatDefiantSignal();
                 },
                 advancePaused: (steps) => {
                   scene.advanceCombatPaused(steps);

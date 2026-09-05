@@ -1,7 +1,34 @@
 import { FIXED_TICKS_PER_SECOND, type FixedStep } from "./fixed-step";
+import { AbilityExecutionEngine } from "./ability-runtime";
+import type {
+  AbilityCooldownHandle,
+  AbilityExecutionSnapshot,
+  AbilityRequestResult,
+  AbilityStatRead,
+  AbilityTarget,
+  ResourcePaymentHandle,
+  ResourceReservationHandle,
+} from "./ability-runtime-contracts";
+import {
+  ABILITY_DAMAGE_EXECUTOR_ID,
+  BASIC_CLEAVE_ID,
+  CINDER_DART_ID,
+  DEFIANT_SIGNAL_ID,
+  MANA_RESOURCE_ID,
+  OUTGOING_DAMAGE_STAT_ID,
+  RefreshingStatusStore,
+  WINTER_PULSE_ID,
+  damageAfterModifier,
+  definitionById,
+  pointInArea,
+  sweptCircleHitFraction,
+  targetMatches,
+  type CombatAbilityId,
+} from "./combat-abilities";
 import { HealthPool, type DamageRequest, type DamageResult } from "./health";
 import { PresentationKind, TechnicalEntityLifecycle } from "./entity-lifecycle";
 import type { RuntimeEntityId } from "./ids";
+import { Mulberry32 } from "./random";
 import {
   SimpleMeleeEnemy,
   type SimpleMeleeEnemyConfig,
@@ -68,7 +95,31 @@ export type CombatArenaEvent =
       readonly type: "entity-died";
       readonly tick: number;
       readonly entityId: string;
+    }
+  | {
+      readonly type: "ability-activated";
+      readonly tick: number;
+      readonly abilityId: CombatAbilityId;
+      readonly x: number;
+      readonly y: number;
     };
+
+export interface CombatProjectileReadModel {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly abilityId: CombatAbilityId;
+}
+
+export interface CombatAreaFeedbackReadModel {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly abilityId: CombatAbilityId;
+  readonly ticksRemaining: number;
+}
 
 export interface CombatArenaEventReader {
   drainEvents(): readonly CombatArenaEvent[];
@@ -100,6 +151,21 @@ export interface CombatArenaDiagnostics {
   readonly attackAimX: number;
   readonly attackAimY: number;
   readonly attackHitCount: number;
+  readonly mana: number;
+  readonly maxMana: number;
+  readonly cooldowns: Readonly<Record<CombatAbilityId, number>>;
+  readonly statuses: readonly {
+    readonly targetId: string;
+    readonly statusId: "chilled" | "focused" | "weakened";
+    readonly ticksRemaining: number;
+  }[];
+  readonly projectiles: readonly CombatProjectileReadModel[];
+  readonly areaFeedback: readonly CombatAreaFeedbackReadModel[];
+  readonly lastAbilityResult: {
+    readonly abilityId: CombatAbilityId;
+    readonly accepted: boolean;
+    readonly reason?: string;
+  } | null;
   readonly enemy: SimpleMeleeEnemyDiagnostics;
   readonly targets: readonly CombatTargetReadModel[];
   readonly eventCount: number;
@@ -149,6 +215,37 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   readonly #enemy: SimpleMeleeEnemy;
   readonly #events: CombatArenaEvent[] = [];
   readonly #attackHitTargets = new Set<string>();
+  readonly #statuses = new RefreshingStatusStore();
+  readonly #cooldownEnds = new Map<string, number>();
+  readonly #payments = new Map<number, number>();
+  readonly #projectiles: {
+    id: number;
+    x: number;
+    y: number;
+    directionX: number;
+    directionY: number;
+    distance: number;
+    damage: number;
+  }[] = [];
+  readonly #areaFeedback: {
+    id: number;
+    x: number;
+    y: number;
+    radius: number;
+    abilityId: CombatAbilityId;
+    expiresAtTick: number;
+  }[] = [];
+  readonly #activeExecutions = new Map<number, AbilityExecutionSnapshot>();
+  #abilityEngine: AbilityExecutionEngine;
+  #manaSubunits = 1_000;
+  #nextSettlementToken = 1;
+  #nextCooldownToken = 1;
+  #nextProjectileId = 1;
+  #nextFeedbackId = 1;
+  #lastAbilityResult: CombatArenaDiagnostics["lastAbilityResult"] = null;
+  #pendingCleave:
+    | { readonly damageMultiplier: number; readonly resolveAtTick: number }
+    | undefined;
   #tick = 0;
   #movementX = 0;
   #movementY = 0;
@@ -160,7 +257,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   #dodgeTicksRemaining = 0;
   #cooldownTicksRemaining = 0;
   #dodgeCount = 0;
-  #attackRequested = false;
   #attackPhase: AttackPhase = "idle";
   #attackPhaseTicksRemaining = 0;
   #attackExecutionId = 0;
@@ -181,6 +277,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       { x: config.width / 2, y: config.height / 2, elevation: 0 },
       PresentationKind.Actor,
     );
+    this.#abilityEngine = this.createAbilityEngine();
   }
 
   public setMovement(x: number, y: number): void {
@@ -214,7 +311,63 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   public requestPrimaryAttack(): void {
-    this.#attackRequested = true;
+    if (
+      !this.#playerHealth.health.dead &&
+      this.#attackPhase === "idle" &&
+      this.#dodgeTicksRemaining === 0
+    ) {
+      this.beginAttack();
+    }
+  }
+
+  public requestAbility(
+    abilityId: CombatAbilityId,
+    target?: AbilityTarget,
+  ): AbilityRequestResult {
+    const resolvedTarget =
+      target ??
+      (abilityId === DEFIANT_SIGNAL_ID
+        ? { kind: "self" as const }
+        : { kind: "direction" as const, x: this.#facingX, y: this.#facingY });
+    const result = this.#abilityEngine.request({
+      abilityId,
+      sourceId: this.#playerId,
+      target: resolvedTarget,
+      requestedAtTick: this.#tick,
+    });
+    this.#lastAbilityResult = result.accepted
+      ? { abilityId, accepted: true }
+      : { abilityId, accepted: false, reason: result.reason };
+    if (result.accepted && result.execution.stage !== "complete") {
+      this.#activeExecutions.set(
+        result.execution.executionId,
+        result.execution,
+      );
+    }
+    if (abilityId === BASIC_CLEAVE_ID && result.accepted) {
+      this.#attackExecutionId = result.execution.executionId;
+      this.#attackCount += 1;
+      this.#attackAimX =
+        result.execution.target.kind === "direction"
+          ? result.execution.target.x
+          : this.#facingX;
+      this.#attackAimY =
+        result.execution.target.kind === "direction"
+          ? result.execution.target.y
+          : this.#facingY;
+      this.#attackHitCount = 0;
+      this.#attackPhase = "startup";
+      this.#attackPhaseTicksRemaining =
+        definitionById(BASIC_CLEAVE_ID)?.timing.startupTicks ?? 0;
+      this.#events.push({
+        type: "attack-started",
+        tick: this.#tick,
+        executionId: this.#attackExecutionId,
+        aimX: this.#attackAimX,
+        aimY: this.#attackAimY,
+      });
+    }
+    return result;
   }
 
   public applyPlayerDamage(request: DamageRequest): DamageResult {
@@ -248,6 +401,10 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         entityId: "player",
       });
       this.cancelPlayerActions();
+      this.#statuses.clear();
+      this.#activeExecutions.clear();
+      this.#projectiles.length = 0;
+      this.#areaFeedback.length = 0;
     }
     return result;
   }
@@ -255,6 +412,22 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   public step(step: FixedStep): void {
     this.#tick = step.tick + 1;
     this.#lifecycle.transforms.snapshot();
+    this.#statuses.expire(this.#tick);
+    if (
+      this.#pendingCleave !== undefined &&
+      this.#tick >= this.#pendingCleave.resolveAtTick
+    ) {
+      this.applyAttackHits(this.#pendingCleave.damageMultiplier);
+      this.#pendingCleave = undefined;
+    }
+    if (!this.#playerHealth.health.dead) {
+      this.#manaSubunits = Math.min(1_000, this.#manaSubunits + 1);
+    }
+    for (let index = this.#areaFeedback.length - 1; index >= 0; index -= 1) {
+      if ((this.#areaFeedback[index]?.expiresAtTick ?? 0) <= this.#tick) {
+        this.#areaFeedback.splice(index, 1);
+      }
+    }
 
     if (
       !this.#playerHealth.health.dead &&
@@ -265,16 +438,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       this.beginDodge();
     }
     this.#dodgeRequested = false;
-
-    if (
-      !this.#playerHealth.health.dead &&
-      this.#attackRequested &&
-      this.#attackPhase === "idle" &&
-      this.#dodgeTicksRemaining === 0
-    ) {
-      this.beginAttack();
-    }
-    this.#attackRequested = false;
 
     const dodging =
       !this.#playerHealth.health.dead && this.#dodgeTicksRemaining > 0;
@@ -292,8 +455,9 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     }
     this.clampToArena();
 
-    this.advanceAttack();
+    this.advanceAbilityExecutions();
     const player = this.playerPosition();
+    this.advanceProjectiles(step);
     this.#enemy.step(
       step,
       {
@@ -302,6 +466,17 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
         dead: this.#playerHealth.health.dead,
       },
       (request) => this.applyPlayerDamage(request),
+      {
+        moveSpeedMultiplier: this.#statuses.has(this.config.enemy.id, "chilled")
+          ? 0.7
+          : 1,
+        outgoingDamageMultiplier: this.#statuses.has(
+          this.config.enemy.id,
+          "weakened",
+        )
+          ? 0.8
+          : 1,
+      },
     );
     if (this.#dodgeTicksRemaining > 0) {
       this.#dodgeTicksRemaining -= 1;
@@ -332,7 +507,6 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#dodgeCount = 0;
     this.#playerHealth.reset();
     this.#enemy.reset();
-    this.#attackRequested = false;
     this.#attackPhase = "idle";
     this.#attackPhaseTicksRemaining = 0;
     this.#attackExecutionId = 0;
@@ -342,6 +516,20 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#attackHitCount = 0;
     this.#attackHitTargets.clear();
     this.#events.length = 0;
+    this.#statuses.clear();
+    this.#cooldownEnds.clear();
+    this.#payments.clear();
+    this.#projectiles.length = 0;
+    this.#areaFeedback.length = 0;
+    this.#activeExecutions.clear();
+    this.#manaSubunits = 1_000;
+    this.#nextSettlementToken = 1;
+    this.#nextCooldownToken = 1;
+    this.#nextProjectileId = 1;
+    this.#nextFeedbackId = 1;
+    this.#lastAbilityResult = null;
+    this.#pendingCleave = undefined;
+    this.#abilityEngine = this.createAbilityEngine();
   }
 
   public drainEvents(): readonly CombatArenaEvent[] {
@@ -379,6 +567,35 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       attackAimX: this.#attackAimX,
       attackAimY: this.#attackAimY,
       attackHitCount: this.#attackHitCount,
+      mana: this.#manaSubunits / 10,
+      maxMana: 100,
+      cooldowns: {
+        [BASIC_CLEAVE_ID]: this.cooldownRemaining(BASIC_CLEAVE_ID),
+        [CINDER_DART_ID]: this.cooldownRemaining(CINDER_DART_ID),
+        [WINTER_PULSE_ID]: this.cooldownRemaining(WINTER_PULSE_ID),
+        [DEFIANT_SIGNAL_ID]: this.cooldownRemaining(DEFIANT_SIGNAL_ID),
+      },
+      statuses: this.#statuses.values().map((status) => ({
+        targetId: status.targetId,
+        statusId: status.statusId,
+        ticksRemaining: status.expiresAtTick - this.#tick,
+      })),
+      projectiles: this.#projectiles.map((projectile) => ({
+        id: projectile.id,
+        x: projectile.x,
+        y: projectile.y,
+        radius: 6,
+        abilityId: CINDER_DART_ID,
+      })),
+      areaFeedback: this.#areaFeedback.map((feedback) => ({
+        id: feedback.id,
+        x: feedback.x,
+        y: feedback.y,
+        radius: feedback.radius,
+        abilityId: feedback.abilityId,
+        ticksRemaining: feedback.expiresAtTick - this.#tick,
+      })),
+      lastAbilityResult: this.#lastAbilityResult,
       enemy,
       targets: [
         {
@@ -396,61 +613,48 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
   }
 
   private beginAttack(): void {
-    this.#attackExecutionId += 1;
-    this.#attackCount += 1;
-    this.#attackAimX = this.#facingX;
-    this.#attackAimY = this.#facingY;
-    this.#attackHitCount = 0;
     this.#attackHitTargets.clear();
-    this.#attackPhase =
-      this.config.primaryAttack.startupTicks > 0 ? "startup" : "active";
-    this.#attackPhaseTicksRemaining =
-      this.#attackPhase === "startup"
-        ? this.config.primaryAttack.startupTicks
-        : this.config.primaryAttack.activeTicks;
-    this.#events.push({
-      type: "attack-started",
-      tick: this.#tick,
-      executionId: this.#attackExecutionId,
-      aimX: this.#attackAimX,
-      aimY: this.#attackAimY,
+    this.requestAbility(BASIC_CLEAVE_ID, {
+      kind: "direction",
+      x: this.#facingX,
+      y: this.#facingY,
     });
   }
 
-  private advanceAttack(): void {
-    if (this.#attackPhase === "idle") {
-      return;
-    }
-    if (this.#attackPhase === "active") {
-      this.applyAttackHits();
-    }
-    this.#attackPhaseTicksRemaining -= 1;
-    if (this.#attackPhaseTicksRemaining > 0) {
-      return;
-    }
-    if (this.#attackPhase === "startup") {
-      this.#attackPhase = "active";
-      this.#attackPhaseTicksRemaining = this.config.primaryAttack.activeTicks;
-    } else if (this.#attackPhase === "active") {
-      if (this.config.primaryAttack.recoveryTicks > 0) {
-        this.#attackPhase = "recovery";
-        this.#attackPhaseTicksRemaining =
-          this.config.primaryAttack.recoveryTicks;
-      } else {
-        this.finishAttack();
+  private advanceAbilityExecutions(): void {
+    for (const executionId of [...this.#activeExecutions.keys()]) {
+      const next = this.#abilityEngine.advance(executionId, this.#tick);
+      if (next.abilityId === BASIC_CLEAVE_ID) {
+        this.#attackPhase =
+          next.stage === "startup" ||
+          next.stage === "active" ||
+          next.stage === "recovery"
+            ? next.stage
+            : "idle";
+        const definition = definitionById(BASIC_CLEAVE_ID);
+        const duration =
+          next.stage === "startup"
+            ? definition?.timing.startupTicks
+            : next.stage === "active"
+              ? definition?.timing.activeTicks
+              : next.stage === "recovery"
+                ? definition?.timing.recoveryTicks
+                : 0;
+        this.#attackPhaseTicksRemaining = Math.max(
+          0,
+          (duration ?? 0) - next.stageElapsedTicks,
+        );
+        if (this.#attackPhase === "idle") this.#attackHitTargets.clear();
       }
-    } else {
-      this.finishAttack();
+      if (next.stage === "complete" || next.stage === "cancel") {
+        this.#activeExecutions.delete(executionId);
+      } else {
+        this.#activeExecutions.set(executionId, next);
+      }
     }
   }
 
-  private finishAttack(): void {
-    this.#attackPhase = "idle";
-    this.#attackPhaseTicksRemaining = 0;
-    this.#attackHitTargets.clear();
-  }
-
-  private applyAttackHits(): void {
+  private applyAttackHits(damageMultiplier = 1): void {
     const transformIndex = this.playerTransformIndex();
     const playerX = this.#lifecycle.transforms.x[transformIndex] ?? 0;
     const playerY = this.#lifecycle.transforms.y[transformIndex] ?? 0;
@@ -477,7 +681,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
     this.#attackHitTargets.add(target.id);
     const result = this.#enemy.applyDamage({
-      amount: attack.damage,
+      amount: damageAfterModifier(attack.damage, damageMultiplier),
       sourceId: "player",
     });
     if (result.applied > 0) {
@@ -492,12 +696,271 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
       });
     }
     if (result.died) {
+      this.#statuses.clearTarget(target.id);
       this.#events.push({
         type: "entity-died",
         tick: this.#tick,
         entityId: target.id,
       });
     }
+  }
+
+  private createAbilityEngine(): AbilityExecutionEngine {
+    return new AbilityExecutionEngine({
+      definitions: { get: definitionById },
+      resources: {
+        canSpend: (_entityId, resourceId, amount) =>
+          resourceId === MANA_RESOURCE_ID && this.#manaSubunits >= amount * 10,
+        pay: (_entityId, _resourceId, amount): ResourcePaymentHandle => {
+          const handle = {
+            kind: "payment" as const,
+            token: this.#nextSettlementToken++,
+          };
+          const subunits = amount * 10;
+          this.#manaSubunits -= subunits;
+          this.#payments.set(handle.token, subunits);
+          return handle;
+        },
+        reserve: (
+          _entityId,
+          _resourceId,
+          amount,
+        ): ResourceReservationHandle => {
+          const handle = {
+            kind: "reservation" as const,
+            token: this.#nextSettlementToken++,
+          };
+          const subunits = amount * 10;
+          this.#manaSubunits -= subunits;
+          this.#payments.set(handle.token, subunits);
+          return handle;
+        },
+        refund: (handle) => {
+          this.#manaSubunits += this.takePayment(handle.token);
+        },
+        commit: (handle) => {
+          this.takePayment(handle.token);
+        },
+        release: (handle) => {
+          this.#manaSubunits += this.takePayment(handle.token);
+        },
+      },
+      cooldowns: {
+        remainingTicks: (_entityId, abilityId, atTick) =>
+          Math.max(0, (this.#cooldownEnds.get(abilityId) ?? atTick) - atTick),
+        start: (
+          entityId,
+          abilityId,
+          atTick,
+          durationTicks,
+        ): AbilityCooldownHandle => {
+          const handle = {
+            token: this.#nextCooldownToken++,
+            entityId,
+            abilityId,
+          };
+          this.#cooldownEnds.set(abilityId, atTick + durationTicks);
+          return handle;
+        },
+        clear: (handle) => this.#cooldownEnds.delete(handle.abilityId),
+      },
+      stats: {
+        read: (_entityId, statId) =>
+          statId === OUTGOING_DAMAGE_STAT_ID &&
+          this.#statuses.has("player", "focused")
+            ? 1.2
+            : 1,
+      },
+      targets: {
+        validate: (request, definition) => {
+          if (!targetMatches(request.target, definition.targeting.mode)) {
+            return false;
+          }
+          if (request.target.kind === "direction") {
+            return Math.hypot(request.target.x, request.target.y) > 0;
+          }
+          if (request.target.kind === "point") {
+            const player = this.playerPosition();
+            return (
+              Math.hypot(
+                request.target.x - player.x,
+                request.target.y - player.y,
+              ) <= definition.targeting.range
+            );
+          }
+          return true;
+        },
+      },
+      events: { publish: () => undefined },
+      random: new Mulberry32(0x00c0_ba77),
+      executors: {
+        has: (kind) => kind === ABILITY_DAMAGE_EXECUTOR_ID,
+        get: (kind) =>
+          kind === ABILITY_DAMAGE_EXECUTOR_ID
+            ? {
+                execute: (_effect, context) => {
+                  this.executeCombatAbility(
+                    context.ability.id,
+                    context.target,
+                    (read) => context.readStat(read),
+                  );
+                },
+              }
+            : undefined,
+      },
+      triggerLimits: { maximumDepth: 2, maximumEffectsPerTick: 16 },
+    });
+  }
+
+  private executeCombatAbility(
+    abilityId: CombatAbilityId,
+    target: AbilityTarget,
+    readStat: (read: AbilityStatRead) => number,
+  ): void {
+    const player = this.playerPosition();
+    const multiplier =
+      abilityId === DEFIANT_SIGNAL_ID
+        ? 1
+        : readStat({
+            subject: "source",
+            statId: OUTGOING_DAMAGE_STAT_ID,
+            policy: "snapshot",
+          });
+    if (abilityId === BASIC_CLEAVE_ID) {
+      this.#pendingCleave = {
+        damageMultiplier: multiplier,
+        resolveAtTick: this.#tick + 1,
+      };
+    } else if (abilityId === CINDER_DART_ID && target.kind === "direction") {
+      const length = Math.hypot(target.x, target.y);
+      this.#projectiles.push({
+        id: this.#nextProjectileId++,
+        x: player.x,
+        y: player.y,
+        directionX: target.x / length,
+        directionY: target.y / length,
+        distance: 0,
+        damage: damageAfterModifier(30, multiplier),
+      });
+    } else if (abilityId === WINTER_PULSE_ID && target.kind === "point") {
+      this.#areaFeedback.push({
+        id: this.#nextFeedbackId++,
+        x: target.x,
+        y: target.y,
+        radius: 100,
+        abilityId,
+        expiresAtTick: this.#tick + 18,
+      });
+      const enemy = this.#enemy.diagnostics();
+      if (
+        !enemy.dead &&
+        pointInArea(target.x, target.y, 100, enemy.x, enemy.y, enemy.radius)
+      ) {
+        this.damageEnemy(damageAfterModifier(20, multiplier));
+        if (!this.#enemy.health.dead) {
+          this.#statuses.apply(enemy.id, "chilled", this.#tick, 120);
+        }
+      }
+    } else if (abilityId === DEFIANT_SIGNAL_ID) {
+      this.#statuses.apply("player", "focused", this.#tick, 180);
+      const enemy = this.#enemy.diagnostics();
+      if (
+        !enemy.dead &&
+        pointInArea(player.x, player.y, 180, enemy.x, enemy.y, enemy.radius)
+      ) {
+        this.#statuses.apply(enemy.id, "weakened", this.#tick, 180);
+      }
+      this.#areaFeedback.push({
+        id: this.#nextFeedbackId++,
+        x: player.x,
+        y: player.y,
+        radius: 180,
+        abilityId,
+        expiresAtTick: this.#tick + 18,
+      });
+    }
+    this.#events.push({
+      type: "ability-activated",
+      tick: this.#tick,
+      abilityId,
+      x: target.kind === "point" ? target.x : player.x,
+      y: target.kind === "point" ? target.y : player.y,
+    });
+  }
+
+  private advanceProjectiles(step: FixedStep): void {
+    for (let index = this.#projectiles.length - 1; index >= 0; index -= 1) {
+      const projectile = this.#projectiles[index];
+      if (projectile === undefined) continue;
+      const travel = Math.min(
+        600 * step.deltaSeconds,
+        600 - projectile.distance,
+      );
+      const endX = projectile.x + projectile.directionX * travel;
+      const endY = projectile.y + projectile.directionY * travel;
+      const enemy = this.#enemy.diagnostics();
+      const hit = enemy.dead
+        ? null
+        : sweptCircleHitFraction(
+            projectile.x,
+            projectile.y,
+            endX,
+            endY,
+            6,
+            enemy.x,
+            enemy.y,
+            enemy.radius,
+          );
+      if (hit !== null) {
+        projectile.x += (endX - projectile.x) * hit;
+        projectile.y += (endY - projectile.y) * hit;
+        this.damageEnemy(projectile.damage);
+        this.#projectiles.splice(index, 1);
+        continue;
+      }
+      projectile.x = endX;
+      projectile.y = endY;
+      projectile.distance += travel;
+      if (projectile.distance >= 600) this.#projectiles.splice(index, 1);
+    }
+  }
+
+  private damageEnemy(amount: number): void {
+    const target = this.#enemy.diagnostics();
+    const result = this.#enemy.applyDamage({ amount, sourceId: "player" });
+    if (result.applied > 0) {
+      this.#events.push({
+        type: "damage-applied",
+        tick: this.#tick,
+        sourceId: "player",
+        targetId: target.id,
+        amount: result.applied,
+        currentHealth: result.currentHealth,
+      });
+    }
+    if (result.died) {
+      this.#statuses.clearTarget(target.id);
+      this.#events.push({
+        type: "entity-died",
+        tick: this.#tick,
+        entityId: target.id,
+      });
+    }
+  }
+
+  private takePayment(token: number): number {
+    const amount = this.#payments.get(token);
+    if (amount === undefined)
+      throw new Error(`Unknown mana settlement ${token}.`);
+    this.#payments.delete(token);
+    return amount;
+  }
+
+  private cooldownRemaining(abilityId: CombatAbilityId): number {
+    return Math.max(
+      0,
+      (this.#cooldownEnds.get(abilityId) ?? this.#tick) - this.#tick,
+    );
   }
 
   private beginDodge(): void {
@@ -518,10 +981,13 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#movementY = 0;
     this.#dodgeRequested = false;
     this.#dodgeTicksRemaining = 0;
-    this.#attackRequested = false;
     this.#attackPhase = "idle";
     this.#attackPhaseTicksRemaining = 0;
+    this.#attackExecutionId = 0;
+    this.#attackCount = 0;
+    this.#attackHitCount = 0;
     this.#attackHitTargets.clear();
+    this.#pendingCleave = undefined;
   }
 
   private clampToArena(): void {

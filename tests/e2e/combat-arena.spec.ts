@@ -179,6 +179,75 @@ test("common enemy approaches and dies to two directional attacks", async ({
   expect(failures).toEqual([]);
 });
 
+test("ability automation exposes projectile, area, and status presentation paths", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+  await expect.poll(() => diagnostics(page)).not.toBeNull();
+
+  await page.evaluate(() => {
+    const combat = window.__RARPG_COMBAT_TEST__;
+    combat?.setAutomationPaused(true);
+    combat?.reset();
+    combat?.setAimDirection(1, 0);
+    combat?.requestCinderDart();
+    combat?.advancePaused(7);
+  });
+  expect(await diagnostics(page)).toMatchObject({
+    mana: 85.7,
+    projectiles: [
+      expect.objectContaining({ abilityId: "ability:cinder-dart", radius: 6 }),
+    ],
+    renderedProjectileCount: 1,
+  });
+
+  await page.evaluate(() => {
+    const combat = window.__RARPG_COMBAT_TEST__;
+    combat?.reset();
+    combat?.requestWinterPulse(860, 400);
+    combat?.advancePaused(12);
+  });
+  expect(await diagnostics(page)).toMatchObject({
+    enemy: { health: 30 },
+    areaFeedback: [
+      expect.objectContaining({
+        abilityId: "ability:winter-pulse",
+        radius: 100,
+      }),
+    ],
+    statuses: [
+      expect.objectContaining({ statusId: "chilled", ticksRemaining: 120 }),
+    ],
+    renderedAreaCount: 1,
+    renderedStatusCount: 1,
+  });
+
+  await page.evaluate(() => {
+    const combat = window.__RARPG_COMBAT_TEST__;
+    combat?.reset();
+    combat?.advancePaused(30);
+    combat?.requestDefiantSignal();
+    combat?.advancePaused(6);
+  });
+  expect(await diagnostics(page)).toMatchObject({
+    areaFeedback: [
+      expect.objectContaining({
+        abilityId: "ability:defiant-signal",
+        radius: 180,
+      }),
+    ],
+    statuses: expect.arrayContaining([
+      expect.objectContaining({ targetId: "player", statusId: "focused" }),
+      expect.objectContaining({ statusId: "weakened" }),
+    ]),
+    renderedAreaCount: 1,
+    renderedStatusCount: 2,
+  });
+  expect(failures).toEqual([]);
+});
+
 test("enemy cadence honors exact-tick dodge and reset semantics", async ({
   page,
 }) => {

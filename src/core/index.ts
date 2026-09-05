@@ -2,6 +2,24 @@ export const FOUNDATION_ID = "rarpg:browser-foundation";
 
 export * from "./ability-runtime-contracts";
 export {
+  ABILITY_DAMAGE_EXECUTOR_ID,
+  BASIC_CLEAVE_ID,
+  CINDER_DART_ID,
+  COMBAT_ABILITY_DEFINITIONS,
+  DEFIANT_SIGNAL_ID,
+  MANA_RESOURCE_ID,
+  OUTGOING_DAMAGE_STAT_ID,
+  RefreshingStatusStore,
+  WINTER_PULSE_ID,
+  damageAfterModifier,
+  definitionById,
+  pointInArea,
+  sweptCircleHitFraction,
+  targetMatches,
+  type CombatAbilityId,
+  type StatusInstance,
+} from "./combat-abilities";
+export {
   CombatArenaSimulation,
   DEFAULT_COMBAT_ARENA_CONFIG,
   type AttackPhase,
@@ -9,6 +27,8 @@ export {
   type CombatArenaDiagnostics,
   type CombatArenaEvent,
   type CombatArenaEventReader,
+  type CombatAreaFeedbackReadModel,
+  type CombatProjectileReadModel,
   type CombatTargetReadModel,
   type PrimaryAttackConfig,
 } from "./combat-arena";
