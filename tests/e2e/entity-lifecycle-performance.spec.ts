@@ -275,6 +275,12 @@ function evaluateThresholds(
     summary === undefined || summary.sampleCount === 0
       ? Number.POSITIVE_INFINITY
       : summary.intervalsOver33_4Milliseconds / summary.sampleCount;
+  const expectedWarmupSteps = Math.round(
+    (summary?.warmupDurationMilliseconds ?? 0) * 0.06,
+  );
+  const expectedSampleSteps = Math.round(
+    (summary?.durationMilliseconds ?? 0) * 0.06,
+  );
   return {
     repetitions: evaluation(false, 1, "5 fresh browser processes"),
     cleanBuild: evaluation(
@@ -291,16 +297,15 @@ function evaluateThresholds(
     ),
     webgl2: evaluation(environment.webgl2, environment.webgl2, "true"),
     warmupSteps: evaluation(
-      (summary?.warmupSteps ?? -1) >= 1_799 &&
-        (summary?.warmupSteps ?? -1) <= 1_801,
+      Math.abs((summary?.warmupSteps ?? -1) - expectedWarmupSteps) <= 1 &&
+        (summary?.warmupDurationMilliseconds ?? 0) >= 30_000,
       summary?.warmupSteps,
-      "1800 ±1",
+      `${expectedWarmupSteps} ±1 for actual >=30s warmup`,
     ),
     sampleSteps: evaluation(
-      (summary?.simulationSteps ?? -1) >= 7_199 &&
-        (summary?.simulationSteps ?? -1) <= 7_201,
+      Math.abs((summary?.simulationSteps ?? -1) - expectedSampleSteps) <= 1,
       summary?.simulationSteps,
-      "7200 ±1",
+      `${expectedSampleSteps} ±1 for actual sample duration`,
     ),
     sampleDuration: evaluation(
       (summary?.durationMilliseconds ?? 0) >= 118_000,

@@ -81,6 +81,7 @@ export interface FrameSampleSummary {
   readonly catchUpCallbacks: number;
   readonly maximumStepsPerCallback: number;
   readonly warmupSteps: number;
+  readonly warmupDurationMilliseconds: number;
   readonly invalidReasons: readonly string[];
   readonly sampleCapacity: number;
   readonly sampleOverflowCount: number;
@@ -152,7 +153,10 @@ export class SyntheticLifecyclePresentation {
   #sampleStartCatchUpCallbacks = 0;
   #sampleMaximumStepsPerCallback = 0;
   #warmupSteps = 0;
+  #fixtureStartedAt = 0;
+  #warmupDurationMilliseconds = 0;
   readonly #sampleInvalidReasons = new Set<string>();
+  #endedSummary: FrameSampleSummary | null = null;
   #ready = false;
   #disposed = false;
   #visible = 0;
@@ -208,6 +212,7 @@ export class SyntheticLifecyclePresentation {
       this.#installRenderTiming();
       this.#fixture.assertPopulations();
       this.#clockMilliseconds = performance.now();
+      this.#fixtureStartedAt = this.#clockMilliseconds;
       if (!this.#paused) {
         this.#runner.resume();
       }
@@ -274,12 +279,15 @@ export class SyntheticLifecyclePresentation {
     }
     this.#fixture?.markWarmupComplete();
     this.#warmupSteps = this.#fixture?.diagnostics().simulationSteps ?? 0;
+    this.#warmupDurationMilliseconds =
+      performance.now() - this.#fixtureStartedAt;
     this.#sampleStartSteps = this.#warmupSteps;
     this.#sampleStartCallbacks = this.#callbacks;
     this.#sampleStartDroppedMilliseconds = this.#droppedMilliseconds;
     this.#sampleStartCatchUpCallbacks = this.#catchUpCallbacks;
     this.#sampleMaximumStepsPerCallback = 0;
     this.#sampleInvalidReasons.clear();
+    this.#endedSummary = null;
     this.#samples.intervalCount = 0;
     this.#samples.workCount = 0;
     this.#samples.overflowCount = 0;
@@ -305,7 +313,8 @@ export class SyntheticLifecyclePresentation {
     this.#samples.sampling = false;
     this.#samples.endedAt = performance.now();
     this.#fixture?.assertNoStructuralAllocationsAfterWarmup();
-    return this.#frameSummary();
+    this.#endedSummary = this.#createFrameSummary();
+    return this.#endedSummary;
   }
 
   public invalidateSample(reason: string): void {
@@ -771,6 +780,12 @@ export class SyntheticLifecyclePresentation {
   }
 
   #frameSummary(): FrameSampleSummary {
+    return this.#samples.sampling || this.#endedSummary === null
+      ? this.#createFrameSummary()
+      : this.#endedSummary;
+  }
+
+  #createFrameSummary(): FrameSampleSummary {
     const end = this.#samples.sampling
       ? performance.now()
       : this.#samples.endedAt;
@@ -808,6 +823,7 @@ export class SyntheticLifecyclePresentation {
         this.#catchUpCallbacks - this.#sampleStartCatchUpCallbacks,
       maximumStepsPerCallback: this.#sampleMaximumStepsPerCallback,
       warmupSteps: this.#warmupSteps,
+      warmupDurationMilliseconds: this.#warmupDurationMilliseconds,
       invalidReasons: [...this.#sampleInvalidReasons],
       sampleCapacity: this.#samples.intervals.length,
       sampleOverflowCount: this.#samples.overflowCount,
