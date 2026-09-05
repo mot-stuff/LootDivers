@@ -17,8 +17,6 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly pausedForUi: boolean;
   readonly playerCanvasX: number;
   readonly playerCanvasY: number;
-  readonly pointerCanvasX: number;
-  readonly pointerCanvasY: number;
   readonly facingCanvasX: number;
   readonly facingCanvasY: number;
 }
@@ -88,13 +86,14 @@ export class CombatArenaPresentation {
     }
     const player = this.#simulation.diagnostics();
     const playerPoint = this.project(player.x, player.y);
+    const aimOriginY = playerPoint.y - 8;
     const pointerPoint = this.scene.cameras.main.getWorldPoint(
       this.#lastPointerX,
       this.#lastPointerY,
     );
     const aim = this.inverseProjectDelta(
       pointerPoint.x - playerPoint.x,
-      pointerPoint.y - playerPoint.y,
+      pointerPoint.y - aimOriginY,
     );
     this.#simulation.setAim(aim.x, aim.y);
 
@@ -112,8 +111,6 @@ export class CombatArenaPresentation {
       pausedForUi: this.#pausedForUi,
       playerCanvasX: this.#renderedPlayerPoint.x,
       playerCanvasY: this.#renderedPlayerPoint.y,
-      pointerCanvasX: this.#lastPointerX,
-      pointerCanvasY: this.#lastPointerY,
       facingCanvasX: this.#renderedFacingPoint.x,
       facingCanvasY: this.#renderedFacingPoint.y,
     };

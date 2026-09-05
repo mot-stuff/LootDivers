@@ -78,49 +78,77 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
   expect(failures).toEqual([]);
 });
 
-test("real pointer movement inverse-projects screen aim into world facing", async ({
-  page,
-}) => {
-  const failures = collectRuntimeFailures(page);
-  await page.goto("/", { waitUntil: "networkidle" });
-  await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
+for (const scenario of [
+  { name: "default responsive viewport", viewport: null },
+  { name: "900x900 viewport", viewport: { width: 900, height: 900 } },
+] as const) {
+  test(`real diagonal pointer aligns rendered facing at ${scenario.name}`, async ({
+    page,
+  }) => {
+    const failures = collectRuntimeFailures(page);
+    if (scenario.viewport !== null) {
+      await page.setViewportSize(scenario.viewport);
+    }
+    await page.goto("/", { waitUntil: "networkidle" });
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-app-state",
+      "ready",
+    );
 
-  const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
-  const box = await canvas.boundingBox();
-  const canvasSize = await canvas.evaluate((element) => ({
-    width: (element as HTMLCanvasElement).width,
-    height: (element as HTMLCanvasElement).height,
-  }));
-  const state = await diagnostics(page);
-  if (box === null || state === null) {
-    throw new Error("Combat canvas diagnostics were unavailable.");
-  }
+    const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
+    const box = await canvas.boundingBox();
+    const canvasSize = await canvas.evaluate((element) => ({
+      width: (element as HTMLCanvasElement).width,
+      height: (element as HTMLCanvasElement).height,
+    }));
+    const state = await diagnostics(page);
+    if (box === null || state === null) {
+      throw new Error("Combat canvas diagnostics were unavailable.");
+    }
 
-  await page.mouse.move(
-    box.x + (state.playerCanvasX / canvasSize.width) * box.width,
-    box.y + (state.playerCanvasY / canvasSize.height) * box.height - 100,
-  );
+    const playerViewportX =
+      box.x + (state.playerCanvasX / canvasSize.width) * box.width;
+    const playerViewportY =
+      box.y + (state.playerCanvasY / canvasSize.height) * box.height;
+    const cursorViewportX = playerViewportX + 120;
+    const cursorViewportY = playerViewportY - 90;
+    await page.mouse.move(cursorViewportX, cursorViewportY);
 
-  await expect
-    .poll(async () => {
+    const alignmentDegrees = async (): Promise<number> => {
       const facing = await diagnostics(page);
-      if (facing === null) {
-        return false;
+      const currentBox = await canvas.boundingBox();
+      if (facing === null || currentBox === null) {
+        return Number.POSITIVE_INFINITY;
       }
-      const cursorX = facing.pointerCanvasX - facing.playerCanvasX;
-      const cursorY = facing.pointerCanvasY - facing.playerCanvasY;
-      const renderedX = facing.facingCanvasX - facing.playerCanvasX;
-      const renderedY = facing.facingCanvasY - facing.playerCanvasY;
-      const cursorLength = Math.hypot(cursorX, cursorY);
-      const renderedLength = Math.hypot(renderedX, renderedY);
-      const alignment =
-        (cursorX * renderedX + cursorY * renderedY) /
-        (cursorLength * renderedLength);
-      return cursorLength > 0 && renderedLength > 0 && alignment > 0.995;
-    })
-    .toBe(true);
-  expect(failures).toEqual([]);
-});
+      const renderedPlayerX =
+        currentBox.x +
+        (facing.playerCanvasX / canvasSize.width) * currentBox.width;
+      const renderedPlayerY =
+        currentBox.y +
+        (facing.playerCanvasY / canvasSize.height) * currentBox.height;
+      const renderedFacingX =
+        currentBox.x +
+        (facing.facingCanvasX / canvasSize.width) * currentBox.width;
+      const renderedFacingY =
+        currentBox.y +
+        (facing.facingCanvasY / canvasSize.height) * currentBox.height;
+      const cursorX = cursorViewportX - renderedPlayerX;
+      const cursorY = cursorViewportY - renderedPlayerY;
+      const renderedX = renderedFacingX - renderedPlayerX;
+      const renderedY = renderedFacingY - renderedPlayerY;
+      const lengths =
+        Math.hypot(cursorX, cursorY) * Math.hypot(renderedX, renderedY);
+      const cosine = (cursorX * renderedX + cursorY * renderedY) / lengths;
+      return (Math.acos(Math.max(-1, Math.min(1, cosine))) * 180) / Math.PI;
+    };
+
+    await expect.poll(alignmentDegrees).toBeLessThan(0.5);
+    console.log(
+      `${scenario.name} aim alignment: ${(await alignmentDegrees()).toFixed(3)}°`,
+    );
+    expect(failures).toEqual([]);
+  });
+}
 
 test("movement remains bounded by semantic arena diagnostics", async ({
   page,
