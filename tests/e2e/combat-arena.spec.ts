@@ -24,7 +24,7 @@ async function diagnostics(page: Page) {
   );
 }
 
-test("playable arena accepts independent movement, aim, and dodge input", async ({
+test("playable arena accepts movement, primary attack, aim, and dodge input", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
@@ -38,6 +38,39 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
   const canvas = page.getByLabel("RARPG Phaser diagnostic canvas");
   await canvas.focus();
   await page.evaluate(() => window.__RARPG_COMBAT_TEST__?.reset());
+
+  const attackOrigin = await diagnostics(page);
+  const canvasBox = await canvas.boundingBox();
+  const canvasSize = await canvas.evaluate((element) => ({
+    width: (element as HTMLCanvasElement).width,
+    height: (element as HTMLCanvasElement).height,
+  }));
+  if (attackOrigin === null || canvasBox === null) {
+    throw new Error("Combat attack diagnostics were unavailable.");
+  }
+  await page.mouse.click(
+    canvasBox.x +
+      ((attackOrigin.playerCanvasX + 60) / canvasSize.width) * canvasBox.width,
+    canvasBox.y +
+      ((attackOrigin.playerCanvasY + 31) / canvasSize.height) *
+        canvasBox.height,
+  );
+  await expect
+    .poll(async () => {
+      const state = await diagnostics(page);
+      return {
+        attackCount: state?.attackCount,
+        attackHitCount: state?.attackHitCount,
+        targetHealth: state?.targets[0]?.health,
+        impactCount: state?.impactCount,
+      };
+    })
+    .toEqual({
+      attackCount: 1,
+      attackHitCount: 1,
+      targetHealth: 75,
+      impactCount: 1,
+    });
 
   await page.keyboard.down("w");
   await page.keyboard.down("d");
@@ -61,6 +94,15 @@ test("playable arena accepts independent movement, aim, and dodge input", async 
   await page.keyboard.press("Space");
   await page.keyboard.press("Space");
   await expect.poll(async () => (await diagnostics(page))?.dodgeCount).toBe(1);
+  await expect.poll(async () => (await diagnostics(page))?.dodging).toBe(true);
+  const dodgeDamage = await page.evaluate(() =>
+    window.__RARPG_COMBAT_TEST__?.applyPlayerDamage(30),
+  );
+  expect(dodgeDamage).toMatchObject({
+    applied: 0,
+    currentHealth: 100,
+    ignoredReason: "invulnerable",
+  });
   await expect
     .poll(async () => (await diagnostics(page))?.dodgeReady)
     .toBe(false);

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 
+import type { DamageResult } from "../../core";
 import type { CanvasViewportReadModel } from "../../presentation/shell-contracts";
 import { applyCanvasViewport } from "../browser/canvas-viewport";
 import { assertWebGL2Context } from "../browser/webgl2";
@@ -185,6 +186,13 @@ class TechnicalWorldScene extends Phaser.Scene {
   public setCombatAimDirection(x: number, y: number): void {
     this.#combat?.setAimDirection(x, y);
   }
+
+  public applyCombatPlayerDamage(amount: number): DamageResult {
+    if (this.#combat === null) {
+      throw new Error("Combat prototype is not active.");
+    }
+    return this.#combat.applyPlayerDamage(amount);
+  }
 }
 
 export interface TechnicalWorldController {
@@ -216,6 +224,7 @@ export interface PhaserBootResult {
     diagnostics(): CombatPresentationDiagnostics | null;
     reset(): void;
     setAimDirection(x: number, y: number): void;
+    applyPlayerDamage(amount: number): DamageResult;
   };
   resize(viewport: CanvasViewportReadModel): void;
 }
@@ -273,6 +282,8 @@ export function bootPhaser(
                 setAimDirection: (x, y) => {
                   scene.setCombatAimDirection(x, y);
                 },
+                applyPlayerDamage: (amount) =>
+                  scene.applyCombatPlayerDamage(amount),
               },
               resize(viewport) {
                 scene.invalidateFixtureSample("viewport-resized");

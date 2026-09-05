@@ -4,9 +4,23 @@ export * from "./ability-runtime-contracts";
 export {
   CombatArenaSimulation,
   DEFAULT_COMBAT_ARENA_CONFIG,
+  type AttackPhase,
   type CombatArenaConfig,
   type CombatArenaDiagnostics,
+  type CombatArenaEvent,
+  type CombatArenaEventReader,
+  type CombatTargetReadModel,
+  type CombatTargetRegistration,
+  type PrimaryAttackConfig,
 } from "./combat-arena";
+export {
+  HealthPool,
+  type Damageable,
+  type DamageIgnoreReason,
+  type DamageRequest,
+  type DamageResult,
+  type HealthReadModel,
+} from "./health";
 export {
   AbilityExecutionEngine,
   type AbilityExecutionDependencies,

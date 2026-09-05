@@ -4,6 +4,8 @@ import {
   CombatArenaSimulation,
   FixedStepRunner,
   type CombatArenaDiagnostics,
+  type CombatArenaEvent,
+  type DamageResult,
 } from "../../core";
 import type { CombatHudReadModel } from "../../presentation/shell-contracts";
 import { CombatInputAdapter } from "./combat-input";
@@ -13,6 +15,7 @@ const ORIGIN_Y = 72;
 const ISO_X_SCALE = 0.65;
 const ISO_Y_SCALE = 0.34;
 const PRESENTATION_DEPTH = 3_500_000;
+const INITIAL_TARGET_ID = "enemy:integration-target";
 
 export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly pausedForUi: boolean;
@@ -20,6 +23,8 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
   readonly playerCanvasY: number;
   readonly facingCanvasX: number;
   readonly facingCanvasY: number;
+  readonly impactCount: number;
+  readonly deathFeedbackCount: number;
 }
 
 export class CombatArenaPresentation {
@@ -27,6 +32,7 @@ export class CombatArenaPresentation {
   readonly #input: CombatInputAdapter;
   readonly #runner: FixedStepRunner;
   readonly #arenaGraphics: Phaser.GameObjects.Graphics;
+  readonly #combatGraphics: Phaser.GameObjects.Graphics;
   readonly #playerGraphics: Phaser.GameObjects.Graphics;
   readonly #renderedPlayerPoint = new Phaser.Math.Vector2();
   readonly #renderedFacingPoint = new Phaser.Math.Vector2();
@@ -34,6 +40,10 @@ export class CombatArenaPresentation {
   #lastHudKey = "";
   #lastPointerX = ORIGIN_X + 150;
   #lastPointerY = ORIGIN_Y + 180;
+  #impactCount = 0;
+  #deathFeedbackCount = 0;
+  #targetFlashUntil = 0;
+  #playerFlashUntil = 0;
 
   public constructor(
     readonly scene: Phaser.Scene,
@@ -45,9 +55,19 @@ export class CombatArenaPresentation {
       (step) => this.#simulation.step(step),
     );
     this.#arenaGraphics = scene.add.graphics().setDepth(PRESENTATION_DEPTH);
+    this.#combatGraphics = scene.add
+      .graphics()
+      .setDepth(PRESENTATION_DEPTH + 1);
     this.#playerGraphics = scene.add
       .graphics()
       .setDepth(PRESENTATION_DEPTH + 2);
+    this.#simulation.registerTarget({
+      id: INITIAL_TARGET_ID,
+      x: this.#simulation.config.width / 2 + 92,
+      y: this.#simulation.config.height / 2,
+      radius: 20,
+      maxHealth: 100,
+    });
     this.drawArena();
     this.render(0);
   }
@@ -69,6 +89,9 @@ export class CombatArenaPresentation {
     if (input.dodgeRequested) {
       this.#simulation.requestDodge();
     }
+    if (input.primaryAttackRequested) {
+      this.#simulation.requestPrimaryAttack();
+    }
     if (input.hasPointer) {
       this.#lastPointerX = input.pointerX;
       this.#lastPointerY = input.pointerY;
@@ -88,11 +111,16 @@ export class CombatArenaPresentation {
     this.#simulation.setAim(aim.x, aim.y);
 
     const result = this.#runner.advance();
+    this.consumeEvents(this.#simulation.drainEvents());
     this.render(result.interpolationAlpha);
   }
 
   public reset(): void {
     this.#simulation.reset();
+    this.#impactCount = 0;
+    this.#deathFeedbackCount = 0;
+    this.#targetFlashUntil = 0;
+    this.#playerFlashUntil = 0;
   }
 
   public diagnostics(): CombatPresentationDiagnostics {
@@ -103,7 +131,19 @@ export class CombatArenaPresentation {
       playerCanvasY: this.#renderedPlayerPoint.y,
       facingCanvasX: this.#renderedFacingPoint.x,
       facingCanvasY: this.#renderedFacingPoint.y,
+      impactCount: this.#impactCount,
+      deathFeedbackCount: this.#deathFeedbackCount,
     };
+  }
+
+  public applyPlayerDamage(amount: number): DamageResult {
+    const result = this.#simulation.applyPlayerDamage({
+      amount,
+      sourceId: INITIAL_TARGET_ID,
+    });
+    this.consumeEvents(this.#simulation.drainEvents());
+    this.render(0);
+    return result;
   }
 
   public setAimDirection(x: number, y: number): void {
@@ -122,6 +162,7 @@ export class CombatArenaPresentation {
     this.#runner.pause();
     this.#input.dispose();
     this.#arenaGraphics.destroy();
+    this.#combatGraphics.destroy();
     this.#playerGraphics.destroy();
   }
 
@@ -167,10 +208,21 @@ export class CombatArenaPresentation {
     const facingEndX = point.x + (facingScreenX / facingLength) * 35;
     const facingEndY = point.y - 8 + (facingScreenY / facingLength) * 35;
 
+    this.#combatGraphics.clear();
+    this.drawAttack(state, point);
+    this.drawTargets(state);
+
     this.#playerGraphics.clear();
-    this.#playerGraphics.fillStyle(state.dodging ? 0xffffff : 0x5ce1e6, 0.24);
+    const playerColor = state.playerDead
+      ? 0x59636f
+      : performance.now() < this.#playerFlashUntil
+        ? 0xff6b6b
+        : state.dodging
+          ? 0xf9f3a6
+          : 0x5ce1e6;
+    this.#playerGraphics.fillStyle(playerColor, 0.24);
     this.#playerGraphics.fillEllipse(point.x, point.y + 8, 52, 25);
-    this.#playerGraphics.fillStyle(state.dodging ? 0xf9f3a6 : 0x5ce1e6, 1);
+    this.#playerGraphics.fillStyle(playerColor, 1);
     this.#playerGraphics.fillCircle(point.x, point.y - 8, 17);
     this.#playerGraphics.lineStyle(5, 0x08111f, 1);
     this.#playerGraphics.lineBetween(
@@ -192,6 +244,87 @@ export class CombatArenaPresentation {
     );
 
     this.publishHud(state);
+  }
+
+  private drawAttack(
+    state: CombatArenaDiagnostics,
+    playerPoint: { readonly x: number; readonly y: number },
+  ): void {
+    if (state.attackPhase === "idle" || state.attackPhase === "recovery") {
+      return;
+    }
+    const attack = this.#simulation.config.primaryAttack;
+    const centerAngle = Math.atan2(state.attackAimY, state.attackAimX);
+    const halfAngle = (attack.halfAngleDegrees * Math.PI) / 180;
+    const points = [new Phaser.Math.Vector2(playerPoint.x, playerPoint.y - 8)];
+    for (let index = 0; index <= 8; index += 1) {
+      const angle = centerAngle - halfAngle + (halfAngle * 2 * index) / 8;
+      const endpoint = this.project(
+        state.x + Math.cos(angle) * attack.range,
+        state.y + Math.sin(angle) * attack.range,
+      );
+      points.push(new Phaser.Math.Vector2(endpoint.x, endpoint.y));
+    }
+    this.#combatGraphics.fillStyle(
+      state.attackPhase === "active" ? 0xffd166 : 0x8ecae6,
+      state.attackPhase === "active" ? 0.34 : 0.15,
+    );
+    this.#combatGraphics.fillPoints(points, true);
+    this.#combatGraphics.lineStyle(3, 0xffd166, 0.9);
+    this.#combatGraphics.strokePoints(points.slice(1), false);
+  }
+
+  private drawTargets(state: CombatArenaDiagnostics): void {
+    for (const target of state.targets) {
+      const point = this.project(target.x, target.y);
+      const flashing =
+        target.id === INITIAL_TARGET_ID &&
+        performance.now() < this.#targetFlashUntil;
+      const color = target.dead ? 0x4b5563 : flashing ? 0xffffff : 0xef476f;
+      this.#combatGraphics.fillStyle(color, target.dead ? 0.45 : 1);
+      this.#combatGraphics.fillCircle(point.x, point.y - 8, target.radius);
+      this.#combatGraphics.lineStyle(4, 0x08111f, 1);
+      if (target.dead) {
+        this.#combatGraphics.lineBetween(
+          point.x - 12,
+          point.y - 20,
+          point.x + 12,
+          point.y + 4,
+        );
+        this.#combatGraphics.lineBetween(
+          point.x + 12,
+          point.y - 20,
+          point.x - 12,
+          point.y + 4,
+        );
+      } else {
+        const healthWidth = 44 * (target.health / target.maxHealth);
+        this.#combatGraphics.fillStyle(0x32131b, 1);
+        this.#combatGraphics.fillRect(point.x - 22, point.y - 38, 44, 5);
+        this.#combatGraphics.fillStyle(0xff6b6b, 1);
+        this.#combatGraphics.fillRect(
+          point.x - 22,
+          point.y - 38,
+          healthWidth,
+          5,
+        );
+      }
+    }
+  }
+
+  private consumeEvents(events: readonly CombatArenaEvent[]): void {
+    for (const event of events) {
+      if (event.type === "damage-applied") {
+        this.#impactCount += 1;
+        if (event.targetId === "player") {
+          this.#playerFlashUntil = performance.now() + 110;
+        } else {
+          this.#targetFlashUntil = performance.now() + 110;
+        }
+      } else if (event.type === "entity-died") {
+        this.#deathFeedbackCount += 1;
+      }
+    }
   }
 
   private publishHud(state: CombatArenaDiagnostics): void {

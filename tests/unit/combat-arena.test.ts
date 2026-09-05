@@ -7,8 +7,11 @@ import {
 } from "../../src/core";
 
 function step(simulation: CombatArenaSimulation, count: number): void {
-  for (let tick = 0; tick < count; tick += 1) {
-    simulation.step({ tick, deltaSeconds: FIXED_STEP_SECONDS });
+  for (let index = 0; index < count; index += 1) {
+    simulation.step({
+      tick: simulation.diagnostics().tick,
+      deltaSeconds: FIXED_STEP_SECONDS,
+    });
   }
 }
 
@@ -86,5 +89,152 @@ describe("CombatArenaSimulation", () => {
     expect(state.y).toBeGreaterThanOrEqual(
       DEFAULT_COMBAT_ARENA_CONFIG.playerRadius,
     );
+  });
+
+  it("snapshots aim and applies damage on the first active tick", () => {
+    const simulation = new CombatArenaSimulation();
+    simulation.registerTarget({
+      id: "target",
+      x: DEFAULT_COMBAT_ARENA_CONFIG.width / 2 + 90,
+      y: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
+      radius: 16,
+      maxHealth: 100,
+    });
+    simulation.setAim(1, 0);
+    simulation.requestPrimaryAttack();
+
+    step(simulation, DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack.startupTicks);
+    expect(simulation.diagnostics()).toMatchObject({
+      attackPhase: "active",
+      attackAimX: 1,
+      attackAimY: 0,
+      attackHitCount: 0,
+      targets: [{ health: 100 }],
+    });
+
+    simulation.setAim(-1, 0);
+    step(simulation, 1);
+    expect(simulation.diagnostics()).toMatchObject({
+      attackPhase: "active",
+      attackAimX: 1,
+      attackAimY: 0,
+      attackHitCount: 1,
+      targets: [{ health: 75 }],
+    });
+  });
+
+  it("uses configured startup, active, and recovery tick windows", () => {
+    const simulation = new CombatArenaSimulation();
+    const attack = DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack;
+    simulation.requestPrimaryAttack();
+
+    step(simulation, attack.startupTicks);
+    expect(simulation.diagnostics()).toMatchObject({
+      attackPhase: "active",
+      attackPhaseTicksRemaining: attack.activeTicks,
+      attackCount: 1,
+    });
+    step(simulation, attack.activeTicks);
+    expect(simulation.diagnostics()).toMatchObject({
+      attackPhase: "recovery",
+      attackPhaseTicksRemaining: attack.recoveryTicks,
+    });
+
+    simulation.requestPrimaryAttack();
+    step(simulation, attack.recoveryTicks);
+    expect(simulation.diagnostics()).toMatchObject({
+      attackPhase: "idle",
+      attackPhaseTicksRemaining: 0,
+      attackCount: 1,
+    });
+  });
+
+  it("hits each target at most once per attack execution", () => {
+    const simulation = new CombatArenaSimulation();
+    simulation.registerTarget({
+      id: "target",
+      x: DEFAULT_COMBAT_ARENA_CONFIG.width / 2 + 90,
+      y: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
+      radius: 16,
+      maxHealth: 100,
+    });
+    simulation.requestPrimaryAttack();
+    step(
+      simulation,
+      DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack.startupTicks +
+        DEFAULT_COMBAT_ARENA_CONFIG.primaryAttack.activeTicks,
+    );
+
+    expect(simulation.diagnostics()).toMatchObject({
+      attackHitCount: 1,
+      targets: [{ health: 75 }],
+    });
+    expect(
+      simulation
+        .drainEvents()
+        .filter((event) => event.type === "damage-applied"),
+    ).toHaveLength(1);
+  });
+
+  it("ignores player damage throughout the active dodge state", () => {
+    const simulation = new CombatArenaSimulation();
+    simulation.requestDodge();
+    step(simulation, 1);
+
+    const ignored = simulation.applyPlayerDamage({
+      amount: 40,
+      sourceId: "enemy",
+    });
+    expect(ignored).toMatchObject({
+      applied: 0,
+      currentHealth: 100,
+      died: false,
+      ignoredReason: "invulnerable",
+    });
+
+    while (simulation.diagnostics().dodging) {
+      step(simulation, 1);
+    }
+    expect(
+      simulation.applyPlayerDamage({ amount: 40, sourceId: "enemy" }),
+    ).toMatchObject({
+      applied: 40,
+      currentHealth: 60,
+      ignoredReason: null,
+    });
+  });
+
+  it("kills the player once, blocks actions, and fully resets combat", () => {
+    const simulation = new CombatArenaSimulation();
+    simulation.setMovement(1, 0);
+    simulation.requestPrimaryAttack();
+    simulation.applyPlayerDamage({ amount: 150, sourceId: "enemy" });
+    simulation.applyPlayerDamage({ amount: 10, sourceId: "enemy" });
+    const deathEvents = simulation
+      .drainEvents()
+      .filter((event) => event.type === "entity-died");
+    expect(deathEvents).toHaveLength(1);
+
+    const deadX = simulation.diagnostics().x;
+    step(simulation, 20);
+    expect(simulation.diagnostics()).toMatchObject({
+      x: deadX,
+      playerHealth: 0,
+      playerDead: true,
+      attackPhase: "idle",
+      attackCount: 0,
+    });
+
+    simulation.reset();
+    expect(simulation.diagnostics()).toMatchObject({
+      x: DEFAULT_COMBAT_ARENA_CONFIG.width / 2,
+      y: DEFAULT_COMBAT_ARENA_CONFIG.height / 2,
+      playerHealth: 100,
+      playerDead: false,
+      attackPhase: "idle",
+      attackCount: 0,
+      dodgeCount: 0,
+      eventCount: 0,
+    });
   });
 });

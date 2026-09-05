@@ -7,6 +7,7 @@ export interface CombatInputSnapshot {
   readonly pointerY: number;
   readonly hasPointer: boolean;
   readonly dodgeRequested: boolean;
+  readonly primaryAttackRequested: boolean;
   readonly resetRequested: boolean;
 }
 
@@ -16,6 +17,7 @@ export class CombatInputAdapter {
   #pointerY = 0;
   #hasPointer = false;
   #dodgeRequested = false;
+  #primaryAttackRequested = false;
   #resetRequested = false;
   readonly #keyDown = (event: KeyboardEvent): void => {
     if (!this.isGameplayFocused(event)) {
@@ -47,6 +49,29 @@ export class CombatInputAdapter {
     this.#pointerY = pointer.y;
     this.#hasPointer = true;
   };
+  readonly #pointerDown = (event: PointerEvent): void => {
+    if (
+      event.button !== 0 ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      !document.hasFocus()
+    ) {
+      return;
+    }
+    this.canvas.focus({ preventScroll: true });
+    if (this.gameplayFocused) {
+      const bounds = this.canvas.getBoundingClientRect();
+      this.#pointerX =
+        ((event.clientX - bounds.left) / bounds.width) * this.canvas.width;
+      this.#pointerY =
+        ((event.clientY - bounds.top) / bounds.height) * this.canvas.height;
+      this.#hasPointer = true;
+      this.#primaryAttackRequested = true;
+      event.preventDefault();
+    }
+  };
 
   public constructor(
     readonly scene: Phaser.Scene,
@@ -56,6 +81,7 @@ export class CombatInputAdapter {
     window.addEventListener("keyup", this.#keyUp, true);
     window.addEventListener("blur", this.#blur);
     scene.input.on("pointermove", this.#pointerMove);
+    canvas.addEventListener("pointerdown", this.#pointerDown);
   }
 
   public get gameplayFocused(): boolean {
@@ -77,9 +103,11 @@ export class CombatInputAdapter {
       pointerY: this.#pointerY,
       hasPointer: this.#hasPointer,
       dodgeRequested: this.#dodgeRequested,
+      primaryAttackRequested: this.#primaryAttackRequested,
       resetRequested: this.#resetRequested,
     };
     this.#dodgeRequested = false;
+    this.#primaryAttackRequested = false;
     this.#resetRequested = false;
     return snapshot;
   }
@@ -89,12 +117,14 @@ export class CombatInputAdapter {
     window.removeEventListener("keyup", this.#keyUp, true);
     window.removeEventListener("blur", this.#blur);
     this.scene.input.off("pointermove", this.#pointerMove);
+    this.canvas.removeEventListener("pointerdown", this.#pointerDown);
     this.clearHeldInput();
   }
 
   private clearHeldInput(): void {
     this.#held.clear();
     this.#dodgeRequested = false;
+    this.#primaryAttackRequested = false;
   }
 
   private isGameplayFocused(event: KeyboardEvent): boolean {

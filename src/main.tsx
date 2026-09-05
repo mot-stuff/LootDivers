@@ -19,6 +19,7 @@ import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
 import type { CombatPresentationDiagnostics } from "./adapters/phaser/combat-arena-presentation";
+import type { DamageResult } from "./core";
 import type {
   FrameSampleSummary,
   RawFrameSamples,
@@ -71,6 +72,7 @@ declare global {
       diagnostics: () => CombatPresentationDiagnostics | null;
       reset: () => void;
       setAimDirection: (x: number, y: number) => void;
+      applyPlayerDamage: (amount: number) => DamageResult;
     };
   }
 }
@@ -263,6 +265,8 @@ if (!support.supported) {
           setAimDirection: (x, y) => {
             renderer.combat.setAimDirection(x, y);
           },
+          applyPlayerDamage: (amount) =>
+            renderer.combat.applyPlayerDamage(amount),
         };
         canvas.focus({ preventScroll: true });
       }
