@@ -22,6 +22,13 @@ export interface CanvasViewportReadModel {
   readonly devicePixelRatio: number;
 }
 
+export interface CombatHudReadModel {
+  readonly paused: boolean;
+  readonly dodgeReady: boolean;
+  readonly cooldownProgress: number;
+  readonly cooldownSecondsRemaining: number;
+}
+
 export interface ShellReadModel {
   readonly revision: number;
   readonly phase: ShellPhase;

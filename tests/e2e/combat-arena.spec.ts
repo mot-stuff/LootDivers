@@ -94,6 +94,33 @@ test("combat canvas fills the browser viewport", async ({ page }) => {
   expect(box?.height).toBeCloseTo(viewport?.height ?? 0, 0);
 });
 
+for (const viewport of [
+  { width: 1280, height: 720 },
+  { width: 900, height: 900 },
+]) {
+  test(`DOM dodge HUD stays bottom-right at ${viewport.width}x${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/", { waitUntil: "networkidle" });
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-app-state",
+      "ready",
+    );
+
+    const box = await page.getByTestId("combat-dodge-hud").boundingBox();
+    expect(box).not.toBeNull();
+    expect(viewport.width - ((box?.x ?? 0) + (box?.width ?? 0))).toBeCloseTo(
+      16,
+      0,
+    );
+    expect(viewport.height - ((box?.y ?? 0) + (box?.height ?? 0))).toBeCloseTo(
+      16,
+      0,
+    );
+  });
+}
+
 for (const scenario of [
   { name: "default responsive viewport", viewport: null },
   { name: "900x900 viewport", viewport: { width: 900, height: 900 } },

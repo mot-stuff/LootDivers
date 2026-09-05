@@ -5,6 +5,7 @@ import {
   FixedStepRunner,
   type CombatArenaDiagnostics,
 } from "../../core";
+import type { CombatHudReadModel } from "../../presentation/shell-contracts";
 import { CombatInputAdapter } from "./combat-input";
 
 const ORIGIN_X = 480;
@@ -27,11 +28,10 @@ export class CombatArenaPresentation {
   readonly #runner: FixedStepRunner;
   readonly #arenaGraphics: Phaser.GameObjects.Graphics;
   readonly #playerGraphics: Phaser.GameObjects.Graphics;
-  readonly #feedbackGraphics: Phaser.GameObjects.Graphics;
-  readonly #statusText: Phaser.GameObjects.Text;
   readonly #renderedPlayerPoint = new Phaser.Math.Vector2();
   readonly #renderedFacingPoint = new Phaser.Math.Vector2();
   #pausedForUi = true;
+  #lastHudKey = "";
   #lastPointerX = ORIGIN_X + 150;
   #lastPointerY = ORIGIN_Y + 180;
 
@@ -48,19 +48,6 @@ export class CombatArenaPresentation {
     this.#playerGraphics = scene.add
       .graphics()
       .setDepth(PRESENTATION_DEPTH + 2);
-    this.#feedbackGraphics = scene.add
-      .graphics()
-      .setScrollFactor(0)
-      .setDepth(PRESENTATION_DEPTH + 3);
-    this.#statusText = scene.add
-      .text(24, 446, "", {
-        color: "#e8f1ff",
-        fontFamily: "monospace",
-        fontSize: "16px",
-        lineSpacing: 7,
-      })
-      .setScrollFactor(0)
-      .setDepth(PRESENTATION_DEPTH + 4);
     this.drawArena();
     this.render(0);
   }
@@ -136,8 +123,6 @@ export class CombatArenaPresentation {
     this.#input.dispose();
     this.#arenaGraphics.destroy();
     this.#playerGraphics.destroy();
-    this.#feedbackGraphics.destroy();
-    this.#statusText.destroy();
   }
 
   private drawArena(): void {
@@ -206,49 +191,27 @@ export class CombatArenaPresentation {
       this.#renderedFacingPoint,
     );
 
-    const viewportWidth =
-      this.scene.cameras.main.width / this.scene.cameras.main.zoom;
-    const viewportHeight =
-      this.scene.cameras.main.height / this.scene.cameras.main.zoom;
-    const hudMargin = 24;
-    const barWidth = 310;
-    const barHeight = 42;
-    const barX = viewportWidth - barWidth - hudMargin;
-    const barY = viewportHeight - barHeight - hudMargin;
+    this.publishHud(state);
+  }
 
-    this.#feedbackGraphics.clear();
-    this.#feedbackGraphics.fillStyle(0x07111e, 0.9);
-    this.#feedbackGraphics.fillRoundedRect(barX, barY, barWidth, barHeight, 8);
-    this.#feedbackGraphics.fillStyle(state.dodgeReady ? 0x57d895 : 0x4f86b8, 1);
-    this.#feedbackGraphics.fillRoundedRect(
-      barX + 8,
-      barY + 8,
-      (barWidth - 16) * state.cooldownProgress,
-      26,
-      5,
-    );
-    this.#feedbackGraphics.lineStyle(
-      2,
-      state.dodgeReady ? 0xa7f3cf : 0x76b8ff,
-      1,
-    );
-    this.#feedbackGraphics.strokeRoundedRect(
-      barX,
-      barY,
-      barWidth,
-      barHeight,
-      8,
-    );
-
-    const focusStatus = this.#pausedForUi
-      ? "PAUSED · click arena to play"
-      : "ACTIVE";
-    const dodgeStatus = state.dodgeReady
-      ? "READY"
-      : `${(state.cooldownTicksRemaining / 60).toFixed(1)}s`;
-    this.#statusText.setPosition(hudMargin, viewportHeight - 70);
-    this.#statusText.setText(
-      `WASD move · SPACE dodge · R reset · Mouse aim\n${focusStatus}                                  DODGE ${dodgeStatus}`,
+  private publishHud(state: CombatArenaDiagnostics): void {
+    const hud: CombatHudReadModel = {
+      paused: this.#pausedForUi,
+      dodgeReady: state.dodgeReady,
+      cooldownProgress: Math.round(state.cooldownProgress * 20) / 20,
+      cooldownSecondsRemaining:
+        Math.ceil((state.cooldownTicksRemaining / 60) * 10) / 10,
+    };
+    const key = JSON.stringify(hud);
+    if (key === this.#lastHudKey) {
+      return;
+    }
+    this.#lastHudKey = key;
+    this.canvas.dispatchEvent(
+      new CustomEvent<CombatHudReadModel>("rarpg:combat-hud", {
+        bubbles: true,
+        detail: hud,
+      }),
     );
   }
 

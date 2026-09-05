@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 
 import { FOUNDATION_ID } from "../core";
 import type {
@@ -6,7 +6,11 @@ import type {
   PersistenceStatus,
   SaveLoadResult,
 } from "../persistence";
-import type { ShellBindings, ShellReadModel } from "./shell-contracts";
+import type {
+  CombatHudReadModel,
+  ShellBindings,
+  ShellReadModel,
+} from "./shell-contracts";
 
 export interface PersistenceFixtureActions {
   save(state: FixtureSaveState): Promise<void>;
@@ -35,11 +39,27 @@ export function App({
   );
   const [counter, setCounter] = useState(1);
   const [serialized, setSerialized] = useState("");
+  const [combatHud, setCombatHud] = useState<CombatHudReadModel>({
+    paused: true,
+    dodgeReady: true,
+    cooldownProgress: 1,
+    cooldownSecondsRemaining: 0,
+  });
 
   useLayoutEffect(
     () => bindings.models.subscribe((nextModel) => setModel(nextModel)),
     [bindings.models],
   );
+  useEffect(() => {
+    if (!showCombatPrototype) {
+      return;
+    }
+    const updateHud = (event: Event) => {
+      setCombatHud((event as CustomEvent<CombatHudReadModel>).detail);
+    };
+    window.addEventListener("rarpg:combat-hud", updateHud);
+    return () => window.removeEventListener("rarpg:combat-hud", updateHud);
+  }, [showCombatPrototype]);
 
   const fixtureState = (): FixtureSaveState => ({
     label: "Phase 0 synthetic fixture",
@@ -185,6 +205,33 @@ export function App({
           )}
         </div>
       </section>
+
+      {showCombatPrototype && (
+        <section
+          class="combat-dodge-hud"
+          aria-label="Dodge status"
+          data-testid="combat-dodge-hud"
+        >
+          <div class="combat-dodge-label">
+            <span>{combatHud.paused ? "PAUSED" : "DODGE"}</span>
+            <strong>
+              {combatHud.dodgeReady
+                ? "READY"
+                : `${combatHud.cooldownSecondsRemaining.toFixed(1)}s`}
+            </strong>
+          </div>
+          <div
+            class="combat-dodge-meter"
+            role="progressbar"
+            aria-label="Dodge cooldown"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(combatHud.cooldownProgress * 100)}
+          >
+            <span style={{ width: `${combatHud.cooldownProgress * 100}%` }} />
+          </div>
+        </section>
+      )}
 
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
