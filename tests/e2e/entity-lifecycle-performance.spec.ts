@@ -49,7 +49,7 @@ test("collects labeled P0-002 full-fixture diagnostics", async ({
     }
   });
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto("/?automation=1&fullFixture=1", {
+  await page.goto("/play/?automation=1&fullFixture=1", {
     waitUntil: "domcontentloaded",
   });
   await expect(page.locator("body")).toHaveAttribute(

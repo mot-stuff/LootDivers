@@ -68,7 +68,7 @@ async function clickLogicalCanvasPoint(
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/?automation=1", { waitUntil: "domcontentloaded" });
+  await page.goto("/play/?automation=1", { waitUntil: "domcontentloaded" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect
     .poll(() =>

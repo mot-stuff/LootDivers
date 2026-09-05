@@ -18,9 +18,21 @@
 /assets/characters/*
   Cache-Control: public, max-age=14400, must-revalidate
 
-# The HTML shell must never be stale: it carries the hashed asset names.
+# The HTML shells must never be stale: they carry the hashed asset names.
+# "/" is the homepage and "/play/" is the game shell (TASK-708, DEC-035).
+# Pages serves dist/play/index.html for /play and /play/, so all three
+# exact-match spellings are listed (exact rules stay non-overlapping).
 /
   Cache-Control: no-cache
 
 /index.html
+  Cache-Control: no-cache
+
+/play
+  Cache-Control: no-cache
+
+/play/
+  Cache-Control: no-cache
+
+/play/index.html
   Cache-Control: no-cache

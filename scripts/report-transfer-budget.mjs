@@ -203,9 +203,12 @@ function referencesFor(path, source) {
   }
 }
 
-export async function discoverInitialGraph(distDirectory) {
-  const queue = ["index.html"];
-  const discovered = new Map([["index.html", new Set(["navigation"])]]);
+export async function discoverInitialGraph(
+  distDirectory,
+  rootPath = "index.html",
+) {
+  const queue = [rootPath];
+  const discovered = new Map([[rootPath, new Set(["navigation"])]]);
   const missingReferences = [];
 
   for (let index = 0; index < queue.length; index += 1) {
@@ -282,8 +285,9 @@ function gate(actualBytes, maximumBytes) {
 export async function createTransferBudgetReport({
   distDirectory,
   reportPath,
+  rootPath = "index.html",
 }) {
-  const graph = await discoverInitialGraph(distDirectory);
+  const graph = await discoverInitialGraph(distDirectory, rootPath);
   const entries = [];
 
   for (const path of graph.paths) {
@@ -374,7 +378,7 @@ export async function createTransferBudgetReport({
     schemaVersion: 1,
     generatedAtUtc: new Date().toISOString(),
     status: overallStatus,
-    root: "index.html",
+    root: rootPath,
     artifactDirectory: resolve(distDirectory),
     reportPath: resolve(reportPath),
     command: {
@@ -435,12 +439,22 @@ const isMain =
   process.argv[1] !== undefined &&
   pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
 
+function plainArgumentValue(name, fallback) {
+  const prefix = `--${name}=`;
+  const argument = process.argv.find((value) => value.startsWith(prefix));
+  return argument === undefined ? fallback : argument.slice(prefix.length);
+}
+
 if (isMain) {
   const distDirectory = argumentValue("dist", DEFAULT_DIST_DIRECTORY);
   const reportPath = argumentValue("report", DEFAULT_REPORT_PATH);
+  // TASK-708 (DEC-035): "/" is the light homepage; the game shell budget
+  // is measured with --root=play/index.html (npm run budget:play).
+  const rootPath = plainArgumentValue("root", "index.html");
   const report = await createTransferBudgetReport({
     distDirectory,
     reportPath,
+    rootPath,
   });
   printSummary(report);
 

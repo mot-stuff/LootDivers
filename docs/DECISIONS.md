@@ -881,7 +881,7 @@ Provide validated export/import. Keep a future trusted server adapter boundary.
 
 IndexedDB is broadly available and transactional, supports larger structured
 data than localStorage, and avoids premature backend work. Generations and export
-reduce—but cannot eliminate—browser storage loss risk.
+reduceâ€”but cannot eliminateâ€”browser storage loss risk.
 
 ### Tradeoffs
 
@@ -1083,7 +1083,7 @@ rather than the reduced Phase 0 stack risks.
 
 The production build passed. Chromium production-artifact smoke passed 26 tests
 with one diagnostic-only skip. A short headed hardware-accelerated Microsoft
-Edge run reached the ready WebGL2 fixture on an NVIDIA RTX 5070 Ti at 1920×1080
+Edge run reached the ready WebGL2 fixture on an NVIDIA RTX 5070 Ti at 1920Ã—1080
 DPR 1, with a 14 ms p95 frame interval and zero intervals over 33.4 ms.
 
 ### Options Considered
@@ -1356,7 +1356,7 @@ Specifically:
   helmet/chest/belt/boots flanked by weapon and offhand, amulet at the neck,
   rings near the hands), pointer-based drag-and-drop equipping and
   unequipping with compatibility highlighting, an accessible click/keyboard
-  path including explicit Ring 1/Ring 2 targeting, and T1–T5 markers on affix
+  path including explicit Ring 1/Ring 2 targeting, and T1â€“T5 markers on affix
   tooltip lines. The I key toggles the menu open and closed outside
   text-entry contexts; Esc still closes.
 
@@ -1447,7 +1447,7 @@ exactly one rolled affix, move the inventory toggle above the HP/MP/XP
 vitals, and remove the inventory-screen Character summary.
 
 This supersedes the DEC-019/DEC-020 12-slot capacity and the rule that Common
-items roll no affixes. Magic remains 1–2 affixes and Rare remains 3–4.
+items roll no affixes. Magic remains 1â€“2 affixes and Rare remains 3â€“4.
 
 ### Why
 
@@ -1489,9 +1489,9 @@ Accepted for adding life and mana flasks to the Phase 3 drop pool.
 ### Decision
 
 Heartwell Flask and Mindwell Flask are generatable items that share gear
-rarity and T1–T5 affix rules, occupy the four flask slots, and never
+rarity and T1â€“T5 affix rules, occupy the four flask slots, and never
 contribute to character health or ability-damage stats. Enemy kills draw
-from the combined gear-and-flask base catalog. Flask use with keys 1–4
+from the combined gear-and-flask base catalog. Flask use with keys 1â€“4
 remains deferred.
 
 Flask-only affixes are original recovery and charge modifiers inspired by
@@ -1522,7 +1522,7 @@ Accepted for the Phase 4 playable character-progression loop.
 
 Keep XP, levels, attributes, masteries, and respec in the
 framework-independent core. Enemy kills grant a fixed 20 experience. The
-level curve is `40 + 20 × (level − 1)` with no hardcoded cap. A new
+level curve is `40 + 20 Ã— (level âˆ’ 1)` with no hardcoded cap. A new
 character starts at level 1 with 2 attribute points and 1 mastery point;
 each later level awards the same amounts.
 
@@ -1599,7 +1599,7 @@ Accepted for the Phase 5 playable Mining and Smithing loop.
 
 Keep profession XP, materials, nodes, and recipes in the
 framework-independent core. Mining and Smithing use the curve
-`20 + 10 × (level − 1)` and stay independent of combat level.
+`20 + 10 Ã— (level âˆ’ 1)` and stay independent of combat level.
 
 The current arena hosts two geometric ore nodes and one forge. F is a
 shared interact: loot pickup wins when a drop is in range, otherwise the
@@ -1626,7 +1626,7 @@ on sprites or building a town.
 
 1. Wait for character and node sprites before any profession work.
 2. Build a town-and-vendor crafting loop before Mining exists.
-3. A thin gather → smith → equip loop in the current arena with
+3. A thin gather â†’ smith â†’ equip loop in the current arena with
    geometric placeholders and a crafted-only item catalog.
 
 ### Chosen Approach
@@ -1708,7 +1708,7 @@ zone name, quest stage, and the vendor menu.
 
 ### Why
 
-This keeps Phaser and Preact non-authoritative, preserves Phase 1–5
+This keeps Phaser and Preact non-authoritative, preserves Phase 1â€“5
 combat tests, and lets the world loop be proven before Tiled combat
 integration.
 
@@ -1749,7 +1749,7 @@ Accepted for the Phase 6 encounter and minimap increment.
 
 The combat arena simulates every living enemy in the current zone, not
 one shared prototype. `reset()` and `new CombatArenaSimulation()` still
-spawn only the Ashtrail prototype so Phase 1–5 combat tests stay valid.
+spawn only the Ashtrail prototype so Phase 1â€“5 combat tests stay valid.
 Traveling into a catalog zone loads that zone's encounter list.
 
 Ashtrail Expanse has a three-Gnasher white pack and one Ashtrail Brute
@@ -1887,7 +1887,7 @@ of the placeholder circle. The sheets live in
 clockwise (screen y down) from east (E, SE, S, SW, W, NW, N, NE).
 
 `BarbarianSpritePresentation` (Phaser adapter) loads five sheets on
-demand — Idle, Run, Attack1, Rolling, Die — and picks an animation from
+demand â€” Idle, Run, Attack1, Rolling, Die â€” and picks an animation from
 combat diagnostics: death, dodge roll, attack, then locomotion. The
 character faces the direction of movement, not the cursor; standing
 still keeps the last movement facing, and only attacks orient toward
@@ -1962,7 +1962,7 @@ Accepted.
 
 ### Decision
 
-Fantasy UI theme — a CSS-first design-token restyle of the in-game shell.
+Fantasy UI theme â€” a CSS-first design-token restyle of the in-game shell.
 `src/presentation/styles.css` defines the theme once as `:root` custom
 properties (`--ui-panel-bg`, `--ui-border`, `--ui-accent`, `--ui-text`,
 and companions for surfaces, frames, text tiers, keycaps, and functional
@@ -2060,7 +2060,7 @@ strictly in order; out-of-order actions neither advance nor break the
 sequence. The tracker is receptive only while the tutorial zone is
 current: entering shows the current step, leaving hides prompts but
 keeps progress, and re-entry after completion shows nothing. The exit
-portal always works regardless of progress — walking out IS the skip
+portal always works regardless of progress â€” walking out IS the skip
 mechanism; nothing gates input and no dedicated skip UI exists.
 
 Tutorial state (step id, prompt, completed count/total) is exposed
@@ -2077,7 +2077,7 @@ consumes wholesale), with identical behavior for all existing zones.
 Phase 7 kickoff (TASK-702) asked for a small landing zone where a fresh
 character learns the core verbs via staged prompts before reaching
 Hearthmere, without touching `reset()` or session-start semantics that
-Phase 1–6 tests depend on.
+Phase 1â€“6 tests depend on.
 
 ### Options Considered
 
@@ -2132,8 +2132,8 @@ the skip mechanism" paragraph above and the strict-ordering strand
 tradeoff:
 
 - **Gated portal.** The Hearthmere Road portal in Wakeshore Landing is
-  hidden and non-interactable — absent from the interactables read
-  model, the minimap, and F-interaction — until the five non-travel
+  hidden and non-interactable â€” absent from the interactables read
+  model, the minimap, and F-interaction â€” until the five non-travel
   steps (move, attack, dodge, loot, gather) are all complete. It
   appears exactly when `travel` becomes the active prompt, and
   immediately on re-entry after full completion. Other zones' portals
@@ -2142,7 +2142,7 @@ tradeoff:
   from a stranded state, `TutorialTracker` now banks every verb the
   moment it is performed in-zone, regardless of order; the prompt
   always shows the first incomplete step in the canonical order. There
-  is no dedicated skip anymore — the tutorial is short enough that
+  is no dedicated skip anymore â€” the tutorial is short enough that
   finishing it IS the exit.
 - **Strand-proofing.** No action sequence can strand a step: move and
   dodge are always available; the scuttler's death banks attack at the
@@ -2293,16 +2293,16 @@ the droplet facts (OS/RAM/IP/occupied ports) gathered in the owner
 runbook's first step.
 
 **Implementation status (2026-09-05):** the site-hosting half is
-implemented (TASK-706) — the owner completed runbook Part A, and CI now
+implemented (TASK-706) â€” the owner completed runbook Part A, and CI now
 uploads the tested `dist/` and auto-deploys it to the `lootdivers`
 Cloudflare Pages project on green main pushes, with `public/_headers`
 cache policy (immutable hashed assets; 4-hour revalidation for unhashed
-art — a refinement of the blanket-immutable wording above) and a
-pixel-verified lossless PNG pass that halved `public/assets/` (7.81 MB →
+art â€” a refinement of the blanket-immutable wording above) and a
+pixel-verified lossless PNG pass that halved `public/assets/` (7.81 MB â†’
 3.91 MB). The backend half is implemented by TASK-707 (pending Director
 architecture review): `server/` workspace (Fastify + Postgres + Caddy in
 Docker Compose, ordered SQL migrations at startup, argon2id + hashed
-opaque session cookies, the Phase 8 kickoff §2 contract verbatim), the
+opaque session cookies, the Phase 8 kickoff Â§2 contract verbatim), the
 client `HttpSaveRepository` adapter behind the DEC-014 `SaveRepository`
 port with a custom-domain-only boot session probe, a CI server gate
 (typecheck/lint/contract tests against MemoryStore and a real Postgres
@@ -2317,7 +2317,7 @@ DEC-036 is recorded at acceptance per the packet.
 ### Decision
 
 **Site hosting:** deploy the static Vite artifact to Cloudflare Pages from
-the existing GitHub Actions gate — the deploy job publishes the exact
+the existing GitHub Actions gate â€” the deploy job publishes the exact
 tested `dist/` artifact on green main pushes only, with immutable cache
 headers for hashed assets and no-cache for `index.html`. The Vite base
 path stays `/`; `?autostart` and the other DEC-031 query parameters work
@@ -2325,7 +2325,7 @@ identically on the deployed origin. The owner's purchased domain (DNS
 already on Cloudflare) attaches to the Pages project at the apex and
 `www`.
 
-**Backend:** self-hosted on the owner's existing DigitalOcean droplet — a
+**Backend:** self-hosted on the owner's existing DigitalOcean droplet â€” a
 Node/TypeScript API using Fastify, Postgres, and a Caddy reverse proxy,
 all run via Docker Compose, served at `api.<yourdomain.com>` behind the
 Cloudflare proxy in Full (strict) mode with a Cloudflare Origin CA
@@ -2385,7 +2385,7 @@ Hosting: GitHub Pages, Cloudflare Pages, Netlify, Vercel, DigitalOcean
 the Director's original recommendation), Firebase (Auth + Firestore),
 Cloudflare Workers + D1/KV, self-hosted Node/Postgres on the owner's
 DigitalOcean droplet. Full comparisons are recorded in
-`/docs/tasks/PHASE7-INFRA-PLAN.md` §1.2 and §2.2.
+`/docs/tasks/PHASE7-INFRA-PLAN.md` Â§1.2 and Â§2.2.
 
 ### Chosen Approach
 
@@ -2403,7 +2403,7 @@ header control. For the backend, the owner overrode the managed-service
 recommendation with grounds the Director accepts: the droplet is already
 paid for (the Supabase pitch's main advantage was avoiding new cost/ops
 for a v1 blob store), and the stated auction-house/economy trajectory
-means a real owned API server becomes necessary anyway — building on it
+means a real owned API server becomes necessary anyway â€” building on it
 now avoids a later Supabase-to-droplet migration and keeps all player
 data under the owner's control. Fastify fits a repo whose validation
 idiom is already JSON Schema/Ajv (DEC-011) at minimal dependency cost;
@@ -2415,7 +2415,7 @@ while keeping a by-hand fallback.
 
 ### Tradeoffs
 
-- The project now owns auth, TLS, backups, and patching — the
+- The project now owns auth, TLS, backups, and patching â€” the
   security-sensitive surface the Supabase path avoided. Mitigations:
   argon2id + hashed opaque tokens (no JWT), a hardened droplet
   (dedicated users, key-only SSH, ufw, unattended-upgrades), Cloudflare
@@ -2446,7 +2446,7 @@ while keeping a by-hand fallback.
 
 ### Relationship to Earlier Decisions
 
-DEC-015's immutable-artifact promotion is implemented (gate artifact →
+DEC-015's immutable-artifact promotion is implemented (gate artifact â†’
 deploy). DEC-017's deferred public-HTTPS obligation is discharged by
 TASK-706. DEC-014 persistence machinery is reused unchanged in
 direction; DEC-031's Continue deferral resolves via TASK-705. DEC-001
@@ -2531,7 +2531,7 @@ Date: 2026-09-05 (TASK-705)
    worn equipment, flasks), owned abilities, loadout assignments, and the
    instance-ID generator positions (craft/vendor/material serials plus the
    deterministic loot generator's seed, sequence counters, and Mulberry32
-   state). `parseCharacterSave` — also core — validates untrusted values
+   state). `parseCharacterSave` â€” also core â€” validates untrusted values
    field by field against the content catalogs, so a value that parses is
    guaranteed restorable. This respects the DEC-005 boundary (persistence
    imports core, never the reverse) and keeps the DTO backend-agnostic per
@@ -2551,7 +2551,7 @@ Date: 2026-09-05 (TASK-705)
 4. **Save triggers: zone travel and page hide.** A zone-ID change observed
    on the combat HUD read model persists the character (this includes New
    Game's travel into the tutorial zone, which is how New Game overwrites
-   the slot — there is no explicit delete). `pagehide`/`visibilitychange`
+   the slot â€” there is no explicit delete). `pagehide`/`visibilitychange`
    also persist, but only after gameplay has started and never while the
    player is dead, so an idle main menu or a death screen can never
    clobber a good save. Saves are fire-and-forget with `console.warn` on
@@ -2595,9 +2595,72 @@ couple the save format to per-tick simulation internals.
   distinguishes fresh, resumable, and backup-recovered saves.
 - Version bumps happen on the envelope (`formatVersion`), with ordered
   migrations and provenance identical to the fixture format; the migration
-  chain is exercised by unit tests through an injected synthetic v1→v2.
+  chain is exercised by unit tests through an injected synthetic v1â†’v2.
 - TASK-707's backend adapter implements the same `SaveRepository` port and
   ships the same envelope bytes; no DTO change is expected.
+
+---
+
+# DEC-035
+
+## Site architecture: one Vite multi-page build â€” "/" homepage, "/play/" game
+
+Date: 2026-09-05 (TASK-708)
+
+## Decision
+
+The site is one Vite multi-page build in the existing repo and Cloudflare
+Pages project. `index.html` is a light game-site homepage â€” Loot Divers
+branding, a Play link, login/signup forms against the Phase 8 v1 API
+contract, and a news section â€” and the game shell moved verbatim to
+`play/index.html`, served at `/play/`. No `base` change; both entries
+share `/assets/`.
+
+- **Homepage (`src/home/`):** static-first HTML plus one small plain
+  TypeScript module and its own stylesheet. No Phaser, no Preact, no game
+  code on `/` â€” the game ships only in the `play` entry chunk. The
+  stylesheet mirrors the DEC-029 `:root` token block (documented as a
+  keep-in-sync copy) rather than importing the game stylesheet.
+- **News:** `src/home/news.json` (`[{date, title, body}]`), imported at
+  build time. The owner publishes an entry by editing that file and
+  pushing; the deploy pipeline rebuilds. No database, no endpoint.
+- **Auth forms:** POST `{email, password}` to `/auth/signup` and
+  `/auth/login` per the Â§2 kickoff contract with cookie credentials.
+  Client-side validation (email shape, password â‰¥ 8). The API host is
+  `api.<domain>` on the custom-domain origin; on localhost and
+  `*.pages.dev` the forms target a same-origin `/api` base that fails
+  soft into a "server unavailable" state (and gives Playwright a stable
+  path to mock), so the homepage never breaks while TASK-707 is not
+  live. Success routes to `/play/`.
+- **Game move:** all boot logic, `?autostart`, and the other automation
+  parameters are unchanged except the path. The one game-side code edit
+  is the barbarian sprite `ASSET_ROOT` gaining a leading slash (it was
+  the only page-relative asset URL and would have resolved to
+  `/play/assets/â€¦`).
+- **Mechanical churn:** every e2e `page.goto("/â€¦")` became
+  `page.goto("/play/â€¦")` (32 call sites across 14 specs, precedent:
+  DEC-031's `?autostart` churn); a new `homepage.spec.ts` covers the
+  homepage; `public/_headers` adds no-cache rules for `/play`, `/play/`,
+  and `/play/index.html`; the post-deploy smoke now checks `/` (200 +
+  title) and `/play/` (200); the transfer-budget script gained a
+  `--root` argument (`npm run budget:play` measures the game entry now
+  that `/` is the homepage).
+
+## Rejected
+
+Routing the homepage inside the game app (game JS on the landing page,
+menu-state entanglement) and a second Pages project (two deploys,
+cross-origin cookies). See the Phase 8 kickoff Â§1.1.
+
+## Consequences
+
+- `/` transfers a few KB of HTML/CSS/JS plus the branding logo; the game
+  loads only when the player navigates to `/play/`.
+- Logged-in flow (TASK-709) reaches the menu via `/play/`; the homepage
+  owns auth.
+- Until TASK-707 ships, real submissions always land in the documented
+  "server unavailable" state; the success and contract-error paths are
+  proven against Playwright route mocks of the Â§2 contract.
 
 ---
 
@@ -2688,16 +2751,16 @@ Date: 2026-09-05 (TASK-710)
    `respawnZoneName`), styled with the DEC-029 tokens. The overlay never
    steals canvas focus and offers one action: "Respawn in {zone}".
 2. **Respawn is data-driven per zone.** `ZoneDefinition` gains a required
-   `respawnZoneId`: Ashtrail Expanse → Hearthmere, Hollowdeep →
-   Hearthmere, Wakeshore Landing → itself (a tutorial death must not
-   eject the player from the tutorial, DEC-030), Hearthmere → itself
+   `respawnZoneId`: Ashtrail Expanse â†’ Hearthmere, Hollowdeep â†’
+   Hearthmere, Wakeshore Landing â†’ itself (a tutorial death must not
+   eject the player from the tutorial, DEC-030), Hearthmere â†’ itself
    (safe zone, unreachable in practice). Confirming runs
    `CombatArenaSimulation.respawn()`: rejected while alive, otherwise
    vitals refill and normal zone entry (`applyZone`) reconstructs all
-   transient state — enemies, loot, cooldowns, statuses — exactly like
+   transient state â€” enemies, loot, cooldowns, statuses â€” exactly like
    travel or restore does.
 3. **v1 death penalty is zero.** XP, level, gold, items, professions, and
-   quest state are untouched (TASK-713 §3; a post-v1 cost is an owner
+   quest state are untouched (TASK-713 Â§3; a post-v1 cost is an owner
    decision).
 4. **Dying commits the respawn outcome to the save.** DEC-034 skipped
    persistence while dead, leaving a rewind exploit (die, reload, resume
@@ -2707,7 +2770,7 @@ Date: 2026-09-05 (TASK-710)
    (same-zone respawns never change the HUD zone id, so the travel
    trigger alone would miss them). Reloading from the death screen or
    after respawning restores the identical post-respawn character. The
-   DEC-034 pagehide safeguard still skips the dead state — the death
+   DEC-034 pagehide safeguard still skips the dead state â€” the death
    trigger has already persisted the same envelope.
 
 ## Alternatives Considered
@@ -2720,7 +2783,7 @@ Date: 2026-09-05 (TASK-710)
   it would add a save-format state that every consumer must handle, when
   committing the respawn destination expresses the same outcome with the
   existing schema.
-- A death penalty (gold fee / XP debt): deferred per TASK-713 §3 — an
+- A death penalty (gold fee / XP debt): deferred per TASK-713 Â§3 â€” an
   owner decision after the economy ships.
 
 ## Consequences

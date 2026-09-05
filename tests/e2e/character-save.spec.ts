@@ -47,7 +47,7 @@ test("zone travel autosaves and Continue restores the character after reload", a
     "hardware-sensitive on GPU-less CI (DEC-033)",
   );
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
   // Play: a deterministic arena kill grants experience and drops loot,
@@ -109,7 +109,7 @@ test("zone travel autosaves and Continue restores the character after reload", a
     .toBe("zone:hollowdeep");
 
   // Reload without ?autostart: a real player boot with an existing save.
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/play/", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   const continueButton = page.getByTestId("main-menu-continue");
   await expect(continueButton).toBeEnabled();
@@ -168,7 +168,7 @@ test("a corrupted save is treated as absent and never crashes boot", async ({
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
   // The TASK-710 death save is the only generation this session ever
@@ -190,7 +190,7 @@ test("a corrupted save is treated as absent and never crashes boot", async ({
     await window.__RARPG_CHARACTER_SAVE_TEST__?.corruptActive();
   });
 
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/play/", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await expect(page.getByTestId("main-menu")).toBeVisible();
   await expect(page.getByTestId("main-menu-new-game")).toBeEnabled();

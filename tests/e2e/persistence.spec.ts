@@ -16,7 +16,7 @@ const fixture = (counter: number) => ({
 });
 
 async function openFixture(page: Page): Promise<void> {
-  await page.goto("/?persistenceTest", { waitUntil: "networkidle" });
+  await page.goto("/play/?persistenceTest", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   await page.evaluate(async () => {
     await window.__RARPG_PERSISTENCE_TEST__?.reset();

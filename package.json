@@ -26,7 +26,7 @@
     "test:component": "vitest run --config vitest.browser.config.ts",
     "test:browser": "npm run test:component && node scripts/run-playwright.mjs",
     "test:visual": "node scripts/run-playwright.mjs --project=chromium --grep deterministic",
-    "budget": "node scripts/report-transfer-budget.mjs",
+    "budget": "node scripts/report-transfer-budget.mjs --root=play/index.html",
     "budget:world": "node scripts/report-world-budget.mjs",
     "budget:fixture": "node scripts/report-fixture-budget.mjs",
     "timing:navigation": "node scripts/report-spatial-navigation-timing.mts",

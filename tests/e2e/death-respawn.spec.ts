@@ -53,7 +53,7 @@ test("dying shows the death screen and confirming respawns in Hearthmere with vi
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
   // Fight from Ashtrail so the respawn is an observable zone change.
@@ -115,7 +115,7 @@ test("a tutorial death respawns in Wakeshore Landing with banked steps intact", 
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
   // Enter the tutorial and bank the "move" step deterministically.
@@ -173,7 +173,7 @@ test("reloading after death or respawn restores the post-respawn state (no rewin
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  await page.goto("/?autostart", { waitUntil: "networkidle" });
+  await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
   // Travel commits a Hollowdeep save (DEC-034), so a rewind — if one were
@@ -204,7 +204,7 @@ test("reloading after death or respawn restores the post-respawn state (no rewin
   await expect.poll(() => activeSaveZone(page)).toBe(HEARTHMERE_ID);
 
   // A real player boot: Continue restores the post-respawn character.
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/play/", { waitUntil: "networkidle" });
   await expect(page.locator("body")).toHaveAttribute("data-app-state", "ready");
   const continueButton = page.getByTestId("main-menu-continue");
   await expect(continueButton).toBeEnabled();
