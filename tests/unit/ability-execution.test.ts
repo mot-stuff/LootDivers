@@ -107,6 +107,7 @@ function harness(
   const cooldowns = new CooldownFixture();
   const events: AbilityExecutionEvent[] = [];
   const effectReads: number[] = [];
+  const randomDraws: number[] = [];
   let statValue = 5;
   const stats: AbilityStatPort = {
     read: () => statValue,
@@ -132,6 +133,7 @@ function harness(
         {
           execute: (_effect, context) => {
             effectReads.push(context.readStat(power));
+            randomDraws.push(context.random.nextUint32());
           },
         },
       ],
@@ -147,6 +149,7 @@ function harness(
     cooldowns,
     events,
     effectReads,
+    randomDraws,
     setStat: (value: number) => {
       statValue = value;
     },
@@ -362,5 +365,21 @@ describe("framework-independent ability execution", () => {
     expect(() => engine.advance(result.execution.executionId, 2)).toThrow(
       /exactly one fixed tick/,
     );
+  });
+
+  it("replays injected seeded effect randomness deterministically", () => {
+    const ability = definition("fixture:random", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const first = harness([ability]);
+    const second = harness([ability]);
+
+    first.engine.request(selfRequest(ability.id, source));
+    second.engine.request(selfRequest(ability.id, source));
+
+    expect(first.randomDraws).toEqual(second.randomDraws);
+    expect(first.randomDraws).toHaveLength(1);
   });
 });
