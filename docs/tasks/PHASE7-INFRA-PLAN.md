@@ -8,6 +8,17 @@ build, 4-browser e2e on push/PR to main). This document plans the remaining
 two legs — game deployment and the accounts/cloud-save backend — plus
 sequencing. **This is a plan only; no implementation accompanies it.**
 
+> **Update 2026-09-05 (owner decisions recorded — see DEC-032 in
+> `/docs/DECISIONS.md`):** the owner signed off on Cloudflare Pages for the
+> site, confirmed the domain is purchased with DNS on Cloudflare, and
+> **overrode §2.3's Supabase recommendation: the backend and Postgres
+> database will be self-hosted on the owner's existing DigitalOcean
+> droplet**, motivated by the desired trajectory toward tracking player
+> gold, progress, characters, and eventually an auction house. §2.2–2.3 are
+> retained below as the evaluation record; TASK-707 now names the concrete
+> self-hosted stack. The owner's manual steps live in
+> `/docs/OWNER-SETUP-RUNBOOK.md`.
+
 Repository facts this plan is grounded in:
 
 - The game is a static Vite build: one ~1.57 MB hashed JS chunk (Phaser
@@ -188,47 +199,88 @@ DigitalOcean is when a real API server exists (auction house, multiplayer);
 choosing Supabase-on-Postgres now keeps that door open with a trivial data
 migration.
 
-## 2.3 Recommendation
+## 2.3 Recommendation — SUPERSEDED BY OWNER DECISION
 
-**Supabase**: managed Postgres + first-party auth, zero custom server code
-for the blob model, $0 at hobby scale, and plain-Postgres data that can move
-to the owner's DigitalOcean plan later with a dump/restore.
+Original recommendation (2026-09-05, morning): **Supabase** — managed
+Postgres + first-party auth, zero custom server code for the blob model,
+$0 at hobby scale, and plain-Postgres data that can move to the owner's
+DigitalOcean plan later with a dump/restore.
 
-One-line rationale: it is the only candidate where accounts + cloud saves
-require no security-sensitive code we write ourselves, at zero cost, without
-meaningful lock-in.
+**Owner decision (2026-09-05, recorded in DEC-032): self-hosted on the
+owner's existing DigitalOcean droplet** — Node/TypeScript API (Fastify) +
+Postgres, run via Docker Compose, behind Caddy with a Cloudflare Origin
+certificate on `api.<yourdomain.com>` (Cloudflare-proxied). The droplet
+already exists (sunk cost), and the owner explicitly wants owned
+infrastructure that can grow into tracking player gold, progress,
+characters, and an auction house — a server-authoritative trajectory that
+self-hosted Postgres serves directly, eliminating the later
+Supabase-to-droplet migration. The tradeoff accepted with it: we now own
+auth (argon2id password hashing + opaque session tokens — no JWT
+complexity), TLS, backups, and patching; the runbook and epic packet
+mitigate each.
 
-## 2.4 Minimal v1 surface
+## 2.4 Minimal v1 surface (updated for the self-hosted decision)
 
 Client-side, everything hides behind a `SaveGateway` port (name indicative)
-so IndexedDB (TASK-705) and Supabase (TASK-707) are sibling adapters:
+so IndexedDB (TASK-705) and the droplet API (TASK-707) are sibling
+adapters. The HTTP surface on `api.<yourdomain.com>`:
 
-- `signUp(email, password)` / `signIn(email, password)` / `signOut()` /
-  `session()` — delegated wholesale to Supabase Auth.
-- `listCharacters()` → `[{characterId, name, level, updatedAt}]` — from
+- `POST /auth/signup`, `POST /auth/login`, `POST /auth/logout`,
+  `GET /auth/session` — email/password with argon2id hashing; opaque
+  session token in an `HttpOnly` cookie backed by a `sessions` table.
+- `GET /characters` → `[{characterId, name, level, updatedAt}]` — from
   metadata columns the client writes alongside the blob (server never
   derives them from the payload).
-- `saveCharacter(characterId, envelope)` — upsert.
-- `loadCharacter(characterId)` → envelope.
+- `PUT /characters/:id` — upsert the envelope (size cap, shape sanity).
+- `GET /characters/:id` → envelope.
+- `GET /healthz` — deploy/uptime probe.
 
 Nothing else: no leaderboards, no telemetry, no trading, no admin surface.
 
-Indicative table (final shape is TASK-707 work):
+Indicative schema (final shape is TASK-707 work). Designed so the economy
+trajectory adds tables without migrating these:
 
 ```sql
-create table characters (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references auth.users (id) on delete cascade,
-  name         text not null,
-  level        integer not null default 1,
-  format_version integer not null,
-  revision     integer not null,
-  blob         jsonb not null,        -- the DEC-014 envelope, opaque
-  checksum     text not null,
-  updated_at   timestamptz not null default now()
+create table users (
+  id            uuid primary key default gen_random_uuid(),
+  email         text not null unique,
+  password_hash text not null,          -- argon2id
+  created_at    timestamptz not null default now()
 );
--- RLS: user_id = auth.uid() for select/insert/update/delete
+
+create table sessions (
+  token_hash  text primary key,         -- server stores only the hash
+  user_id     uuid not null references users (id) on delete cascade,
+  expires_at  timestamptz not null
+);
+
+create table characters (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references users (id) on delete cascade,
+  name           text not null,
+  level          integer not null default 1,
+  format_version integer not null,
+  revision       integer not null,
+  blob           jsonb not null,        -- the DEC-014 envelope, opaque
+  checksum       text not null,
+  updated_at     timestamptz not null default now()
+);
+-- ownership enforced in the API layer: every query filters by the
+-- session's user_id
 ```
+
+**Economy/gold trajectory (owner scope signal — design note, not v1
+work):** when gold ships as a game feature, it lives **inside the
+character blob** like every other stat — v1 stays a pure blob store. The
+documented extraction path for when trading/auction house arrives: add
+`wallets` (character_id, balance) and `ledger_entries` (append-only:
+wallet_id, delta, reason, reference, created_at) tables; a one-time
+migration seeds each wallet from the blob's gold field; from then on the
+server's wallet balance is authoritative, the blob's gold field becomes a
+client-side display cache, and every gold mutation that touches shared
+economy flows through a ledger entry. Because `users` and `characters`
+have stable UUID keys from day one, that migration adds tables and one
+backfill — it never reshapes existing ones.
 
 ## 2.5 Blob versioning and migration strategy
 
@@ -252,7 +304,7 @@ create table characters (
 IndexedDB (TASK-705) remains the always-on local save; cloud save is a
 sync layer above it, not a replacement. Offline play keeps working; sign-in
 enables push/pull of the same envelope. This is why TASK-705 must not know
-anything about Supabase.
+anything about the backend.
 
 ---
 
@@ -266,12 +318,14 @@ Confirmed with one refinement:
   706 touches `.github/workflows/`, `public/_headers`, and docs. Different
   owners, different branches.
 - **TASK-707 (accounts/cloud saves) starts only after both** TASK-705
-  merges (the blob it stores must exist) **and the owner signs off on
-  DEC-032's backend direction** (third-party account creation — see §5).
+  merges (the blob it stores must exist) **and the owner completes the
+  runbook's Part A droplet preparation** (`/docs/OWNER-SETUP-RUNBOOK.md`
+  steps 1–10; the DEC-032 backend sign-off itself is already recorded).
   Site deployment (706) is not a hard dependency of 707, but in practice
   it lands first and gives QA a real origin to test auth against.
 
-Proposed order: **TASK-706 ∥ TASK-705 → TASK-707.**
+Proposed order: **TASK-706 ∥ TASK-705 → TASK-707.** TASK-705 remains the
+next implementation work and does not block on any owner manual step.
 
 ---
 
@@ -293,9 +347,10 @@ players and automation.
 
 ### Dependencies
 
-CI workflow (`8d90245`) merged — done. **OWNER SIGN-OFF required before
-starting:** Cloudflare account creation (§5). Custom domain attachment is a
-separate later owner action, not part of this task.
+CI workflow (`8d90245`) merged — done. Owner sign-off recorded in DEC-032.
+Owner manual prerequisites: runbook steps 3–4 (Pages project + GitHub
+secrets); the custom-domain attach (runbook step 5) can happen before or
+after the first deploy.
 
 ### Scope
 
@@ -310,7 +365,9 @@ separate later owner action, not part of this task.
 
 ### Out of Scope
 
-- Custom domain wiring (later owner action; the `*.pages.dev` URL is v1).
+- Custom domain wiring (owner runbook step 5 — dashboard-only, zero code
+  impact; acceptance below runs against whichever of `*.pages.dev` or the
+  domain is live).
 - Any change to `vite.config.ts` `base`, game code, or query parameters.
 - Preview deployments per PR, staging environments, rollback automation.
 - Backend of any kind; analytics; error reporting.
@@ -452,196 +509,163 @@ Core snapshot/restore, persistence envelope/repository, shell contracts,
 
 ---
 
-## TASK-707 — Accounts and Cloud Saves (epic, coarse)
+## TASK-707 — Accounts and Cloud Saves on the Droplet (epic, coarse)
 
 ### Owner
 
-Director decomposes at kickoff; expected split: Gameplay Engineer
-(SaveGateway adapters, sync flow), UI Engineer (auth/account UI), QA
+Director decomposes at kickoff; expected split: Gameplay Engineer (API
+service + SaveGateway adapters + sync flow — first backend code in the
+repo, Director reviews architecture), UI Engineer (auth/account UI), QA
 Reviewer (independent gate). Systems Designer is consulted only if the DTO
 needs changes (it should not).
 
 ### Objective
 
-A signed-in player's character persists to Supabase and can be continued
-from another browser/machine: signup/login, save push on the TASK-705
-triggers, load/list on Continue. Local IndexedDB saves keep working
-signed-out.
+A signed-in player's character persists to Postgres on the owner's
+DigitalOcean droplet and can be continued from another browser/machine:
+signup/login, save push on the TASK-705 triggers, load/list on Continue.
+Local IndexedDB saves keep working signed-out.
+
+### Concrete stack (per DEC-032)
+
+- **API: Node/TypeScript + Fastify.** Why Fastify over alternatives: the
+  repo has zero backend dependencies today, so the bar is "smallest
+  competent TypeScript HTTP server." Fastify is TypeScript-first, has a
+  small dependency tree, and validates request/response bodies with JSON
+  Schema — the same validation model the content pipeline already uses
+  (Ajv, DEC-011), so agents work with one schema idiom across the project.
+  Express brings less (no built-in validation, weaker TS); NestJS brings
+  far more framework than a five-endpoint API justifies.
+- **Auth: owned, minimal.** Email/password with argon2id hashing; opaque
+  random session tokens (server stores only the token hash) in `HttpOnly;
+  Secure; SameSite` cookies backed by a `sessions` table. No JWT, no
+  OAuth, no email verification in v1 (password reset deferred; documented
+  limitation).
+- **Database: Postgres** in Docker with a named volume; plain SQL
+  migrations checked into the repo (no ORM required for three tables —
+  decomposition may pick a thin query layer like `postgres`/`pg`).
+- **Runtime: Docker Compose** on the droplet — `postgres`, `api`, `caddy`
+  services; Caddy terminates TLS with the Cloudflare Origin certificate
+  (runbook step 9) behind the proxied `api.<yourdomain.com>` record,
+  Cloudflare mode Full (strict).
+- **Deploy: GitHub Actions → SSH.** After the gate passes on main, a
+  deploy job SSHes to the droplet as the `deploy` user (runbook step 10
+  secrets) and runs a repo-shipped pull-and-restart script
+  (`git pull && docker compose up -d --build`). Chosen over a container
+  registry: no registry account, one moving part, and the manual fallback
+  is the same script run by hand.
+- **Repo layout:** a `server/` workspace isolated from the game build
+  (the Vite artifact must not grow); its own tsconfig, tests in the
+  existing Vitest setup, linted by the existing ESLint config.
 
 ### Dependencies
 
-TASK-705 merged (the envelope exists). **DECISION CHECKPOINT: owner
-sign-off on DEC-032 backend direction (§5) — Supabase account creation,
-project region, and email confirmation settings — before any implementation
-begins.** TASK-706 live URL available for end-to-end QA (soft dependency).
+TASK-705 merged (the envelope exists). Owner runbook Part A complete
+(droplet hardened, Docker installed, origin cert staged, deploy secrets
+set — `/docs/OWNER-SETUP-RUNBOOK.md` steps 1–10). Owner runbook Part B
+steps 12–14 are performed by the owner during this task's rollout.
+TASK-706 live site available for end-to-end QA (soft dependency).
 
 ### Scope (indicative — final packets at decomposition)
 
-- Supabase project setup (owner-assisted), `characters` table + RLS.
-- Client `SaveGateway` port with IndexedDB and Supabase adapters; sync
-  policy per §2.5 (last-write-wins, one-deep server-side revision
-  history).
+- `server/`: Fastify API (auth + characters + healthz), SQL migrations,
+  Dockerfile, `docker-compose.yml`, Caddyfile, backup script, deploy
+  script.
+- `.github/workflows/`: API CI job (typecheck/lint/test) + SSH deploy job.
+- Client `SaveGateway` port with IndexedDB and HTTP adapters; sync policy
+  per §2.5 (last-write-wins, one-deep server-side revision history).
 - Auth UI: signup/login/logout on the main menu; session persistence.
-- Size cap and envelope-shape sanity check on save.
-- Tests: unit (gateway contract, conflict policy), component (auth UI),
-  e2e against a test project or mocked gateway (decide at decomposition).
+- Size cap (1 MB/character to start) and envelope-shape sanity check on
+  save; rate limiting on the auth endpoints.
+- CORS locked to the game origins (`<yourdomain.com>`, `www`,
+  `lootdivers.pages.dev`).
+- Tests: unit (gateway contract, conflict policy, auth flows against a
+  test Postgres or in-memory fake — decide at decomposition), component
+  (auth UI), e2e with a mocked gateway; one documented staging smoke
+  against the real droplet.
 
 ### Out of Scope
 
 - Anti-cheat, server-side validation of blob contents, authoritative
   simulation (§2.1 — documented trust model).
-- Multiple character slots (Phase 8), trading, leaderboards, telemetry,
-  moderation, OAuth providers, password-reset polish beyond Supabase
-  defaults.
+- Multiple character slots (Phase 8), leaderboards, telemetry,
+  moderation, OAuth providers, email verification/password reset.
+- **The auction house and any shared economy — see Future trajectory
+  below.** Nothing in this epic implements trading, wallets, or ledgers.
 - Any migration of game logic server-side.
+
+### Future trajectory (design constraint, not deliverable)
+
+The owner's stated direction is infrastructure that can eventually track
+player gold, progress, characters, and an auction house. This epic
+positions for that without building it: stable UUID keys on `users` and
+`characters` from day one, and the §2.4 ledger-extraction path (add
+`wallets` + append-only `ledger_entries`, backfill gold from the blob,
+server becomes authoritative for gold thereafter) documented as the
+gateway to trading. **The auction house itself is a separate future epic**
+gated on the vertical-slice rule and its own decision record: it is the
+moment the trust model flips (server-authoritative gold and item custody,
+listing/bid/settlement transactions, blob-vs-ledger reconciliation), and
+it must not be smuggled in through this packet.
 
 ### Acceptance Criteria (epic-level)
 
-1. Signup → play → save lands in Supabase (visible in table editor) →
-   different browser → login → Continue restores the character.
+1. Signup → play → save lands in droplet Postgres (visible via `psql` in
+   the container) → different browser → login → Continue restores the
+   character.
 2. Signed-out play is unchanged (local saves only, no errors, no nags
    beyond a sign-in affordance).
-3. RLS verified: one user cannot read/write another's rows (negative
-   test).
-4. The DTO module remains backend-agnostic (no Supabase imports outside
-   the adapter).
-5. Full gate suite green; independent QA PASS; DEC entry recording the
+3. Ownership enforced: an authenticated user cannot read or write another
+   user's characters (negative test at the API layer).
+4. The DTO module remains backend-agnostic (no HTTP/adapter imports
+   outside the adapter).
+5. A green main push auto-deploys the API to the droplet;
+   `https://api.<yourdomain.com>/healthz` returns healthy through the
+   Cloudflare proxy; a failed gate deploys nothing.
+6. Daily backup dump verified restorable once (documented drill).
+7. Full gate suite green; independent QA PASS; DEC entry recording the
    accepted implementation.
 
 ### Testing
 
 Defined per-packet at decomposition; epic-level: the two-browser
-round-trip above plus the RLS negative test.
+round-trip above, the ownership negative test, and the backup restore
+drill.
 
 ---
 
-# 5. DEC-032 Draft — DO NOT APPEND TO DECISIONS.md YET
+# 5. DEC-032 — Recorded
 
-Items marked **[OWNER SIGN-OFF]** must be explicitly approved by the owner
-before the corresponding implementation starts. The Director may not
-self-approve them: they involve third-party accounts, potential cost, and
-the owner's domain.
-
----
-
-## DEC-032 (DRAFT — pending owner sign-off)
-
-### Status
-
-Draft. Hosting direction pending owner sign-off on Cloudflare account
-creation; backend direction pending owner sign-off on Supabase account
-creation. Custom-domain attachment is deferred to a separate owner action.
-
-### Date
-
-2026-09-05
-
-### Decision
-
-**Hosting:** deploy the static Vite artifact to Cloudflare Pages from the
-existing GitHub Actions gate — the deploy job publishes the exact tested
-`dist/` artifact on green main pushes only, with immutable cache headers
-for hashed assets and no-cache for `index.html`. The Vite base path stays
-`/`; `?autostart` and the other DEC-031 query parameters work identically
-on the deployed origin. **[OWNER SIGN-OFF: create the Cloudflare account
-and Pages project; supply API token/account id as repo secrets.]**
-**[OWNER SIGN-OFF (later, separate): attach the owner's custom domain.]**
-
-**Backend direction for accounts/cloud saves:** Supabase (managed Postgres
-+ first-party auth), used strictly as a blob store per the binding stance
-below. **[OWNER SIGN-OFF: create the Supabase project (free tier) and
-approve email/password auth; confirm this supersedes or defers the
-roadmap's DigitalOcean-for-website intent — DigitalOcean remains the
-candidate home for a future real API server (auction house/multiplayer),
-and Supabase's plain Postgres keeps that migration to a dump/restore.]**
-
-**Binding architectural stance:** the character save DTO (TASK-705) is
-client-defined and backend-agnostic. The backend stores and returns
-versioned, checksummed character envelopes plus identity; it never parses
-payloads, never migrates blobs (migrations run client-side via the DEC-014
-ordered-migration machinery), and owns no game logic. Server-side
-enforcement is limited to authentication, row ownership (RLS),
-envelope-shape sanity, and a size cap. Conflict policy is last-write-wins
-with a one-deep server-side revision history.
-
-**Trust model:** single-player trust. Anti-cheat and server-side
-validation of save contents are explicitly out of scope until a shared
-economy, trading, leaderboards, or multiplayer exist; whichever feature
-introduces shared state must introduce server-authoritative handling of
-that state and must not treat this blob store as sufficient.
-
-### Context
-
-Phase 7 reached the point (post TASK-704, GitHub remote and CI live at
-`8d90245`) where the owner wants the site and database/accounts groundwork
-before TASK-705 and saved progress. The game is a pure static artifact
-(~1.57 MB JS + ~7 MB PNGs) with a deterministic, framework-independent
-core and a DEC-014 envelope persistence layer that generalizes directly to
-a character blob.
-
-### Options Considered
-
-Hosting: GitHub Pages, Cloudflare Pages, Netlify, Vercel, DigitalOcean
-(App Platform static / droplet). Backend: Supabase, Firebase
-(Auth + Firestore), Cloudflare Workers + D1/KV, self-hosted Node/Postgres
-on DigitalOcean.
-
-### Chosen Approach
-
-Cloudflare Pages for hosting; Supabase as a blob-store backend behind a
-client-owned `SaveGateway` port with IndexedDB as the sibling local
-adapter.
-
-### Why
-
-Cloudflare Pages is the only zero-cost host with unlimited static
-bandwidth, zero base-path churn now or after the custom domain, and cache
-header control. Supabase is the only backend candidate where accounts plus
-cloud saves require no security-sensitive custom server code, at $0 hobby
-scale, storing plain Postgres that can later move to the owner's
-DigitalOcean plan with a dump/restore. Firebase's document limit and
-proprietary API, Workers+D1's hand-rolled auth, and a droplet's cost/ops
-burden all lose to that combination for a v1 whose entire surface is
-signup/login and load/save.
-
-### Tradeoffs
-
-- Two third-party accounts (Cloudflare, Supabase) enter the project.
-- Supabase free projects pause after ~1 week of inactivity and need a
-  manual unpause; acceptable at hobby scale, revisit if it bites.
-- Last-write-wins can lose progress across simultaneous devices; the
-  one-deep revision history is the recovery hatch, and merge UX is
-  deferred.
-- Client-side saves remain user-tamperable by design (documented trust
-  model); nothing here is reusable as an economy-integrity mechanism.
-- The roadmap's "host images on GitHub" bandwidth hedge is dropped as
-  unnecessary under Cloudflare's bandwidth terms.
-
-### Systems Affected
-
-- CI/CD workflow and deployment
-- Persistence (`SaveGateway` port, Supabase adapter in TASK-707)
-- Main menu (auth UI, Continue)
-- docs/ROADMAP.md Final Phase hosting/backend wording
-
-### Relationship to Earlier Decisions
-
-DEC-015's immutable-artifact promotion is implemented (gate artifact →
-deploy). DEC-017's deferred public-HTTPS obligation is discharged by
-TASK-706. DEC-014 persistence machinery is reused unchanged in direction;
-DEC-031's Continue deferral resolves via TASK-705. DEC-001 (single-player
-first) governs the trust model.
+The DEC-032 draft that previously lived in this section was reviewed by
+the owner on 2026-09-05. The owner signed off on Cloudflare Pages for the
+site and the Cloudflare DNS/domain split, and **replaced the draft's
+Supabase backend recommendation with self-hosting on their existing
+DigitalOcean droplet** (Node/TypeScript Fastify API + Postgres via Docker
+Compose, `api.<yourdomain.com>` proxied through Cloudflare). The accepted
+decision is recorded in **`/docs/DECISIONS.md` as DEC-032**; that entry is
+now authoritative. The binding blob-store stance (§2.1), versioning
+strategy (§2.5), and economy-ledger extraction path (§2.4) carried into it
+unchanged.
 
 ---
 
-# 6. Owner Sign-off Checklist (blocking items only)
+# 6. Owner Actions Remaining
 
-1. **Cloudflare account + Pages project** (blocks TASK-706 start).
-2. **Supabase project + email/password auth** (blocks TASK-707 start; not
-   needed for TASK-705/706).
-3. **DigitalOcean intent** — confirm DO is deferred to a future real API
-   server rather than the static site (roadmap wording will be amended).
-4. **Custom domain** — later, whenever the owner wants it on the Pages
-   project; zero code impact.
+All blocking sign-offs are recorded in DEC-032. What remains for the owner
+is execution, not decision — every step lives in
+`/docs/OWNER-SETUP-RUNBOOK.md`:
 
-TASK-705 requires no sign-off and can start immediately.
+1. **Runbook Part A (do now):** droplet facts, Pages project + GitHub
+   secrets, custom-domain attach, `api` DNS record, droplet hardening,
+   Docker install, origin certificate, deploy user + secrets. Steps 3–4
+   unblock TASK-706; steps 1 and 6–10 unblock TASK-707.
+2. **Runbook Part B (when TASK-707 ships):** server `.env`, first compose
+   up, backup cron, first deploy verification.
+
+Pending **details** (not decisions): the exact domain string (the runbook
+uses `<yourdomain.com>` placeholders) and the droplet facts from runbook
+step 1 (OS/RAM/IP/occupied ports — the Ubuntu assumption must be
+confirmed before runbook steps 6+ are executed).
+
+TASK-705 requires no owner action and remains the next implementation
+work.

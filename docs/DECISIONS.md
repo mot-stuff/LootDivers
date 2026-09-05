@@ -2277,3 +2277,163 @@ Consumes DEC-029 tokens as the theme's showpiece and travels into the
 DEC-030 tutorial zone. DEC-014 persistence architecture is unchanged;
 Continue ships with TASK-705. Third accepted packet of the Phase 7
 kickoff (TASK-703), pending the TASK-704 QA gate.
+
+---
+
+# DEC-032
+
+### Status
+
+Accepted with owner sign-off on 2026-09-05: Cloudflare Pages for the game
+site, the owner's existing DigitalOcean droplet + Postgres for the
+backend, Cloudflare DNS/proxy for the domain split, and custom-domain
+attachment to the Pages project. Pending details (not decisions): the
+exact domain string (documents use `<yourdomain.com>` placeholders) and
+the droplet facts (OS/RAM/IP/occupied ports) gathered in the owner
+runbook's first step.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+**Site hosting:** deploy the static Vite artifact to Cloudflare Pages from
+the existing GitHub Actions gate — the deploy job publishes the exact
+tested `dist/` artifact on green main pushes only, with immutable cache
+headers for hashed assets and no-cache for `index.html`. The Vite base
+path stays `/`; `?autostart` and the other DEC-031 query parameters work
+identically on the deployed origin. The owner's purchased domain (DNS
+already on Cloudflare) attaches to the Pages project at the apex and
+`www`.
+
+**Backend:** self-hosted on the owner's existing DigitalOcean droplet — a
+Node/TypeScript API using Fastify, Postgres, and a Caddy reverse proxy,
+all run via Docker Compose, served at `api.<yourdomain.com>` behind the
+Cloudflare proxy in Full (strict) mode with a Cloudflare Origin CA
+certificate on the droplet. Auth is owned and minimal: email/password with
+argon2id hashing and opaque hashed session tokens in HttpOnly cookies.
+Deployment is GitHub Actions over SSH as a dedicated low-privilege deploy
+user running a repo-shipped pull-and-restart script. This supersedes the
+plan draft's Supabase recommendation by owner directive. The owner's
+manual steps (DNS records, Pages project, secrets, droplet hardening,
+Docker, origin certificate, deploy user, backups) are specified in
+`/docs/OWNER-SETUP-RUNBOOK.md`.
+
+**Binding architectural stance:** the character save DTO (TASK-705) is
+client-defined and backend-agnostic. The backend stores and returns
+versioned, checksummed character envelopes plus identity; it never parses
+payloads, never migrates blobs (migrations run client-side via the
+DEC-014 ordered-migration machinery), and owns no game logic in this
+phase. Server-side enforcement is limited to authentication, row
+ownership, envelope-shape sanity, a size cap, and auth rate limiting.
+Conflict policy is last-write-wins with a one-deep server-side revision
+history.
+
+**Economy trajectory:** the owner intends this infrastructure to
+eventually track player gold, progress, characters, and an auction house.
+The v1 schema positions for that without building it: `users` and
+`characters` carry stable UUID keys from day one; when gold ships as a
+game feature it lives inside the character blob; when trading/auction
+house arrives, a documented extraction path adds `wallets` and append-only
+`ledger_entries` tables, backfills balances from blobs once, and makes the
+server authoritative for gold thereafter. The auction house itself is a
+separate future epic with its own decision record and is explicitly not
+part of Phase 7 work (vertical-slice rule).
+
+**Trust model:** single-player trust. Anti-cheat and server-side
+validation of save contents are explicitly out of scope until a shared
+economy, trading, leaderboards, or multiplayer exist; whichever feature
+introduces shared state must introduce server-authoritative handling of
+that state (starting with the ledger extraction above) and must not treat
+the blob store as sufficient.
+
+### Context
+
+Phase 7 reached the point (post TASK-704, GitHub remote and CI live at
+`8d90245`) where the owner wants the site and database/accounts
+groundwork before TASK-705 and saved progress. The game is a pure static
+artifact (~1.57 MB JS + ~7 MB PNGs) with a deterministic,
+framework-independent core and a DEC-014 envelope persistence layer that
+generalizes directly to a character blob. The owner holds an existing
+DigitalOcean droplet, a purchased domain with DNS on Cloudflare, and an
+explicit desire for owned infrastructure that can grow into economy
+tracking and an auction house.
+
+### Options Considered
+
+Hosting: GitHub Pages, Cloudflare Pages, Netlify, Vercel, DigitalOcean
+(App Platform static / droplet). Backend: Supabase (Postgres + auth,
+the Director's original recommendation), Firebase (Auth + Firestore),
+Cloudflare Workers + D1/KV, self-hosted Node/Postgres on the owner's
+DigitalOcean droplet. Full comparisons are recorded in
+`/docs/tasks/PHASE7-INFRA-PLAN.md` §1.2 and §2.2.
+
+### Chosen Approach
+
+Cloudflare Pages for the static site (apex/`www` of the owner's domain);
+self-hosted Fastify + Postgres in Docker Compose on the owner's droplet
+behind a Cloudflare-proxied `api` subdomain, used strictly as a blob
+store behind a client-owned `SaveGateway` port with IndexedDB as the
+sibling local adapter.
+
+### Why
+
+Cloudflare Pages is the only zero-cost host with unlimited static
+bandwidth, zero base-path churn now or after the custom domain, and cache
+header control. For the backend, the owner overrode the managed-service
+recommendation with grounds the Director accepts: the droplet is already
+paid for (the Supabase pitch's main advantage was avoiding new cost/ops
+for a v1 blob store), and the stated auction-house/economy trajectory
+means a real owned API server becomes necessary anyway — building on it
+now avoids a later Supabase-to-droplet migration and keeps all player
+data under the owner's control. Fastify fits a repo whose validation
+idiom is already JSON Schema/Ajv (DEC-011) at minimal dependency cost;
+Docker Compose gives a solo owner a reproducible one-file stack with a
+single volume to back up; Cloudflare Origin CA + Full (strict) is the
+simplest correct TLS for a proxied-only origin (15-year cert, no renewal
+automation); SSH pull-and-restart deploys avoid a container registry
+while keeping a by-hand fallback.
+
+### Tradeoffs
+
+- The project now owns auth, TLS, backups, and patching — the
+  security-sensitive surface the Supabase path avoided. Mitigations:
+  argon2id + hashed opaque tokens (no JWT), a hardened droplet
+  (dedicated users, key-only SSH, ufw, unattended-upgrades), Cloudflare
+  proxy in front, daily dumps with a tested restore drill, and email
+  verification/password reset deferred rather than half-built.
+- Droplet cost (~$6+/month) is accepted as already sunk by the owner.
+- A single droplet is a single point of failure with no staging
+  environment; acceptable at hobby scale, revisit before the auction
+  house epic.
+- Last-write-wins can lose progress across simultaneous devices; the
+  one-deep revision history is the recovery hatch, and merge UX is
+  deferred.
+- Client-side saves remain user-tamperable by design (documented trust
+  model); nothing here is reusable as an economy-integrity mechanism
+  until the ledger extraction lands.
+- The roadmap's "host images on GitHub" bandwidth hedge is dropped as
+  unnecessary under Cloudflare's bandwidth terms.
+
+### Systems Affected
+
+- CI/CD workflows (Pages deploy job now; API build/deploy jobs in
+  TASK-707)
+- New `server/` workspace (TASK-707) and droplet runtime
+- Persistence (`SaveGateway` port, HTTP adapter in TASK-707)
+- Main menu (auth UI, Continue)
+- docs/ROADMAP.md Final Phase hosting/backend wording
+- `/docs/OWNER-SETUP-RUNBOOK.md` (owner-executed infrastructure steps)
+
+### Relationship to Earlier Decisions
+
+DEC-015's immutable-artifact promotion is implemented (gate artifact →
+deploy). DEC-017's deferred public-HTTPS obligation is discharged by
+TASK-706. DEC-014 persistence machinery is reused unchanged in
+direction; DEC-031's Continue deferral resolves via TASK-705. DEC-001
+(single-player first) governs the trust model; the auction house remains
+a deferred system requiring its own approval per the roadmap. Supersedes
+the roadmap Final Phase's "DigitalOcean for the website / GitHub-hosted
+images" wording: the droplet hosts the API, Cloudflare Pages hosts the
+site and assets.
