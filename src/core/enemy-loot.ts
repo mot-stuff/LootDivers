@@ -1,4 +1,4 @@
-import { EQUIPMENT_BASE_CATALOG, type ItemRarity } from "./item-catalog";
+import { ITEM_BASE_CATALOG, type ItemRarity } from "./item-catalog";
 import {
   createAbilityStoneStack,
   generateEquipmentItem,
@@ -74,9 +74,8 @@ export class DeterministicEnemyLootGenerator {
       seed: this.#random.nextUint32(),
       instanceId: this.nextItemId(),
       baseId:
-        EQUIPMENT_BASE_CATALOG[
-          this.#random.nextInteger(EQUIPMENT_BASE_CATALOG.length)
-        ]!.id,
+        ITEM_BASE_CATALOG[this.#random.nextInteger(ITEM_BASE_CATALOG.length)]!
+          .id,
       rarity: this.rollRarity(),
     });
     const items: ItemInstance[] = [equipment];

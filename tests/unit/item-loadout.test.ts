@@ -8,6 +8,7 @@ import {
   CINDER_DART_ID,
   DEFIANT_SIGNAL_ID,
   EQUIPMENT_BASE_CATALOG,
+  FLASK_BASE_CATALOG,
   EQUIPMENT_SLOTS,
   INVENTORY_SLOT_COUNT,
   CharacterItemLoadout,
@@ -156,6 +157,29 @@ describe("Phase 3 item generation", () => {
       const item = equipment(7, base.id, "common", 7);
       expect(item.affixes).toHaveLength(1);
       expect(modifiersForEquipment(item).length).toBe(
+        base.baseModifiers.length + 1,
+      );
+    }
+  });
+
+  it("rolls Heartwell and Mindwell flasks with flask-only affixes", () => {
+    expect(FLASK_BASE_CATALOG.map(({ displayName }) => displayName)).toEqual([
+      "Heartwell Flask",
+      "Mindwell Flask",
+    ]);
+    for (const base of FLASK_BASE_CATALOG) {
+      const legal = AFFIX_CATALOG.filter((affix) =>
+        isAffixLegalForBase(affix, base),
+      );
+      expect(legal.length).toBeGreaterThanOrEqual(
+        AFFIX_COUNTS_BY_RARITY.rare.maximum,
+      );
+      expect(legal.every((affix) => affix.allowedSlots.includes("flask"))).toBe(
+        true,
+      );
+      const common = equipment(9, base.id, "common", 9);
+      expect(common.affixes).toHaveLength(1);
+      expect(modifiersForEquipment(common).length).toBe(
         base.baseModifiers.length + 1,
       );
     }
@@ -326,6 +350,36 @@ describe("Phase 3 inventory and equipment", () => {
     expect(character.equipFromInventory(1, "main-hand")).toEqual({
       accepted: true,
     });
+  });
+
+  it("equips flasks into flask slots without changing character combat stats", () => {
+    const character = new CharacterItemLoadout();
+    const flask = equipment(41, FLASK_BASE_CATALOG[0]!.id);
+    const weapon = equipment(42, MAIN_HAND_ID);
+    character.addItem(flask);
+    character.addItem(weapon);
+
+    expect(character.equipFromInventory(0, "helmet")).toEqual({
+      accepted: false,
+      reason: "incompatible-slot",
+    });
+    expect(character.equipFromInventory(0)).toEqual({ accepted: true });
+    expect(character.flasks()["flask-1"]).toEqual(flask);
+    expect(character.stats()).toEqual({
+      maximumHealth: 100,
+      outgoingAbilityDamageBasisPoints: 10_000,
+      outgoingAbilityDamageMultiplier: 1,
+    });
+
+    expect(character.equipFromInventory(1)).toEqual({ accepted: true });
+    const armed = expectedEquipmentStats(weapon);
+    expect(character.stats()).toEqual({
+      maximumHealth: armed.health,
+      outgoingAbilityDamageBasisPoints: armed.damage,
+      outgoingAbilityDamageMultiplier: armed.damage / 10_000,
+    });
+    expect(character.unequip("flask-1")).toEqual({ accepted: true });
+    expect(character.flasks()["flask-1"]).toBeNull();
   });
 
   it("aggregates stats across all nine equipment slots", () => {

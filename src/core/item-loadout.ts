@@ -7,10 +7,14 @@ import {
 } from "./combat-abilities";
 import {
   EQUIPMENT_SLOTS,
+  FLASK_SLOTS,
   IMPLEMENTED_ABILITY_CATALOG,
+  isFlaskSlot,
   slotAcceptsKind,
   slotsForKind,
   type EquipmentSlot,
+  type FlaskSlot,
+  type WearableSlot,
 } from "./item-catalog";
 import {
   equipmentSlotKindOf,
@@ -69,6 +73,12 @@ function emptyEquipment(): Record<EquipmentSlot, EquipmentItemInstance | null> {
   return equipment;
 }
 
+function emptyFlasks(): Record<FlaskSlot, EquipmentItemInstance | null> {
+  const flasks = {} as Record<FlaskSlot, EquipmentItemInstance | null>;
+  for (const slot of FLASK_SLOTS) flasks[slot] = null;
+  return flasks;
+}
+
 function initialLoadout(): Record<LoadoutSlot, CombatAbilityId | null> {
   return {
     lmb: BASIC_CLEAVE_ID,
@@ -123,6 +133,7 @@ export function applyOutgoingAbilityDamage(
 export class CharacterItemLoadout {
   readonly #inventory = new Inventory();
   readonly #equipment = emptyEquipment();
+  readonly #flasks = emptyFlasks();
   readonly #ownedAbilities = new Set<CombatAbilityId>([BASIC_CLEAVE_ID]);
   readonly #loadout = initialLoadout();
 
@@ -134,6 +145,10 @@ export class CharacterItemLoadout {
     Record<EquipmentSlot, EquipmentItemInstance | null>
   > {
     return { ...this.#equipment };
+  }
+
+  public flasks(): Readonly<Record<FlaskSlot, EquipmentItemInstance | null>> {
+    return { ...this.#flasks };
   }
 
   public loadout(): Readonly<Record<LoadoutSlot, CombatAbilityId | null>> {
@@ -150,6 +165,9 @@ export class CharacterItemLoadout {
     if (
       EQUIPMENT_SLOTS.some(
         (slot) => this.#equipment[slot]?.instanceId === item.instanceId,
+      ) ||
+      FLASK_SLOTS.some(
+        (slot) => this.#flasks[slot]?.instanceId === item.instanceId,
       )
     ) {
       return { accepted: false, reason: "duplicate-instance" };
@@ -160,13 +178,13 @@ export class CharacterItemLoadout {
   /**
    * Equips the item at the given inventory index. When `targetSlot` is
    * omitted, the slot is derived from the item's base: kinds with one
-   * concrete slot use it, and rings prefer the first empty ring slot,
-   * falling back to ring-1 (swapping its occupant). A provided `targetSlot`
-   * must accept the item's slot kind or the command is rejected.
+   * concrete slot use it, rings and flasks prefer the first empty matching
+   * slot, and otherwise swap into the first candidate. A provided
+   * `targetSlot` must accept the item's slot kind or the command is rejected.
    */
   public equipFromInventory(
     inventoryIndex: number,
-    targetSlot?: EquipmentSlot,
+    targetSlot?: WearableSlot,
   ): EquipResult {
     const item = this.#inventory.itemAt(inventoryIndex);
     if (item === null) return { accepted: false, reason: "empty-slot" };
@@ -175,7 +193,7 @@ export class CharacterItemLoadout {
     }
 
     const kind = equipmentSlotKindOf(item);
-    let slot: EquipmentSlot;
+    let slot: WearableSlot;
     if (targetSlot !== undefined) {
       if (!slotAcceptsKind(targetSlot, kind)) {
         return { accepted: false, reason: "incompatible-slot" };
@@ -184,22 +202,22 @@ export class CharacterItemLoadout {
     } else {
       const candidates = slotsForKind(kind);
       slot =
-        candidates.find((candidate) => this.#equipment[candidate] === null) ??
+        candidates.find((candidate) => this.occupied(candidate) === null) ??
         candidates[0]!;
     }
 
-    const previous = this.#equipment[slot];
+    const previous = this.occupied(slot);
     this.#inventory.take(inventoryIndex);
-    this.#equipment[slot] = item;
+    this.place(slot, item);
     if (previous !== null) this.#inventory.putAt(inventoryIndex, previous);
     return { accepted: true };
   }
 
-  public unequip(slot: EquipmentSlot): InventoryAddResult {
-    const item = this.#equipment[slot];
+  public unequip(slot: WearableSlot): InventoryAddResult {
+    const item = this.occupied(slot);
     if (item === null) return { accepted: true };
     const result = this.#inventory.add(item);
-    if (result.accepted) this.#equipment[slot] = null;
+    if (result.accepted) this.place(slot, null);
     return result;
   }
 
@@ -256,5 +274,14 @@ export class CharacterItemLoadout {
 
     this.#loadout[slot] = abilityId;
     return { accepted: true };
+  }
+
+  private occupied(slot: WearableSlot): EquipmentItemInstance | null {
+    return isFlaskSlot(slot) ? this.#flasks[slot] : this.#equipment[slot];
+  }
+
+  private place(slot: WearableSlot, item: EquipmentItemInstance | null): void {
+    if (isFlaskSlot(slot)) this.#flasks[slot] = item;
+    else this.#equipment[slot] = item;
   }
 }

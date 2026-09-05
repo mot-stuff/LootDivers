@@ -70,7 +70,11 @@ export type ItemEquipmentSlot =
   | "main-hand"
   | "offhand"
   | "ring-1"
-  | "ring-2";
+  | "ring-2"
+  | "flask-1"
+  | "flask-2"
+  | "flask-3"
+  | "flask-4";
 export type ItemEquipmentSlotKind =
   | "helmet"
   | "chest"
@@ -79,7 +83,8 @@ export type ItemEquipmentSlotKind =
   | "boots"
   | "main-hand"
   | "offhand"
-  | "ring";
+  | "ring"
+  | "flask";
 export type ItemRarityHud = "common" | "magic" | "rare" | "unique";
 export type ItemLoadoutSlot = "lmb" | "q" | "e" | "r";
 
@@ -148,6 +153,7 @@ export interface InventoryHudReadModel {
   readonly revision: number;
   readonly inventorySlots: readonly InventorySlotHudReadModel[];
   readonly equipmentSlots: readonly EquipmentSlotHudReadModel[];
+  readonly flaskSlots: readonly EquipmentSlotHudReadModel[];
   readonly abilityChoices: readonly AbilityChoiceHudReadModel[];
   readonly loadout: readonly LoadoutAssignmentHudReadModel[];
   readonly playerMaximumHealth: number;

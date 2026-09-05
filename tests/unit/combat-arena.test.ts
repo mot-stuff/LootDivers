@@ -8,6 +8,7 @@ import {
   DEFIANT_SIGNAL_ID,
   DeterministicEnemyLootGenerator,
   EQUIPMENT_BASE_CATALOG,
+  ITEM_BASE_CATALOG,
   FIXED_STEP_SECONDS,
   INVENTORY_SLOT_COUNT,
   WINTER_PULSE_ID,
@@ -105,7 +106,7 @@ describe("CombatArenaSimulation", () => {
     const rarities = new Set(equipmentItems.map((item) => item.rarity));
     expect(rarities).toEqual(new Set(["common", "magic", "rare"]));
     expect(new Set(equipmentItems.map((item) => item.baseId))).toEqual(
-      new Set(EQUIPMENT_BASE_CATALOG.map(({ id }) => id)),
+      new Set(ITEM_BASE_CATALOG.map(({ id }) => id)),
     );
   });
 

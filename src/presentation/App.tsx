@@ -55,6 +55,12 @@ const EMPTY_ITEM_HUD: InventoryHudReadModel = {
     { slot: "ring-1", label: "Ring 1", item: null },
     { slot: "ring-2", label: "Ring 2", item: null },
   ],
+  flaskSlots: [
+    { slot: "flask-1", label: "Flask 1", item: null },
+    { slot: "flask-2", label: "Flask 2", item: null },
+    { slot: "flask-3", label: "Flask 3", item: null },
+    { slot: "flask-4", label: "Flask 4", item: null },
+  ],
   abilityChoices: [],
   loadout: [
     {
@@ -174,6 +180,7 @@ const ITEM_SLOT_KIND_LABELS: Readonly<Record<ItemEquipmentSlotKind, string>> = {
   "main-hand": "Main hand",
   offhand: "Offhand",
   ring: "Ring",
+  flask: "Flask",
 };
 
 function itemSlotLabel(slotKind: ItemEquipmentSlotKind): string {
@@ -503,18 +510,42 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
             ))}
             <ol
               class="paper-doll-flasks"
-              aria-label="Reserved flask slots"
+              aria-label="Flask slots"
               data-testid="inventory-flask-slots"
             >
-              {[1, 2, 3, 4].map((slot) => (
-                <li
-                  key={slot}
-                  class="paper-doll-flask"
-                  aria-label={`Flask slot ${slot}, not implemented`}
-                >
-                  <kbd>{slot}</kbd>
-                  <strong>Flask</strong>
-                  <span>Empty</span>
+              {model.flaskSlots.map((slot, index) => (
+                <li key={slot.slot}>
+                  <button
+                    type="button"
+                    class={`equipment-slot paper-doll-flask${
+                      selection?.kind === "equipment" &&
+                      selection.slot === slot.slot
+                        ? " selected"
+                        : ""
+                    }${equipmentDropClass(slot.slot)}`}
+                    data-drop-equipment-slot={slot.slot}
+                    data-rarity={slot.item?.rarity}
+                    aria-label={`${slot.label}, ${slot.item?.displayName ?? "empty"}`}
+                    onClick={() =>
+                      setSelection({ kind: "equipment", slot: slot.slot })
+                    }
+                    onFocus={() =>
+                      setSelection({ kind: "equipment", slot: slot.slot })
+                    }
+                    onPointerDown={(event) => {
+                      if (slot.item !== null) {
+                        beginDrag(
+                          event,
+                          { kind: "equipment", slot: slot.slot },
+                          slot.item,
+                        );
+                      }
+                    }}
+                  >
+                    <kbd>{index + 1}</kbd>
+                    <strong>{slot.label}</strong>
+                    <span>{slot.item?.displayName ?? "Empty"}</span>
+                  </button>
                 </li>
               ))}
             </ol>
@@ -672,7 +703,12 @@ function formatSeconds(seconds: number): string {
   return `${Math.ceil(seconds * 10) / 10}s`;
 }
 
-function CombatActionBar({ model }: CombatVitalsProps) {
+function CombatActionBar({
+  model,
+  flasks,
+}: CombatVitalsProps & {
+  readonly flasks: InventoryHudReadModel["flaskSlots"];
+}) {
   return (
     <section
       class="combat-action-hud"
@@ -681,16 +717,22 @@ function CombatActionBar({ model }: CombatVitalsProps) {
     >
       <ol
         class="combat-flask-list"
-        aria-label="Reserved flask slots"
+        aria-label="Flask slots"
         data-testid="combat-flask-slots"
       >
-        {[1, 2, 3, 4].map((slot) => (
+        {flasks.map((slot, index) => (
           <li
-            key={slot}
+            key={slot.slot}
             class="combat-flask-slot"
-            aria-label={`Flask slot ${slot}, not implemented`}
+            data-rarity={slot.item?.rarity}
+            aria-label={
+              slot.item === null
+                ? `Flask slot ${index + 1}, empty`
+                : `Flask slot ${index + 1}, ${slot.item.displayName}`
+            }
           >
-            <kbd>{slot}</kbd>
+            <kbd>{index + 1}</kbd>
+            <span>{slot.item?.displayName ?? ""}</span>
           </li>
         ))}
       </ol>
@@ -1051,7 +1093,9 @@ export function App({
         </div>
       </section>
 
-      {showCombatPrototype && <CombatActionBar model={combatHud} />}
+      {showCombatPrototype && (
+        <CombatActionBar model={combatHud} flasks={itemHud.flaskSlots} />
+      )}
       {showCombatPrototype && (
         <div class="combat-vitals-stack" data-testid="combat-vitals-stack">
           <button

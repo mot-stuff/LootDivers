@@ -9,8 +9,6 @@ import {
   FIXED_TICKS_PER_SECOND,
   FixedStepRunner,
   IMPLEMENTED_ABILITY_CATALOG,
-  MAXIMUM_HEALTH_STAT_ID,
-  OUTGOING_DAMAGE_STAT_ID,
   WINTER_PULSE_ID,
   affixById,
   definitionById,
@@ -20,11 +18,13 @@ import {
   type CombatAbilityId,
   type DamageResult,
   EQUIPMENT_SLOTS,
+  FLASK_SLOTS,
+  formatItemModifierLabel,
   type EquipmentItemInstance,
   type EquipmentSlot,
   type EquipmentSlotKind,
+  type FlaskSlot,
   type ItemInstance,
-  type ItemStatModifier,
   type LoadoutSlot,
   type WorldLootDrop,
 } from "../../core";
@@ -105,6 +105,14 @@ const EQUIPMENT_TYPE_LABELS: Readonly<Record<EquipmentSlotKind, string>> = {
   "main-hand": "Melee weapon",
   offhand: "Offhand",
   ring: "Ring",
+  flask: "Flask",
+};
+
+const FLASK_SLOT_LABELS: Readonly<Record<FlaskSlot, string>> = {
+  "flask-1": "Flask 1",
+  "flask-2": "Flask 2",
+  "flask-3": "Flask 3",
+  "flask-4": "Flask 4",
 };
 
 const STATUS_LABELS = {
@@ -878,6 +886,14 @@ export class CombatArenaPresentation {
             ? null
             : this.equipmentHudModel(loadout.equipment[slot]),
       })),
+      flaskSlots: FLASK_SLOTS.map((slot) => ({
+        slot,
+        label: FLASK_SLOT_LABELS[slot],
+        item:
+          loadout.flasks[slot] === null
+            ? null
+            : this.equipmentHudModel(loadout.flasks[slot]),
+      })),
       abilityChoices: IMPLEMENTED_ABILITY_CATALOG.map((id) => ({
         id,
         displayName: this.abilityName(id),
@@ -931,13 +947,13 @@ export class CombatArenaPresentation {
       ...base.baseModifiers.map((modifier, index) => ({
         id: `${base.id}:base-${index}`,
         source: "base" as const,
-        label: this.modifierLabel(modifier),
+        label: formatItemModifierLabel(modifier),
         tier: null,
       })),
       ...item.affixes.map((affix) => ({
         id: affix.affixId,
         source: "affix" as const,
-        label: this.modifierLabel(affix.modifier),
+        label: formatItemModifierLabel(affix.modifier),
         tier: affix.tier,
       })),
     ];
@@ -950,25 +966,14 @@ export class CombatArenaPresentation {
           : `${affixNames.join(" ")} ${base.displayName}`,
       rarity: item.rarity,
       slotKind: base.slot,
-      typeLabel: EQUIPMENT_TYPE_LABELS[base.slot],
+      typeLabel:
+        base.slot === "flask"
+          ? base.tags.some((tag) => String(tag) === "tag:life-flask")
+            ? "Life flask"
+            : "Mana flask"
+          : EQUIPMENT_TYPE_LABELS[base.slot],
       modifiers,
     };
-  }
-
-  private modifierLabel(modifier: ItemStatModifier): string {
-    if (
-      modifier.statId === MAXIMUM_HEALTH_STAT_ID &&
-      modifier.operation === "flat"
-    ) {
-      return `+${modifier.value} maximum health`;
-    }
-    if (
-      modifier.statId === OUTGOING_DAMAGE_STAT_ID &&
-      modifier.operation === "additive-basis-points"
-    ) {
-      return `+${modifier.value / 100}% outgoing ability damage`;
-    }
-    return `${modifier.value} ${String(modifier.statId)}`;
   }
 
   private abilityName(abilityId: CombatAbilityId): string {

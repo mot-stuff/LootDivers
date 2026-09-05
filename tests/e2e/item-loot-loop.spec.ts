@@ -142,10 +142,14 @@ test("enemy loot can be picked, equipped, and used to create an ability", async 
     itemHud?.inventorySlots.find(
       ({ item }) =>
         item?.kind === "equipment" &&
+        item.slotKind !== "flask" &&
         item.modifiers.some(({ source }) => source === "affix"),
     ) ??
     itemHud?.inventorySlots.find(
-      ({ item }) => item?.kind === "equipment" && item.modifiers.length > 0,
+      ({ item }) =>
+        item?.kind === "equipment" &&
+        item.slotKind !== "flask" &&
+        item.modifiers.length > 0,
     );
   const stoneSlot = itemHud?.inventorySlots.find(
     ({ item }) => item?.kind === "ability-stone",

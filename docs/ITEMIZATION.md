@@ -14,8 +14,7 @@ Phase 3 proves a focused loot loop rather than the final item model:
 
 - a 48-slot scrollable inventory;
 - nine equipment slots: Helmet, Chest, Amulet, Belt, Boots, Main Hand,
-  Offhand, Ring 1, and Ring 2, plus four reserved flask slots below the
-  boots;
+  Offhand, Ring 1, and Ring 2, plus four flask slots below the boots;
 - non-stackable equipment and Ability Stone stacks of up to nine;
 - Common equipment with one affix, Magic equipment with one or two affixes,
   and Rare equipment with three or four distinct legal affixes;
@@ -41,6 +40,12 @@ Worn Cleaver (main hand), Trailguard Vest (chest), Wayfinder Amulet (amulet),
 Lookout Casque (helmet), Cinchweave Belt (belt), Drifter Treads (boots),
 Splintered Buckler (offhand), and Plain Loopband (ring).
 
+Heartwell Flask (life) and Mindwell Flask (mana) also drop. They use the same
+rarity and tier rules as gear but roll flask-only affixes and occupy the four
+flask slots. Their modifiers describe recovery, duration, charges, instant
+recovery, recovery rate, and charges gained on kill. Drinking flasks with
+keys 1–4 remains deferred.
+
 Every affix rolls a tier from 1 through 5. Tier 1 is the best: each affix
 declares five non-overlapping value ranges where tier 1 holds the highest
 values. Tier N rolls with relative weight N (tier 1 at 1/15, tier 5 at 5/15),
@@ -49,14 +54,15 @@ candidate, a tier, and a value inside that tier's range; the whole item is
 deterministic per seed, and validation rejects tiers outside 1–5 or values
 outside the rolled tier's range.
 
-The eight prototype affixes are Tempered and Steadfast Grip (main hand),
+The eight prototype gear affixes are Tempered and Steadfast Grip (main hand),
 Reinforced and Battlewoven (armor slots: helmet, chest, belt, boots, offhand),
 Hearty and Focused (jewelry: amulet and rings), and the generic Vigorous and
-Keen (any equipment, deliberately weaker ranges). Slot-kind and tag
-restrictions prevent illegal rolls, and every base has exactly four legal
-affixes, so the Rare maximum is always satisfiable with distinct affixes. This
-is intentionally enough content to test choices without creating a
-production-scale catalog.
+Keen (any equipment, deliberately weaker ranges). Flask-only affixes are
+Brimming, Sudden, Fleetpour, Deep Reserve, Thrifty, and Reaping. Slot-kind and
+tag restrictions prevent illegal rolls. Every gear base has exactly four legal
+affixes and every flask base has six, so the Rare maximum is always
+satisfiable with distinct affixes. This is intentionally enough content to
+test choices without creating a production-scale catalog.
 
 Unique rarity exists in the item model (reserved for later phases) but is
 never generated: generation rejects unique requests and enemy loot weights

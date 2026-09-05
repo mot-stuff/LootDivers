@@ -47,7 +47,7 @@ import {
   type LoadoutSlot,
   type StoneConsumptionResult,
 } from "./item-loadout";
-import type { EquipmentSlot } from "./item-catalog";
+import type { EquipmentSlot, FlaskSlot, WearableSlot } from "./item-catalog";
 import type { EquipmentItemInstance, ItemInstance } from "./item-generation";
 import type { InventoryAddResult } from "./inventory";
 import {
@@ -178,6 +178,7 @@ export interface CharacterItemLoadoutReadModel {
   readonly equipment: Readonly<
     Record<EquipmentSlot, EquipmentItemInstance | null>
   >;
+  readonly flasks: Readonly<Record<FlaskSlot, EquipmentItemInstance | null>>;
   readonly ownedAbilities: readonly CombatAbilityId[];
   readonly assignments: Readonly<Record<LoadoutSlot, CombatAbilityId | null>>;
   readonly stats: EquipmentStats;
@@ -436,7 +437,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
 
   public equipCharacterItem(
     inventoryIndex: number,
-    targetSlot?: EquipmentSlot,
+    targetSlot?: WearableSlot,
   ): EquipResult {
     const result = this.#characterItems.equipFromInventory(
       inventoryIndex,
@@ -446,7 +447,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     return result;
   }
 
-  public unequipCharacterItem(slot: EquipmentSlot): InventoryAddResult {
+  public unequipCharacterItem(slot: WearableSlot): InventoryAddResult {
     const result = this.#characterItems.unequip(slot);
     if (result.accepted) this.synchronizeEquipmentHealth();
     return result;
@@ -473,6 +474,7 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     return {
       inventory: this.#characterItems.inventorySlots(),
       equipment: this.#characterItems.equipment(),
+      flasks: this.#characterItems.flasks(),
       ownedAbilities: this.#characterItems.ownedAbilities(),
       assignments: this.#characterItems.loadout(),
       stats: this.characterStats(),

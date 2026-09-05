@@ -9,6 +9,24 @@ import {
 import { contentId, type ContentId } from "./ids";
 
 export const MAXIMUM_HEALTH_STAT_ID = contentId("stat:maximum-health");
+export const FLASK_RECOVERY_STAT_ID = contentId("stat:flask-recovery");
+export const FLASK_DURATION_DECISECONDS_STAT_ID = contentId(
+  "stat:flask-duration-deciseconds",
+);
+export const FLASK_CHARGES_STAT_ID = contentId("stat:flask-charges");
+export const FLASK_CHARGES_USED_STAT_ID = contentId("stat:flask-charges-used");
+export const FLASK_CHARGES_USED_REDUCTION_STAT_ID = contentId(
+  "stat:flask-charges-used-reduction",
+);
+export const FLASK_INSTANT_RECOVERY_STAT_ID = contentId(
+  "stat:flask-instant-recovery",
+);
+export const FLASK_RECOVERY_RATE_STAT_ID = contentId(
+  "stat:flask-recovery-rate",
+);
+export const FLASK_CHARGES_ON_KILL_STAT_ID = contentId(
+  "stat:flask-charges-on-kill",
+);
 export const ABILITY_STONE_BASE_ID = contentId("item:ability-stone");
 
 /**
@@ -24,7 +42,21 @@ export type EquipmentSlotKind =
   | "boots"
   | "main-hand"
   | "offhand"
-  | "ring";
+  | "ring"
+  | "flask";
+
+export type FlaskSlot = "flask-1" | "flask-2" | "flask-3" | "flask-4";
+
+export const FLASK_SLOTS: readonly FlaskSlot[] = [
+  "flask-1",
+  "flask-2",
+  "flask-3",
+  "flask-4",
+] as const;
+
+export function isFlaskSlot(slot: string): slot is FlaskSlot {
+  return (FLASK_SLOTS as readonly string[]).includes(slot);
+}
 
 /** A concrete equipment slot on the character. */
 export type EquipmentSlot =
@@ -51,8 +83,10 @@ export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = [
   "ring-2",
 ] as const;
 
+export type WearableSlot = EquipmentSlot | FlaskSlot;
+
 const SLOTS_BY_KIND: Readonly<
-  Record<EquipmentSlotKind, readonly EquipmentSlot[]>
+  Record<EquipmentSlotKind, readonly WearableSlot[]>
 > = {
   helmet: ["helmet"],
   chest: ["chest"],
@@ -62,20 +96,19 @@ const SLOTS_BY_KIND: Readonly<
   "main-hand": ["main-hand"],
   offhand: ["offhand"],
   ring: ["ring-1", "ring-2"],
+  flask: FLASK_SLOTS,
 };
 
 /**
  * Concrete character slots that can hold a base of the given kind, in default
  * placement preference order.
  */
-export function slotsForKind(
-  kind: EquipmentSlotKind,
-): readonly EquipmentSlot[] {
+export function slotsForKind(kind: EquipmentSlotKind): readonly WearableSlot[] {
   return SLOTS_BY_KIND[kind];
 }
 
 export function slotAcceptsKind(
-  slot: EquipmentSlot,
+  slot: WearableSlot,
   kind: EquipmentSlotKind,
 ): boolean {
   return SLOTS_BY_KIND[kind].includes(slot);
@@ -100,8 +133,14 @@ export interface OutgoingAbilityDamageModifier {
   readonly value: number;
 }
 
+export interface FlaskModifier {
+  readonly statId: ContentId;
+  readonly operation: "flat" | "additive-basis-points";
+  readonly value: number;
+}
+
 export type ItemStatModifier =
-  MaximumHealthModifier | OutgoingAbilityDamageModifier;
+  MaximumHealthModifier | OutgoingAbilityDamageModifier | FlaskModifier;
 
 export interface EquipmentBaseDefinition {
   readonly id: ContentId;
@@ -113,7 +152,8 @@ export interface EquipmentBaseDefinition {
 
 export type AffixModifierDefinition =
   | Omit<MaximumHealthModifier, "value">
-  | Omit<OutgoingAbilityDamageModifier, "value">;
+  | Omit<OutgoingAbilityDamageModifier, "value">
+  | Omit<FlaskModifier, "value">;
 
 /** Inclusive integer value range for one affix tier. */
 export interface AffixTierRange {
@@ -244,6 +284,46 @@ export const EQUIPMENT_BASE_CATALOG: readonly EquipmentBaseDefinition[] = [
     baseModifiers: [],
   },
 ] as const;
+
+export const FLASK_BASE_CATALOG: readonly EquipmentBaseDefinition[] = [
+  {
+    id: contentId("item:heartwell-flask"),
+    displayName: "Heartwell Flask",
+    slot: "flask",
+    tags: [tag("flask"), tag("life-flask")],
+    baseModifiers: [
+      { statId: FLASK_RECOVERY_STAT_ID, operation: "flat", value: 70 },
+      {
+        statId: FLASK_DURATION_DECISECONDS_STAT_ID,
+        operation: "flat",
+        value: 50,
+      },
+      { statId: FLASK_CHARGES_STAT_ID, operation: "flat", value: 30 },
+      { statId: FLASK_CHARGES_USED_STAT_ID, operation: "flat", value: 20 },
+    ],
+  },
+  {
+    id: contentId("item:mindwell-flask"),
+    displayName: "Mindwell Flask",
+    slot: "flask",
+    tags: [tag("flask"), tag("mana-flask")],
+    baseModifiers: [
+      { statId: FLASK_RECOVERY_STAT_ID, operation: "flat", value: 50 },
+      {
+        statId: FLASK_DURATION_DECISECONDS_STAT_ID,
+        operation: "flat",
+        value: 40,
+      },
+      { statId: FLASK_CHARGES_STAT_ID, operation: "flat", value: 30 },
+      { statId: FLASK_CHARGES_USED_STAT_ID, operation: "flat", value: 20 },
+    ],
+  },
+] as const;
+
+export const ITEM_BASE_CATALOG: readonly EquipmentBaseDefinition[] = [
+  ...EQUIPMENT_BASE_CATALOG,
+  ...FLASK_BASE_CATALOG,
+];
 
 export const AFFIX_CATALOG: readonly AffixDefinition[] = [
   {
@@ -382,6 +462,108 @@ export const AFFIX_CATALOG: readonly AffixDefinition[] = [
       { minimumValue: 50, maximumValue: 100 },
     ],
   },
+  {
+    id: contentId("affix:brimming"),
+    displayName: "Brimming",
+    allowedSlots: ["flask"],
+    requiredTags: [tag("flask")],
+    modifier: {
+      statId: FLASK_RECOVERY_STAT_ID,
+      operation: "flat",
+    },
+    tiers: [
+      { minimumValue: 28, maximumValue: 32 },
+      { minimumValue: 23, maximumValue: 27 },
+      { minimumValue: 18, maximumValue: 22 },
+      { minimumValue: 13, maximumValue: 17 },
+      { minimumValue: 8, maximumValue: 12 },
+    ],
+  },
+  {
+    id: contentId("affix:sudden"),
+    displayName: "Sudden",
+    allowedSlots: ["flask"],
+    requiredTags: [tag("flask")],
+    modifier: {
+      statId: FLASK_INSTANT_RECOVERY_STAT_ID,
+      operation: "additive-basis-points",
+    },
+    tiers: [
+      { minimumValue: 2500, maximumValue: 3000 },
+      { minimumValue: 2000, maximumValue: 2499 },
+      { minimumValue: 1500, maximumValue: 1999 },
+      { minimumValue: 1000, maximumValue: 1499 },
+      { minimumValue: 500, maximumValue: 999 },
+    ],
+  },
+  {
+    id: contentId("affix:fleetpour"),
+    displayName: "Fleetpour",
+    allowedSlots: ["flask"],
+    requiredTags: [tag("flask")],
+    modifier: {
+      statId: FLASK_RECOVERY_RATE_STAT_ID,
+      operation: "additive-basis-points",
+    },
+    tiers: [
+      { minimumValue: 4000, maximumValue: 5000 },
+      { minimumValue: 3000, maximumValue: 3999 },
+      { minimumValue: 2000, maximumValue: 2999 },
+      { minimumValue: 1200, maximumValue: 1999 },
+      { minimumValue: 500, maximumValue: 1199 },
+    ],
+  },
+  {
+    id: contentId("affix:deep-reserve"),
+    displayName: "Deep Reserve",
+    allowedSlots: ["flask"],
+    requiredTags: [tag("flask")],
+    modifier: {
+      statId: FLASK_CHARGES_STAT_ID,
+      operation: "flat",
+    },
+    tiers: [
+      { minimumValue: 12, maximumValue: 14 },
+      { minimumValue: 10, maximumValue: 11 },
+      { minimumValue: 8, maximumValue: 9 },
+      { minimumValue: 6, maximumValue: 7 },
+      { minimumValue: 4, maximumValue: 5 },
+    ],
+  },
+  {
+    id: contentId("affix:thrifty"),
+    displayName: "Thrifty",
+    allowedSlots: ["flask"],
+    requiredTags: [tag("flask")],
+    modifier: {
+      statId: FLASK_CHARGES_USED_REDUCTION_STAT_ID,
+      operation: "flat",
+    },
+    tiers: [
+      { minimumValue: 8, maximumValue: 9 },
+      { minimumValue: 6, maximumValue: 7 },
+      { minimumValue: 5, maximumValue: 5 },
+      { minimumValue: 3, maximumValue: 4 },
+      { minimumValue: 2, maximumValue: 2 },
+    ],
+  },
+  {
+    id: contentId("affix:reaping"),
+    displayName: "Reaping",
+    allowedSlots: ["flask"],
+    requiredTags: [tag("flask")],
+    modifier: {
+      statId: FLASK_CHARGES_ON_KILL_STAT_ID,
+      operation: "flat",
+    },
+    tiers: [
+      { minimumValue: 5, maximumValue: 5 },
+      { minimumValue: 4, maximumValue: 4 },
+      { minimumValue: 3, maximumValue: 3 },
+      { minimumValue: 2, maximumValue: 2 },
+      { minimumValue: 1, maximumValue: 1 },
+    ],
+  },
 ] as const;
 
 export const IMPLEMENTED_ABILITY_CATALOG: readonly CombatAbilityId[] = [
@@ -394,7 +576,7 @@ export const IMPLEMENTED_ABILITY_CATALOG: readonly CombatAbilityId[] = [
 export function equipmentBaseById(
   id: ContentId,
 ): EquipmentBaseDefinition | undefined {
-  return EQUIPMENT_BASE_CATALOG.find((definition) => definition.id === id);
+  return ITEM_BASE_CATALOG.find((definition) => definition.id === id);
 }
 
 export function affixById(id: ContentId): AffixDefinition | undefined {
@@ -409,4 +591,38 @@ export function isAffixLegalForBase(
     affix.allowedSlots.includes(base.slot) &&
     affix.requiredTags.every((required) => base.tags.includes(required))
   );
+}
+
+export function formatItemModifierLabel(modifier: ItemStatModifier): string {
+  if (modifier.statId === MAXIMUM_HEALTH_STAT_ID) {
+    return `+${modifier.value} maximum health`;
+  }
+  if (modifier.statId === OUTGOING_DAMAGE_STAT_ID) {
+    return `+${modifier.value / 100}% outgoing ability damage`;
+  }
+  if (modifier.statId === FLASK_RECOVERY_STAT_ID) {
+    return `+${modifier.value} recovery`;
+  }
+  if (modifier.statId === FLASK_DURATION_DECISECONDS_STAT_ID) {
+    return `${(modifier.value / 10).toFixed(1)}s recovery time`;
+  }
+  if (modifier.statId === FLASK_CHARGES_STAT_ID) {
+    return `+${modifier.value} maximum charges`;
+  }
+  if (modifier.statId === FLASK_CHARGES_USED_STAT_ID) {
+    return `Consumes ${modifier.value} charges`;
+  }
+  if (modifier.statId === FLASK_CHARGES_USED_REDUCTION_STAT_ID) {
+    return `-${modifier.value} charges used`;
+  }
+  if (modifier.statId === FLASK_INSTANT_RECOVERY_STAT_ID) {
+    return `${modifier.value / 100}% recovered instantly`;
+  }
+  if (modifier.statId === FLASK_RECOVERY_RATE_STAT_ID) {
+    return `+${modifier.value / 100}% recovery rate`;
+  }
+  if (modifier.statId === FLASK_CHARGES_ON_KILL_STAT_ID) {
+    return `+${modifier.value} charges gained on kill`;
+  }
+  return `${modifier.value} ${String(modifier.statId)}`;
 }

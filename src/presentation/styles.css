@@ -168,7 +168,11 @@ body.combat-mode #app,
 
 .combat-flask-slot {
   position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
   min-height: 2.5rem;
+  overflow: hidden;
   border: 1px solid #52677f;
   border-radius: 0.3rem;
   background:
@@ -179,6 +183,26 @@ body.combat-mode #app,
   position: absolute;
   top: 0.2rem;
   left: 0.2rem;
+}
+
+.combat-flask-slot span {
+  display: -webkit-box;
+  margin-top: 1.15rem;
+  padding: 0 0.2rem 0.15rem;
+  overflow: hidden;
+  color: #dceaff;
+  font-size: 0.52rem;
+  line-height: 1.15;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.combat-flask-slot[data-rarity="magic"] {
+  border-color: #6da5ff;
+}
+
+.combat-flask-slot[data-rarity="rare"] {
+  border-color: #f0c75e;
 }
 
 .combat-ability {
@@ -563,9 +587,7 @@ body.combat-mode #app,
   gap: 0.15rem;
   min-height: 3.4rem;
   padding: 0.3rem;
-  border: 1px dashed #52677f;
-  border-radius: 0.35rem;
-  background: #0d1726;
+  border-style: dashed;
 }
 
 .paper-doll-flask kbd {

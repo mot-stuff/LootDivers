@@ -7,6 +7,7 @@ import {
 } from "../../src/adapters/phaser/loot-label";
 import {
   EQUIPMENT_BASE_CATALOG,
+  FLASK_BASE_CATALOG,
   createAbilityStoneStack,
   persistentInstanceId,
   type EquipmentItemInstance,
@@ -32,7 +33,10 @@ function equipment(rarity: ItemRarity): EquipmentItemInstance {
 
 describe("worldLootLabel", () => {
   it("uses the base display name, never an affix-decorated name", () => {
-    for (const [index, base] of EQUIPMENT_BASE_CATALOG.entries()) {
+    for (const [index, base] of [
+      ...EQUIPMENT_BASE_CATALOG,
+      ...FLASK_BASE_CATALOG,
+    ].entries()) {
       const label = worldLootLabel({
         kind: "equipment",
         instanceId: persistentInstanceId(`test:loot-label-base-${index}`),

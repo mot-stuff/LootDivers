@@ -1473,3 +1473,35 @@ screen rather than inside inventory.
 
 DEC-019 and DEC-020 remain the governing Phase 3 architecture except where
 this decision changes inventory size and Common affix count.
+
+---
+
+# DEC-022
+
+### Status
+
+Accepted for adding life and mana flasks to the Phase 3 drop pool.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Heartwell Flask and Mindwell Flask are generatable items that share gear
+rarity and T1–T5 affix rules, occupy the four flask slots, and never
+contribute to character health or ability-damage stats. Enemy kills draw
+from the combined gear-and-flask base catalog. Flask use with keys 1–4
+remains deferred.
+
+Flask-only affixes are original recovery and charge modifiers inspired by
+ARPG flask design, not copies of another game's names or proprietary
+wording.
+
+### Systems Affected
+
+- Item catalogs, generation, loot, loadout, inventory UI, and combat HUD
+
+### Relationship to Earlier Decisions
+
+DEC-019 through DEC-021 remain the governing Phase 3 item architecture.

@@ -179,6 +179,12 @@ const itemHudModel: InventoryHudReadModel = {
     { slot: "ring-1", label: "Ring 1", item: null },
     { slot: "ring-2", label: "Ring 2", item: null },
   ],
+  flaskSlots: [
+    { slot: "flask-1", label: "Flask 1", item: null },
+    { slot: "flask-2", label: "Flask 2", item: null },
+    { slot: "flask-3", label: "Flask 3", item: null },
+    { slot: "flask-4", label: "Flask 4", item: null },
+  ],
   abilityChoices: [
     {
       id: "ability:basic-cleave",
@@ -775,8 +781,13 @@ describe("technical UI shell component", () => {
       ).toHaveLength(INVENTORY_SLOT_COUNT);
       expect(container.querySelector(".inventory-grid-scroll")).not.toBeNull();
       expect(
-        container.querySelectorAll(".paper-doll .equipment-slot"),
+        container.querySelectorAll(".paper-doll > .equipment-slot"),
       ).toHaveLength(9);
+      expect(
+        container.querySelectorAll(
+          "[data-testid='inventory-flask-slots'] .equipment-slot",
+        ),
+      ).toHaveLength(4);
       // Every slot is addressable as a drop target with its concrete slot ID.
       expect(
         Array.from(
@@ -788,6 +799,10 @@ describe("technical UI shell component", () => {
         "belt",
         "boots",
         "chest",
+        "flask-1",
+        "flask-2",
+        "flask-3",
+        "flask-4",
         "helmet",
         "main-hand",
         "offhand",
@@ -1078,15 +1093,15 @@ describe("technical UI shell component", () => {
       expect(
         Array.from(
           container.querySelectorAll(
-            "[data-testid='inventory-flask-slots'] .paper-doll-flask",
+            "[data-testid='inventory-flask-slots'] [data-drop-equipment-slot]",
           ),
           (slot) => slot.getAttribute("aria-label"),
         ),
       ).toEqual([
-        "Flask slot 1, not implemented",
-        "Flask slot 2, not implemented",
-        "Flask slot 3, not implemented",
-        "Flask slot 4, not implemented",
+        "Flask 1, empty",
+        "Flask 2, empty",
+        "Flask 3, empty",
+        "Flask 4, empty",
       ]);
     } finally {
       window.removeEventListener(ITEM_COMMAND_EVENT, captureCommand);
