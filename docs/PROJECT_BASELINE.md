@@ -1,6 +1,6 @@
 # Phase 0 Project Baseline
 
-**Status:** P0-G01 through P0-G06 complete; final independent QA remains
+**Status:** Phase 0 complete; Phase 1 authorized
 **Last updated:** 2026-09-04
 **Authority:** DEC-016, DEC-017, and `PHASE_0_ARCHITECTURE.md`
 
@@ -25,21 +25,23 @@ Edge boot proof satisfies P0-G06 temporarily. Public HTTPS staging is deferred.
 
 ## Phase boundary
 
-Phase 0 is now a seven-task validation gate, not an infrastructure-completion
-phase. P0-G07 PASS immediately authorizes Phase 1 combat. The QA review must not
-hold the transition for exhaustive remediation of deferred work.
+Phase 0 was a seven-task validation gate, not an infrastructure-completion
+phase. P0-G07 passed on clean `main` at `3adfba3`, completing Phase 0 and
+immediately authorizing Phase 1 combat.
 
-Allowed before the gate:
+Completed gate actions:
 
 - rerun and repair only the compact acceptance checks;
 - perform independent QA against P0-G01 through P0-G07.
 
-Not authorized by this revision:
+Still not authorized:
 
 - production deployment or production hosting selection;
-- Phase 1 gameplay implementation before QA PASS;
 - production launch, hosting hardening, backend, or multiplayer;
 - new broad infrastructure work justified only by the superseded backlog.
+
+Phase 1 combat implementation is authorized, but was not started by this Phase
+0 closure task.
 
 ## Evidence mapping
 
@@ -60,11 +62,13 @@ Not authorized by this revision:
   build passed; the exact artifact was served over loopback; Chromium smoke and
   a headed hardware-accelerated Microsoft Edge ready/WebGL2 check passed. Public
   HTTPS staging is deferred.
-- **P0-G07 Independent QA — Pending:** the compact gate has not been run.
+- **P0-G07 Independent QA — PASS:** clean `main` at `3adfba3` passed formatting,
+  lint, typecheck, 156 unit tests, world checks, production build, all five
+  transfer-budget gates, 26 Chromium smoke tests with one diagnostic skip, and
+  two deterministic fixture/depth visual tests. Git remained clean.
 
-The table maps evidence; it does not retroactively claim that previously
-pending reviews passed. G07 independently rechecks every compact criterion and
-is the single acceptance decision.
+G07 independently rechecked every compact criterion and is the final Phase 0
+acceptance decision.
 
 ## Completed-early, non-gating scope
 
@@ -100,13 +104,9 @@ The compact gate does not require:
 - detailed production telemetry;
 - multiplayer architecture beyond preserving simple boundaries.
 
-## Remaining minimal blockers
+## Phase 0 blockers
 
-1. Have an independent QA Reviewer execute the exact lean gate in
-   `PHASE_0_ARCHITECTURE.md` and issue PASS.
-
-Nothing else is a Phase 1 authorization blocker unless one of those checks
-reveals a direct compact-gate failure.
+None. Phase 0 is complete and Phase 1 is authorized.
 
 ---
 

@@ -9,12 +9,13 @@ professions, gathering, crafting, exploration, dungeons, and bosses.
 Phase 0 is a minimal seven-task stack-validation gate. Existing foundation work
 has been mapped to the compact gate without deleting completed code.
 
-Phase 1 gameplay implementation has not started. P0-G01 through P0-G06 are
-complete; only the lean independent QA gate remains. By owner-approved DEC-017,
-the exact production artifact served over loopback with Chromium and Microsoft
-Edge boot proof temporarily satisfies P0-G06; public HTTPS staging is deferred.
-A QA PASS immediately authorizes Phase 1 combat with no separate Director
-approval.
+Phase 0 is complete. Independent P0-G07 QA passed on clean `main` at `3adfba3`,
+which immediately authorized Phase 1 combat with no separate Director approval.
+Phase 1 implementation has not started.
+
+By owner-approved DEC-017, the exact production artifact served over loopback
+with Chromium and Microsoft Edge boot proof temporarily satisfies P0-G06;
+public HTTPS staging is deferred.
 
 ## Approved technical direction
 

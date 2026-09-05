@@ -1,7 +1,7 @@
 # RARPG Phase 0 — Minimal Stack-Validation Gate
 
-**Status:** Scope reduced on 2026-09-04; P0-G01 through P0-G06 are complete.
-Phase 1 is authorized immediately after TASK-P0-G07 passes.
+**Status:** Complete on 2026-09-04. Independent TASK-P0-G07 QA passed on clean
+`main` at `3adfba3`; Phase 1 is authorized.
 **Decision:** DEC-016 and DEC-017
 **Scope:** The smallest browser foundation needed to begin combat prototyping.
 
@@ -169,6 +169,8 @@ require exhaustive remediation.
 **Authorization:** A PASS automatically completes Phase 0 and authorizes Phase
 1 combat immediately. No second architecture review, exhaustive browser matrix,
 eligible reference machine, or separate owner approval is required.
+**Status:** PASS on 2026-09-04 at `3adfba3`. Phase 0 is complete and Phase 1 is
+authorized. Phase 1 implementation was not started by this closure task.
 
 ## Exact lean gate commands
 

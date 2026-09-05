@@ -4,6 +4,9 @@
 
 Goal: prove the browser stack is adequate, then begin combat immediately.
 
+**Status:** Complete. Independent P0-G07 QA passed on 2026-09-04 at
+`3adfba3`. Phase 1 is immediately authorized.
+
 Phase 0 contains exactly seven dependency-ordered gates:
 
 1. **P0-G01 Browser foundation** — toolchain, strict TypeScript, Phaser/WebGL2
@@ -61,7 +64,8 @@ Exit criteria:
 - dodge and deaths work;
 - no major runtime errors.
 
-Phase 1 starts as soon as the independent P0-G07 gate passes.
+**Status:** Authorized to start by the P0-G07 PASS. No Phase 1 implementation
+was included in the Phase 0 closure.
 
 ---
 
