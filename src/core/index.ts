@@ -305,6 +305,12 @@ export {
   AbilityExecutionEngine,
   type AbilityExecutionDependencies,
 } from "./ability-runtime";
+export {
+  CHARACTER_NAME_PATTERN,
+  CHARACTER_NAME_RULE_MESSAGE,
+  CHARACTER_SLOT_LIMIT,
+  normalizeCharacterName,
+} from "./character-identity";
 export type { Clock } from "./clock";
 export {
   createCoreRuntime,

@@ -12,7 +12,12 @@ import {
   PASSIVE_CATALOG,
   WAKESHORE_LANDING_ID,
 } from "../../src/core";
-import { App } from "../../src/presentation/App";
+import {
+  App,
+  type AccountCharacterModel,
+  type AccountMenuActions,
+  type AccountMenuModel,
+} from "../../src/presentation/App";
 import type {
   CharacterHudReadModel,
   CombatHudReadModel,
@@ -1982,6 +1987,291 @@ describe("technical UI shell component", () => {
       // menu App's window listeners and focus effects must be torn down here.
       render(null, container);
       render(null, bare);
+    }
+  });
+
+  // TASK-709 account-aware menu (DEC-036 menu composition).
+
+  /** Settles the async action promise chain behind menu clicks. */
+  async function flushAsync(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  function accountModel(
+    overrides?: Partial<AccountMenuModel>,
+  ): AccountMenuModel {
+    return {
+      email: "diver@example.com",
+      phase: "ready",
+      characters: [],
+      slotLimit: 4,
+      busy: false,
+      error: null,
+      notice: null,
+      ...overrides,
+    };
+  }
+
+  const accountCharacters: AccountCharacterModel[] = [
+    { id: "c-1", name: "Rega the Bold", className: "barbarian", level: 7 },
+    { id: "c-2", name: "Ash", className: "barbarian", level: 2 },
+  ];
+
+  function mountAccountMenu(
+    account: AccountMenuModel,
+    actions: AccountMenuActions,
+    onGameplayStarted: () => void = () => undefined,
+  ) {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    render(
+      <App
+        bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+        showCombatPrototype
+        showMainMenu
+        account={account}
+        accountActions={actions}
+        onGameplayStarted={onGameplayStarted}
+      />,
+      container,
+    );
+    return container;
+  }
+
+  it("replaces the local menu with character select when a session exists", async () => {
+    const select = vi.fn<AccountMenuActions["select"]>(() =>
+      Promise.resolve<"fresh" | "restored" | null>("restored"),
+    );
+    const actions: AccountMenuActions = {
+      select,
+      create: vi.fn<AccountMenuActions["create"]>(() =>
+        Promise.resolve<"fresh" | null>("fresh"),
+      ),
+      remove: vi.fn<AccountMenuActions["remove"]>(() => Promise.resolve(true)),
+    };
+    const onGameplayStarted = vi.fn();
+    const worldCommands = vi.fn<(command: WorldUiCommand) => void>();
+    const captureWorld = (event: CustomEvent<WorldUiCommand>) => {
+      worldCommands(event.detail);
+    };
+    window.addEventListener(WORLD_COMMAND_EVENT, captureWorld);
+    const container = mountAccountMenu(
+      accountModel({ characters: accountCharacters }),
+      actions,
+      onGameplayStarted,
+    );
+    try {
+      // The local actions are replaced wholesale by the account section.
+      expect(
+        container.querySelector('[data-testid="main-menu-new-game"]'),
+      ).toBeNull();
+      expect(
+        container.querySelector('[data-testid="account-email"]')?.textContent,
+      ).toContain("diver@example.com");
+      const entries = container.querySelectorAll(
+        '[data-testid="account-character-select"]',
+      );
+      expect(entries).toHaveLength(2);
+      expect(entries[0]?.textContent).toContain("Rega the Bold");
+      expect(entries[0]?.textContent).toContain("Barbarian · Level 7");
+
+      // Selecting resolves "restored": no tutorial travel, menu dismissed,
+      // save triggers armed.
+      await act(async () => {
+        (entries[0] as HTMLButtonElement).click();
+        await flushAsync();
+      });
+      expect(select).toHaveBeenCalledExactlyOnceWith("c-1");
+      expect(worldCommands).not.toHaveBeenCalled();
+      expect(onGameplayStarted).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('[data-testid="main-menu"]')).toBeNull();
+    } finally {
+      window.removeEventListener(WORLD_COMMAND_EVENT, captureWorld);
+      render(null, container);
+    }
+  });
+
+  it("validates the DEC-036 name rule client-side before any create call", async () => {
+    const create = vi.fn<AccountMenuActions["create"]>(() =>
+      Promise.resolve<"fresh" | null>("fresh"),
+    );
+    const actions: AccountMenuActions = {
+      select: vi.fn<AccountMenuActions["select"]>(() => Promise.resolve(null)),
+      create,
+      remove: vi.fn<AccountMenuActions["remove"]>(() => Promise.resolve(true)),
+    };
+    const onGameplayStarted = vi.fn();
+    const worldCommands = vi.fn<(command: WorldUiCommand) => void>();
+    const captureWorld = (event: CustomEvent<WorldUiCommand>) => {
+      worldCommands(event.detail);
+    };
+    window.addEventListener(WORLD_COMMAND_EVENT, captureWorld);
+    const container = mountAccountMenu(
+      accountModel(),
+      actions,
+      onGameplayStarted,
+    );
+    try {
+      expect(
+        container.querySelector('[data-testid="account-empty"]'),
+      ).not.toBeNull();
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>(
+            '[data-testid="account-create-open"]',
+          )
+          ?.click();
+      });
+
+      // The create screen shows the class card, animated preview hook, and
+      // an original description.
+      const card = container.querySelector(
+        '[data-testid="account-class-card"]',
+      );
+      expect(card?.textContent).toContain("Barbarian");
+      expect(
+        container.querySelector(
+          '[data-testid="account-create-preview"].barbarian-idle-preview',
+        ),
+      ).not.toBeNull();
+
+      const nameInput = container.querySelector<HTMLInputElement>(
+        '[data-testid="account-create-name"]',
+      );
+      const submit = container.querySelector<HTMLButtonElement>(
+        '[data-testid="account-create-submit"]',
+      );
+
+      // Invalid names never reach the server.
+      for (const invalid of ["1Rega", "Rega--Bold", "ab"]) {
+        await act(() => {
+          nameInput!.value = invalid;
+          nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await act(() => submit?.click());
+        expect(create).not.toHaveBeenCalled();
+        expect(
+          container.querySelector('[data-testid="account-create-error"]')
+            ?.textContent,
+        ).toContain("3-16 characters");
+      }
+
+      // A valid name is trimmed, sent, and a fresh outcome starts the
+      // tutorial travel exactly like New Game.
+      await act(() => {
+        nameInput!.value = "  Rega the Bold  ";
+        nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        submit?.click();
+        await flushAsync();
+      });
+      expect(create).toHaveBeenCalledExactlyOnceWith("Rega the Bold");
+      expect(worldCommands).toHaveBeenCalledExactlyOnceWith({
+        type: "world.travel",
+        zoneId: WAKESHORE_LANDING_ID,
+      });
+      expect(onGameplayStarted).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('[data-testid="main-menu"]')).toBeNull();
+    } finally {
+      window.removeEventListener(WORLD_COMMAND_EVENT, captureWorld);
+      render(null, container);
+    }
+  });
+
+  it("locks creation at the slot limit and requires typed delete confirmation", async () => {
+    const remove = vi.fn<AccountMenuActions["remove"]>(() =>
+      Promise.resolve(true),
+    );
+    const actions: AccountMenuActions = {
+      select: vi.fn<AccountMenuActions["select"]>(() => Promise.resolve(null)),
+      create: vi.fn<AccountMenuActions["create"]>(() => Promise.resolve(null)),
+      remove,
+    };
+    const fullRoster: AccountCharacterModel[] = [
+      ...accountCharacters,
+      { id: "c-3", name: "D'Marr", className: "barbarian", level: 11 },
+      { id: "c-4", name: "Kel-Vren", className: "barbarian", level: 4 },
+    ];
+    const container = mountAccountMenu(
+      accountModel({ characters: fullRoster }),
+      actions,
+    );
+    try {
+      expect(
+        container.querySelector<HTMLButtonElement>(
+          '[data-testid="account-create-open"]',
+        )?.disabled,
+      ).toBe(true);
+      expect(
+        container.querySelector('[data-testid="account-slot-note"]')
+          ?.textContent,
+      ).toContain("slots are full");
+
+      // Delete arms only after the exact name is typed.
+      await act(() => {
+        container
+          .querySelectorAll<HTMLButtonElement>(
+            '[data-testid="account-character-delete"]',
+          )[0]
+          ?.click();
+      });
+      const confirmInput = container.querySelector<HTMLInputElement>(
+        '[data-testid="account-delete-input"]',
+      );
+      const confirmSubmit = container.querySelector<HTMLButtonElement>(
+        '[data-testid="account-delete-submit"]',
+      );
+      expect(confirmSubmit?.disabled).toBe(true);
+      await act(() => {
+        confirmInput!.value = "rega the bold";
+        confirmInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(confirmSubmit?.disabled).toBe(true);
+      await act(() => {
+        confirmInput!.value = "Rega the Bold";
+        confirmInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(confirmSubmit?.disabled).toBe(false);
+      await act(async () => {
+        confirmSubmit?.click();
+        await flushAsync();
+      });
+      expect(remove).toHaveBeenCalledExactlyOnceWith("c-1");
+    } finally {
+      render(null, container);
+    }
+  });
+
+  it("falls back to the local menu with a notice when the list is unavailable", () => {
+    const actions: AccountMenuActions = {
+      select: vi.fn<AccountMenuActions["select"]>(() => Promise.resolve(null)),
+      create: vi.fn<AccountMenuActions["create"]>(() => Promise.resolve(null)),
+      remove: vi.fn<AccountMenuActions["remove"]>(() => Promise.resolve(false)),
+    };
+    const container = mountAccountMenu(
+      accountModel({
+        phase: "unavailable",
+        notice: "The account service is unreachable right now.",
+      }),
+      actions,
+    );
+    try {
+      expect(
+        container.querySelector('[data-testid="account-select"]'),
+      ).toBeNull();
+      expect(
+        container.querySelector<HTMLButtonElement>(
+          '[data-testid="main-menu-new-game"]',
+        )?.disabled,
+      ).toBe(false);
+      expect(
+        container.querySelector('[data-testid="account-unavailable"]')
+          ?.textContent,
+      ).toContain("unreachable");
+    } finally {
+      render(null, container);
     }
   });
 });

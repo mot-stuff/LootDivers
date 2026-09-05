@@ -15,6 +15,8 @@ import {
   SystemSaveClock,
   WebCryptoSha256,
 } from "./adapters/browser/persistence-platform";
+import { ApiClient, ApiError } from "./adapters/http/api-client";
+import { HttpSaveRepository } from "./adapters/http/http-save-repository";
 import { probeAuthSession } from "./adapters/http/session-probe";
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
@@ -44,9 +46,11 @@ import {
   type FixtureSaveState,
   type PersistenceStatus,
 } from "./persistence";
-import type { CharacterSave } from "./core";
+import { CHARACTER_SLOT_LIMIT, type CharacterSave } from "./core";
 import {
   App,
+  type AccountMenuActions,
+  type AccountMenuModel,
   type MainMenuCharacterSaveModel,
   type PersistenceFixtureActions,
 } from "./presentation/App";
@@ -208,13 +212,13 @@ const combatPrototype =
 const autostart = fixtureParameters.has("autostart");
 const showMainMenu = combatPrototype && !autostart;
 /**
- * TASK-707 boot session probe: on the custom-domain origin only, ask the
- * accounts API whether a session cookie is live. Fire-and-forget — local
- * origins skip it entirely and a down API resolves to signed-out, so boot
- * never blocks on the network. TASK-709's menu reads the settled state via
- * `authSessionState()`.
+ * TASK-709 automation affordance (DEC-031 explicit-parameter precedent):
+ * `?accountTest` points the account menu at a same-origin `/api` base so
+ * Playwright can route-mock the §2 contract on 127.0.0.1, where the real
+ * session probe is deliberately skipped. Real players never set it, and
+ * without it local origins remain purely local.
  */
-void probeAuthSession();
+const accountAutomation = fixtureParameters.has("accountTest");
 document.body.classList.toggle("combat-mode", combatPrototype);
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,
@@ -271,11 +275,24 @@ const characterRepository = new IndexedDbSaveRepository<
   codec: CHARACTER_SAVE_CODEC,
 });
 const characterSaves = new CharacterSaveService(characterRepository);
+/**
+ * TASK-709: the save service behind the DEC-034 triggers. Local IndexedDB
+ * by default; selecting a server character swaps in an `HttpSaveRepository`
+ * bound to that character row, and every existing trigger (zone travel,
+ * death, respawn, page hide) then persists to the server unchanged.
+ */
+let activeCharacterSaves: CharacterSaveService = characterSaves;
 let characterSaveMenu: MainMenuCharacterSaveModel = {
   available: false,
   recovered: false,
 };
 let continueSavedCharacter: (() => boolean) | null = null;
+/** TASK-709 account menu state (null on local origins / signed out). */
+let accountMenu: AccountMenuModel | null = null;
+let accountLoginUrl: string | null = null;
+let accountClient: ApiClient | null = null;
+/** Set once the renderer boots; restores a server save into the sim. */
+let restoreServerCharacter: ((save: CharacterSave) => boolean) | null = null;
 /**
  * Save triggers stay disarmed until the player actually enters gameplay
  * (New Game, Continue, or `?autostart`), so an untouched main menu can
@@ -341,10 +358,214 @@ function renderApp(): void {
       onGameplayStarted={() => {
         gameplayStarted = true;
       }}
+      account={accountMenu}
+      accountActions={accountActions}
+      accountLoginUrl={accountLoginUrl}
     />,
     mount,
   );
 }
+
+// ---------------------------------------------------------------------------
+// TASK-709 account-aware menu (DEC-036 menu composition).
+//
+// The shell owns every API interaction; the menu UI observes `accountMenu`
+// and calls `accountActions`. Nothing here runs for `?autostart`, the
+// fixture automation modes, or plain local origins, so all pre-709 paths
+// stay byte-identical.
+// ---------------------------------------------------------------------------
+
+const ACCOUNT_UNAVAILABLE_NOTICE =
+  "The account service is unreachable right now — you can play locally " +
+  "and try again later.";
+
+function setAccountMenu(next: AccountMenuModel | null): void {
+  accountMenu = next;
+  renderApp();
+}
+
+function accountActionMessage(error: unknown): string {
+  if (
+    error instanceof ApiError &&
+    (error.status === 409 || error.status === 422 || error.status === 403)
+  ) {
+    return error.message;
+  }
+  return ACCOUNT_UNAVAILABLE_NOTICE;
+}
+
+async function refreshAccountCharacters(): Promise<void> {
+  if (accountClient === null || accountMenu === null) return;
+  try {
+    const list = await accountClient.listCharacters();
+    setAccountMenu({
+      ...accountMenu,
+      phase: "ready",
+      characters: list.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        className: entry.class,
+        level: entry.level,
+      })),
+      busy: false,
+      notice: null,
+    });
+  } catch {
+    setAccountMenu({
+      ...accountMenu,
+      phase: "unavailable",
+      busy: false,
+      error: null,
+      notice: ACCOUNT_UNAVAILABLE_NOTICE,
+    });
+  }
+}
+
+/**
+ * Binds the save pipeline to a server character row and resolves how
+ * gameplay should start: "fresh" (never saved — the menu runs the New Game
+ * tutorial travel) or "restored" (the envelope decoded and the simulation
+ * has been restored). Null means the character could not be entered; the
+ * reason is surfaced through the menu model.
+ */
+async function enterServerCharacter(
+  id: string,
+): Promise<"fresh" | "restored" | null> {
+  if (accountClient === null) return null;
+  const repository = new HttpSaveRepository({
+    client: accountClient,
+    characterId: id,
+    codec: CHARACTER_SAVE_CODEC,
+    checksumProvider: new WebCryptoSha256(),
+    clock: new SystemSaveClock(),
+    build: "loot-divers-client",
+    contentSchemaVersion: 1,
+  });
+  const service = new CharacterSaveService(repository);
+  const boot = await service.loadForBoot();
+  if (boot.save === null && boot.failure !== null) {
+    if (accountMenu !== null) {
+      setAccountMenu({
+        ...accountMenu,
+        busy: false,
+        error: `This character could not be loaded: ${boot.failure}`,
+      });
+    }
+    return null;
+  }
+  if (boot.save !== null && restoreServerCharacter?.(boot.save) !== true) {
+    if (accountMenu !== null) {
+      setAccountMenu({
+        ...accountMenu,
+        busy: false,
+        error: "This character's save could not be restored on this client.",
+      });
+    }
+    return null;
+  }
+  activeCharacterSaves = service;
+  if (accountMenu !== null) {
+    setAccountMenu({ ...accountMenu, busy: false, error: null });
+  }
+  return boot.save === null ? "fresh" : "restored";
+}
+
+const accountActions: AccountMenuActions = {
+  async select(id) {
+    if (accountMenu === null) return null;
+    setAccountMenu({ ...accountMenu, busy: true, error: null });
+    return enterServerCharacter(id);
+  },
+  async create(name) {
+    if (accountClient === null || accountMenu === null) return null;
+    setAccountMenu({ ...accountMenu, busy: true, error: null });
+    let id: string;
+    try {
+      id = await accountClient.createCharacter(name, "barbarian");
+    } catch (error) {
+      setAccountMenu({
+        ...accountMenu,
+        busy: false,
+        error: accountActionMessage(error),
+      });
+      return null;
+    }
+    const outcome = await enterServerCharacter(id);
+    return outcome === null ? null : "fresh";
+  },
+  async remove(id) {
+    if (accountClient === null || accountMenu === null) return false;
+    setAccountMenu({ ...accountMenu, busy: true, error: null });
+    try {
+      await accountClient.deleteCharacter(id);
+    } catch (error) {
+      setAccountMenu({
+        ...accountMenu,
+        busy: false,
+        error: accountActionMessage(error),
+      });
+      return false;
+    }
+    await refreshAccountCharacters();
+    return true;
+  },
+};
+
+/**
+ * Resolves the boot session and, when signed in, activates the account
+ * menu. On real origins this is the TASK-707 probe (custom domain only);
+ * under `?accountTest` it targets the same-origin `/api` base Playwright
+ * mocks. Runs only when the main menu will actually show, so `?autostart`
+ * and the fixture modes never touch the network beyond the 707 probe.
+ */
+async function resolveAccountSession(): Promise<{
+  origin: string;
+  email: string;
+} | null> {
+  if (accountAutomation) {
+    const origin = `${window.location.origin}/api`;
+    try {
+      const session = await new ApiClient(origin).session();
+      if (session !== null) return { origin, email: session.email };
+    } catch {
+      // Unreachable mock API: treated as signed out.
+    }
+    accountLoginUrl = "/";
+    renderApp();
+    return null;
+  }
+  const probe = await probeAuthSession();
+  if (probe.apiOrigin === null) return null; // Local origin: nothing changes.
+  if (probe.session === null) {
+    accountLoginUrl = "/";
+    renderApp();
+    return null;
+  }
+  return { origin: probe.apiOrigin, email: probe.session.email };
+}
+
+async function initAccountMenu(): Promise<void> {
+  if (!showMainMenu) {
+    // Preserve the TASK-707 boot probe on gameplay/automation boots.
+    if (!accountAutomation) void probeAuthSession();
+    return;
+  }
+  const resolved = await resolveAccountSession();
+  if (resolved === null) return;
+  if (gameplayStarted) return; // The player already started a local game.
+  accountClient = new ApiClient(resolved.origin);
+  setAccountMenu({
+    email: resolved.email,
+    phase: "loading",
+    characters: [],
+    slotLimit: CHARACTER_SLOT_LIMIT,
+    busy: false,
+    error: null,
+    notice: null,
+  });
+  await refreshAccountCharacters();
+}
+void initAccountMenu();
 
 renderApp();
 
@@ -500,10 +721,13 @@ if (!support.supported) {
         // queued save always writes the freshest state.
         let pendingCharacterSave: Promise<void> = Promise.resolve();
         const persistCharacter = (): Promise<void> => {
+          // `activeCharacterSaves` is read at flush time so a TASK-709
+          // server-character selection swaps every trigger to the HTTP
+          // repository atomically.
           pendingCharacterSave = pendingCharacterSave
             .catch(() => undefined)
             .then(() =>
-              characterSaves.save(renderer.combat.captureCharacterSave()),
+              activeCharacterSaves.save(renderer.combat.captureCharacterSave()),
             );
           return pendingCharacterSave;
         };
@@ -585,6 +809,20 @@ if (!support.supported) {
           };
           renderApp();
         });
+
+        // TASK-709: restores a decoded server envelope into the simulation
+        // (same semantics as the local Continue closure above).
+        restoreServerCharacter = (save) => {
+          try {
+            renderer.combat.restoreCharacterSave(save);
+            return true;
+          } catch (error) {
+            const detail =
+              error instanceof Error ? error.message : String(error);
+            console.warn(`Server character could not be restored: ${detail}`);
+            return false;
+          }
+        };
 
         window.__RARPG_CHARACTER_SAVE_TEST__ = {
           saveNow: () => persistCharacter(),

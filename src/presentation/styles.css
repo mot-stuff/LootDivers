@@ -1840,6 +1840,268 @@ a:focus-visible {
   }
 }
 
+/* TASK-709 account-aware menu (DEC-036): character select and the barbarian
+   create screen, additive on the DEC-029 tokens. */
+.main-menu-login {
+  color: var(--ui-accent);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.main-menu-login:hover,
+.main-menu-login:focus-visible {
+  color: var(--ui-focus);
+}
+
+.account-menu {
+  display: grid;
+  gap: 0.85rem;
+  justify-items: center;
+  width: min(26rem, 100%);
+}
+
+.account-heading {
+  margin: 0;
+  color: var(--ui-heading);
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-email {
+  margin: -0.5rem 0 0;
+  color: var(--ui-text-dim);
+  font-size: 0.75rem;
+}
+
+.account-character-list {
+  display: grid;
+  gap: 0.55rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-character-list:empty {
+  display: none;
+}
+
+.account-character {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.account-character-select {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0.4rem;
+  background-color: var(--ui-panel-bg-raised);
+  background-image: var(--ui-panel-vignette);
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-character-select:hover:enabled,
+.account-character-select:focus-visible {
+  border-color: var(--ui-accent);
+  color: var(--ui-focus);
+}
+
+.account-character-select:disabled {
+  color: var(--ui-muted-state);
+  cursor: wait;
+}
+
+.account-character-name {
+  color: var(--ui-heading);
+  font-size: 0.95rem;
+}
+
+.account-character-meta {
+  color: var(--ui-text-dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.account-character-delete {
+  padding: 0 0.7rem;
+  border: 1px solid var(--ui-border-dim);
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ui-text-dim);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.account-character-delete:hover:enabled,
+.account-character-delete:focus-visible {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+
+.account-delete-confirm {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ui-border-dim);
+  border-radius: 0.4rem;
+  background-color: var(--ui-panel-bg);
+}
+
+.account-delete-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.account-delete-submit {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--ui-danger);
+  border-radius: 0.35rem;
+  background: none;
+  color: var(--ui-danger);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.account-delete-submit:disabled {
+  border-color: var(--ui-border-dim);
+  color: var(--ui-muted-state);
+  cursor: not-allowed;
+}
+
+.account-back {
+  padding: 0.35rem 0.8rem;
+  border: none;
+  background: none;
+  color: var(--ui-text-dim);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.account-back:hover:enabled,
+.account-back:focus-visible {
+  color: var(--ui-focus);
+}
+
+.account-class-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.9rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0.4rem;
+  background-color: var(--ui-panel-bg-raised);
+  background-image: var(--ui-panel-vignette);
+}
+
+.account-class-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.account-class-copy h3 {
+  margin: 0;
+  color: var(--ui-heading);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-class-copy p {
+  margin: 0;
+  color: var(--ui-text-dim);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* South-facing idle row of the 1920x1024 barbarian sheet: 15 frames of
+   128px, row index 2 (E, SE, S clockwise from east). A pure CSS steps()
+   flipbook — no Phaser on the menu. */
+.barbarian-idle-preview {
+  width: 128px;
+  height: 128px;
+  background: url("/assets/characters/barbarian/Idle.png") no-repeat 0 -256px;
+  image-rendering: pixelated;
+  animation: barbarian-idle-preview 1.25s steps(15, end) infinite;
+  /* The figure fills only the middle of its 128px frame; scale the paint
+     (layout box stays 128px) so the preview reads at menu size. */
+  transform: scale(2);
+  transform-origin: 50% 62%;
+}
+
+@keyframes barbarian-idle-preview {
+  from {
+    background-position-x: 0;
+  }
+
+  to {
+    background-position-x: -1920px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barbarian-idle-preview {
+    animation: none;
+  }
+}
+
+.account-create-form {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: stretch;
+  width: min(15.5rem, 100%);
+}
+
+.account-field-label {
+  color: var(--ui-text-dim);
+  font-size: 0.78rem;
+}
+
+.account-name-input {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0.35rem;
+  background-color: var(--ui-panel-bg);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.account-name-input:focus-visible {
+  border-color: var(--ui-accent);
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.account-error {
+  margin: 0;
+  max-width: 100%;
+  color: var(--ui-danger-text);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@media (max-height: 640px) {
+  .barbarian-idle-preview {
+    transform: scale(1.4);
+  }
+
+  .account-menu {
+    gap: 0.55rem;
+  }
+}
+
 /* TASK-710 death screen (DEC-037): translucent full-screen backdrop with a
    framed panel on the DEC-029 tokens. Sits below the main menu (z 10). */
 .death-overlay {
