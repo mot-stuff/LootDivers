@@ -17,6 +17,7 @@ import {
   type ResourcePaymentHandle,
   type ResourceReservationHandle,
   type RuntimeEntityId,
+  type StatefulRandomSource,
 } from "../../src/core/index.ts";
 
 const mana = contentId("fixture:mana");
@@ -158,6 +159,7 @@ class CooldownFixture implements AbilityCooldownPort {
 function harness(
   definitions: readonly AbilityDefinition[],
   limits = { maximumDepth: 4, maximumEffectsPerTick: 16 },
+  random: StatefulRandomSource = new Mulberry32(0x5eed_0009),
 ) {
   const resources = new ResourceFixture();
   const cooldowns = new CooldownFixture();
@@ -190,7 +192,7 @@ function harness(
         eventHook?.(event);
       },
     },
-    random: new Mulberry32(0x5eed_0009),
+    random,
     executors: {
       has: (kind) => executorMap.has(kind),
       get: (kind) => executorMap.get(kind),
@@ -206,6 +208,7 @@ function harness(
     effectLog,
     statValues,
     executorMap,
+    random,
     setEventHook: (hook: typeof eventHook) => {
       eventHook = hook;
     },
@@ -473,6 +476,181 @@ describe("ability runtime remediation contracts", () => {
         (event) => event.abilityId === ability.id && event.stage === "complete",
       ),
     ).toBe(false);
+  });
+
+  it("stops the effect batch when a custom executor cancels reentrantly", () => {
+    const childId = contentId("fixture:cancelled-batch-child");
+    const cancelExecutor = contentId("fixture:cancel-executor");
+    const ability = definition("fixture:cancelled-batch", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      cancellation: {
+        allowedDuring: ["active"],
+        refund: "all",
+        cooldown: "clear",
+      },
+      effects: [
+        {
+          kind: "custom",
+          executorKind: cancelExecutor,
+          parameters: [],
+        },
+        {
+          kind: "custom",
+          executorKind: recordExecutor,
+          parameters: [{ key: "label", value: "later-effect" }],
+        },
+        { kind: "trigger-ability", abilityId: childId },
+      ],
+    });
+    const child = definition("fixture:cancelled-batch-child", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      statCaptures: [],
+      effects: [],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([ability, child]);
+    fixture.executorMap.set(cancelExecutor, {
+      execute: (_effect, context) => {
+        fixture.effectLog.push("cancel-effect");
+        fixture.engine.cancel(context.executionId, context.tick);
+      },
+    });
+    fixture.executorMap.set(recordExecutor, {
+      execute: () => {
+        fixture.effectLog.push("later-effect");
+      },
+    });
+
+    const result = fixture.engine.request(selfRequest(ability.id, source));
+
+    expect(result).toMatchObject({
+      accepted: true,
+      execution: { stage: "cancel" },
+    });
+    expect(fixture.effectLog).toEqual(["cancel-effect"]);
+    expect(fixture.events.some((event) => event.abilityId === child.id)).toBe(
+      false,
+    );
+  });
+
+  it("defers trigger flushing to the outermost reentrant dispatch", () => {
+    const childAId = contentId("fixture:dispatch-child-a");
+    const childBId = contentId("fixture:dispatch-child-b");
+    const reentrantId = contentId("fixture:dispatch-reentrant");
+    const actionExecutor = contentId("fixture:dispatch-action");
+    const custom = (label: string) => ({
+      kind: "custom" as const,
+      executorKind: actionExecutor,
+      parameters: [{ key: "label", value: label }],
+    });
+    const parent = definition("fixture:dispatch-parent", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      statCaptures: [],
+      effects: [
+        { kind: "trigger-ability", abilityId: childAId },
+        custom("reenter"),
+        custom("parent-end"),
+      ],
+    });
+    const reentrant = definition("fixture:dispatch-reentrant", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      statCaptures: [],
+      effects: [{ kind: "trigger-ability", abilityId: childBId }],
+    });
+    const childA = definition("fixture:dispatch-child-a", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      statCaptures: [],
+      effects: [custom("child-a")],
+    });
+    const childB = definition("fixture:dispatch-child-b", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      statCaptures: [],
+      effects: [custom("child-b")],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([parent, reentrant, childA, childB]);
+    fixture.executorMap.set(actionExecutor, {
+      execute: (effect, context) => {
+        if (effect.kind !== "custom") throw new Error("wrong effect");
+        const label = String(effect.parameters[0]?.value);
+        fixture.effectLog.push(label);
+        if (label === "reenter") {
+          fixture.engine.request(
+            selfRequest(reentrantId, context.sourceId, context.tick),
+          );
+        }
+      },
+    });
+
+    fixture.engine.request(selfRequest(parent.id, source));
+
+    expect(fixture.effectLog).toEqual([
+      "reenter",
+      "parent-end",
+      "child-a",
+      "child-b",
+    ]);
+  });
+
+  it("replays effect RNG observations and final state from a saved seed state", () => {
+    const randomExecutor = contentId("fixture:random-executor");
+    const ability = definition("fixture:random-replay", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      statCaptures: [],
+      effects: [
+        {
+          kind: "custom",
+          executorKind: randomExecutor,
+          parameters: [],
+        },
+      ],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const firstRandom = new Mulberry32(0x1234_5678);
+    const initialState = firstRandom.saveState();
+    const first = harness(
+      [ability],
+      { maximumDepth: 4, maximumEffectsPerTick: 16 },
+      firstRandom,
+    );
+    const firstObservations: number[] = [];
+    first.executorMap.set(randomExecutor, {
+      execute: (_effect, context) => {
+        firstObservations.push(
+          context.random.nextUint32(),
+          context.random.nextUint32(),
+        );
+      },
+    });
+
+    first.engine.request(selfRequest(ability.id, source));
+    const firstFinalState = first.random.saveState();
+
+    const replay = harness(
+      [ability],
+      { maximumDepth: 4, maximumEffectsPerTick: 16 },
+      Mulberry32.fromState(initialState),
+    );
+    const replayObservations: number[] = [];
+    replay.executorMap.set(randomExecutor, {
+      execute: (_effect, context) => {
+        replayObservations.push(
+          context.random.nextUint32(),
+          context.random.nextUint32(),
+        );
+      },
+    });
+    replay.engine.request(selfRequest(ability.id, source));
+
+    expect(replayObservations).toEqual(firstObservations);
+    expect(replay.random.saveState()).toEqual(firstFinalState);
   });
 
   it("retains runtime trigger cycle and chain-depth bounds", () => {

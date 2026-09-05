@@ -768,6 +768,9 @@ re-check terminal state, so synchronous cancellation cannot execute effects or
 fall through to completion. Regression tests reproduce all three review probes.
 Budget-abort state and settlement ownership are committed before rejection
 callbacks, making synchronous cancellation idempotent and exactly-once settled.
+Final QA remediation adds terminal guards after every custom executor boundary,
+outermost-dispatch ownership of FIFO trigger flushing under reentrant requests,
+and saved-state seeded-RNG replay coverage with identical effect observations.
 
 ### TASK-P0-010 — Establish persistence foundation
 

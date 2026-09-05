@@ -97,6 +97,7 @@ export class AbilityExecutionEngine {
   private currentTick: number | undefined;
   private remainingEffects = 0;
   private flushingTriggers = false;
+  private dispatchDepth = 0;
 
   public constructor(
     private readonly dependencies: AbilityExecutionDependencies,
@@ -105,68 +106,72 @@ export class AbilityExecutionEngine {
   }
 
   public request(request: AbilityRequest): AbilityRequestResult {
-    this.enterTick(request.requestedAtTick);
-    const result = this.requestQueued(request, []);
-    this.flushTriggerQueue();
-    return result;
+    return this.dispatch(() => {
+      this.enterTick(request.requestedAtTick);
+      return this.requestQueued(request, []);
+    });
   }
 
   public advance(executionId: number, tick: number): AbilityExecutionSnapshot {
-    this.enterTick(tick);
-    const record = this.requireExecution(executionId);
-    if (record.stage === "complete" || record.stage === "cancel") {
-      throw new Error(`Execution ${executionId} is already terminal.`);
-    }
-    if (tick !== record.lastTick + 1) {
-      throw new RangeError(
-        `Execution ${executionId} must advance once at current simulation tick ${tick}.`,
-      );
-    }
-    this.advanceOneTick(record, tick);
-    this.flushTriggerQueue();
-    return this.snapshot(record);
+    return this.dispatch(() => {
+      this.enterTick(tick);
+      const record = this.requireExecution(executionId);
+      if (record.stage === "complete" || record.stage === "cancel") {
+        throw new Error(`Execution ${executionId} is already terminal.`);
+      }
+      if (tick !== record.lastTick + 1) {
+        throw new RangeError(
+          `Execution ${executionId} must advance once at current simulation tick ${tick}.`,
+        );
+      }
+      this.advanceOneTick(record, tick);
+      return this.snapshot(record);
+    });
   }
 
   public cancel(executionId: number, tick: number): AbilityExecutionSnapshot {
-    this.enterTick(tick);
-    const record = this.requireExecution(executionId);
-    if (record.stage === "cancel") {
-      return this.snapshot(record);
-    }
-    if (record.lastTick === tick - 1) {
-      this.advanceOneTick(record, tick);
-      this.flushTriggerQueue();
-    }
-    if (record.lastTick !== tick) {
-      throw new RangeError(
-        `Execution ${executionId} is not coherent with current simulation tick ${tick}.`,
-      );
-    }
-    if (
-      record.stage !== "startup" &&
-      record.stage !== "active" &&
-      record.stage !== "recovery"
-    ) {
-      throw new Error(
-        `Execution ${executionId} cannot be cancelled from stage "${record.stage}".`,
-      );
-    }
-    if (!record.definition.cancellation.allowedDuring.includes(record.stage)) {
-      throw new Error(
-        `Ability "${record.definition.id}" does not allow cancellation during "${record.stage}".`,
-      );
-    }
+    return this.dispatch(() => {
+      this.enterTick(tick);
+      const record = this.requireExecution(executionId);
+      if (record.stage === "cancel") {
+        return this.snapshot(record);
+      }
+      if (record.lastTick === tick - 1) {
+        this.advanceOneTick(record, tick);
+      }
+      if (record.lastTick !== tick) {
+        throw new RangeError(
+          `Execution ${executionId} is not coherent with current simulation tick ${tick}.`,
+        );
+      }
+      if (
+        record.stage !== "startup" &&
+        record.stage !== "active" &&
+        record.stage !== "recovery"
+      ) {
+        throw new Error(
+          `Execution ${executionId} cannot be cancelled from stage "${record.stage}".`,
+        );
+      }
+      if (
+        !record.definition.cancellation.allowedDuring.includes(record.stage)
+      ) {
+        throw new Error(
+          `Ability "${record.definition.id}" does not allow cancellation during "${record.stage}".`,
+        );
+      }
 
-    this.settleCancellation(record);
-    if (
-      record.cooldown !== undefined &&
-      record.definition.cancellation.cooldown === "clear"
-    ) {
-      this.dependencies.cooldowns.clear(record.cooldown);
-      record.cooldown = undefined;
-    }
-    this.transition(record, "cancel", tick);
-    return this.snapshot(record);
+      this.settleCancellation(record);
+      if (
+        record.cooldown !== undefined &&
+        record.definition.cancellation.cooldown === "clear"
+      ) {
+        this.dependencies.cooldowns.clear(record.cooldown);
+        record.cooldown = undefined;
+      }
+      this.transition(record, "cancel", tick);
+      return this.snapshot(record);
+    });
   }
 
   public get(executionId: number): AbilityExecutionSnapshot | undefined {
@@ -391,6 +396,19 @@ export class AbilityExecutionEngine {
         throw new Error(`Validated executor "${kind}" became unavailable.`);
       }
       executor.execute(effect, this.effectContext(record, effectIndex, tick));
+      if (this.executions.get(record.executionId)?.stage !== "active") return;
+    }
+  }
+
+  private dispatch<T>(operation: () => T): T {
+    this.dispatchDepth += 1;
+    try {
+      return operation();
+    } finally {
+      this.dispatchDepth -= 1;
+      if (this.dispatchDepth === 0) {
+        this.flushTriggerQueue();
+      }
     }
   }
 

@@ -134,3 +134,9 @@ activations reject before resource settlement when the current tick lacks work;
 delayed activations that cannot reserve are explicitly cancelled with payments
 refunded and reservations released. Forward idle tick gaps start one fresh
 budget for the observed tick; backward operations fail.
+
+Effect execution re-checks terminal state after every registered executor call.
+Only the outermost public dispatch owns trigger flushing, so reentrant requests
+cannot drain queued children before the current parent effect batch finishes.
+Seeded random state is supplied through effect context and supports saved-state
+replay with identical observations and final generator state.
