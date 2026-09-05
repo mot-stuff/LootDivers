@@ -171,23 +171,22 @@ test("a corrupted save is treated as absent and never crashes boot", async ({
   await page.goto("/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
-  // One travel writes the only save generation. Wait until the committed
-  // active save reads back as Hollowdeep so corruption below hits the
-  // settled write, not a generation whose pointer promotion is in flight.
+  // The TASK-710 death save is the only generation this session ever
+  // writes: no travel happens, so corrupting it leaves no valid backup to
+  // recover. Killing the player also keeps the pagehide safeguard from
+  // writing a fresh valid save during navigation (it skips the dead
+  // state). Wait until the committed active save reads back before
+  // corrupting so we hit the settled write, not one whose
+  // generation-pointer promotion is in flight.
   await page.evaluate(() => {
-    window.__RARPG_COMBAT_TEST__?.travelTo("zone:hollowdeep");
+    window.__RARPG_COMBAT_TEST__?.applyPlayerDamage(1_000_000);
   });
-  await expect(page.getByTestId("combat-zone")).toContainText("Hollowdeep");
   await expect
     .poll(() => activeSaveZone(page), {
-      message: "zone travel should persist the Hollowdeep save",
+      message: "dying should persist the respawn-committed save",
     })
-    .toBe("zone:hollowdeep");
-
-  // Kill the player so the pagehide safeguard cannot write a fresh valid
-  // save during navigation, then corrupt the only stored generation.
+    .toBe("zone:hearthmere");
   await page.evaluate(async () => {
-    window.__RARPG_COMBAT_TEST__?.applyPlayerDamage(1_000_000);
     await window.__RARPG_CHARACTER_SAVE_TEST__?.corruptActive();
   });
 

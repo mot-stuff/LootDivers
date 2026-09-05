@@ -1051,6 +1051,46 @@ function MainMenu({
   );
 }
 
+/**
+ * TASK-710 death screen (DEC-037): a full-screen overlay shown only while
+ * the core reports the player dead. Confirming emits `world.respawn`
+ * through the existing world-command path; the core refills vitals and
+ * re-enters the zone's respawn destination with zero penalty. The overlay
+ * deliberately does not steal focus from the canvas — gameplay input is
+ * already locked by the core while dead ("player-defeated" rejections),
+ * and the focused-canvas key contract is covered by existing e2e specs.
+ */
+function DeathOverlay({
+  model,
+  onRespawn,
+}: CombatVitalsProps & { readonly onRespawn: () => void }) {
+  return (
+    <section
+      class="death-overlay"
+      role="alertdialog"
+      aria-label="You have fallen"
+      data-testid="death-overlay"
+    >
+      <div class="death-overlay-panel">
+        <p class="eyebrow">Slain</p>
+        <h2 class="death-overlay-heading">You have fallen</h2>
+        <p class="death-overlay-note">
+          The dark closes in, but the hearth still calls your name. Nothing
+          carried is lost.
+        </p>
+        <button
+          type="button"
+          class="death-respawn-button"
+          data-testid="death-respawn"
+          onClick={onRespawn}
+        >
+          Respawn in {model.respawnZoneName}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function CombatVitals({ model }: CombatVitalsProps) {
   const healthPercent =
     model.playerMaxHealth > 0
@@ -1532,6 +1572,7 @@ export function App({
     gatheringProgress: 0,
     zoneId: "zone:hearthmere",
     zoneName: "Hearthmere",
+    respawnZoneName: "Hearthmere",
     questLabel: null,
     tutorial: null,
     minimap: EMPTY_MINIMAP,
@@ -1731,6 +1772,16 @@ export function App({
         detail: command,
       }),
     );
+  }
+
+  function respawn(): void {
+    // Confirm the death screen (TASK-710): the adapter validates through
+    // core (a living player's request is ignored), then hand input back to
+    // the canvas so the runner resumes in the respawn zone.
+    emitWorldCommand({ type: "world.respawn" });
+    document
+      .querySelector<HTMLCanvasElement>("#game-canvas")
+      ?.focus({ preventScroll: true });
   }
 
   const fixtureState = (): FixtureSaveState => ({
@@ -1967,12 +2018,19 @@ export function App({
         />
       )}
 
-      {showCombatPrototype && combatHud.paused && !mainMenuOpen && (
-        <section class="combat-paused-hud" role="status">
-          <strong>PAUSED</strong>
-          <span>Click the arena to resume</span>
-        </section>
+      {showCombatPrototype && combatHud.playerDead && !mainMenuOpen && (
+        <DeathOverlay model={combatHud} onRespawn={respawn} />
       )}
+
+      {showCombatPrototype &&
+        combatHud.paused &&
+        !mainMenuOpen &&
+        !combatHud.playerDead && (
+          <section class="combat-paused-hud" role="status">
+            <strong>PAUSED</strong>
+            <span>Click the arena to resume</span>
+          </section>
+        )}
 
       {showCombatPrototype && mainMenuOpen && model.phase.kind !== "error" && (
         <MainMenu

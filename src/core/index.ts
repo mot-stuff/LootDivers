@@ -53,6 +53,7 @@ export {
   type LootPickupFailure,
   type LootPickupResult,
   type QuestReadModel,
+  type RespawnResult,
   type TravelFailure,
   type TravelResult,
   type VendorTradeFailure,

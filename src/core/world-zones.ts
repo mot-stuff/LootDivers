@@ -95,6 +95,13 @@ export interface ZoneDefinition {
   readonly displayName: string;
   readonly summary: string;
   readonly safe: boolean;
+  /**
+   * Where a player who dies in this zone respawns (TASK-710, DEC-037).
+   * Unsafe zones send the fallen to the nearest town; the tutorial zone
+   * respawns into itself so a tutorial death never ejects a newcomer to
+   * Hearthmere; towns respawn in place (unreachable in practice).
+   */
+  readonly respawnZoneId: ZoneId;
   readonly floorColor: number;
   readonly edgeColor: number;
   readonly playerSpawnX: number;
@@ -318,6 +325,7 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     displayName: "Ashtrail Expanse",
     summary: "Open ground with ore, a field forge, and the Hollowdeep descent",
     safe: false,
+    respawnZoneId: HEARTHMERE_ID,
     floorColor: 0x10263a,
     edgeColor: 0x64d8cb,
     playerSpawnX: 600,
@@ -356,6 +364,7 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     displayName: "Hearthmere",
     summary: "A safe halt with provisions, a forge, and the Roadwarden",
     safe: true,
+    respawnZoneId: HEARTHMERE_ID,
     floorColor: 0x2a2118,
     edgeColor: 0xe8b86d,
     playerSpawnX: 780,
@@ -385,6 +394,7 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     displayName: "Hollowdeep",
     summary: "A cut stone hollow watched by the Bruiser and Embercleft",
     safe: false,
+    respawnZoneId: HEARTHMERE_ID,
     floorColor: 0x1a1424,
     edgeColor: 0x9f7aea,
     playerSpawnX: 160,
@@ -412,6 +422,7 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     displayName: "Wakeshore Landing",
     summary: "A quiet shoreline where new arrivals learn the core skills",
     safe: false,
+    respawnZoneId: WAKESHORE_LANDING_ID,
     floorColor: 0x203228,
     edgeColor: 0x8fd6b0,
     playerSpawnX: 220,

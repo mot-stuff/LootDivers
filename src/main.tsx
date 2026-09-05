@@ -41,6 +41,7 @@ import {
   type MainMenuCharacterSaveModel,
   type PersistenceFixtureActions,
 } from "./presentation/App";
+import { CHARACTER_RESPAWN_EVENT } from "./presentation/shell-contracts";
 import type {
   CanvasViewportReadModel,
   CharacterHudReadModel,
@@ -447,21 +448,40 @@ if (!support.supported) {
         // The simulation always boots into Hearthmere, so that is the
         // baseline; the first hud snapshot with a different zone marks a
         // completed travel (including New Game's move to Wakeshore Landing).
+        // The same read model drives the TASK-710 death trigger: the moment
+        // the player dies, the character persists with the respawn
+        // destination already committed (core capture semantics, DEC-037),
+        // so reloading from the death screen can never rewind past the
+        // death.
         let lastObservedZoneId: string | null =
           renderer.combat.diagnostics()?.zoneId ?? null;
+        let lastObservedPlayerDead =
+          renderer.combat.diagnostics()?.playerDead ?? false;
         window.addEventListener("rarpg:combat-hud", (event) => {
           const hud = (event as CustomEvent<CombatHudReadModel>).detail;
+          const died = !lastObservedPlayerDead && hud.playerDead;
+          lastObservedPlayerDead = hud.playerDead;
           if (lastObservedZoneId === null) {
             lastObservedZoneId = hud.zoneId;
             return;
           }
-          if (hud.zoneId === lastObservedZoneId) return;
+          const traveled = hud.zoneId !== lastObservedZoneId;
           lastObservedZoneId = hud.zoneId;
+          if (!gameplayStarted) return;
+          if (traveled || died) persistCharacterQuietly();
+        });
+        // TASK-710 save-at-respawn trigger (DEC-037): the presentation
+        // adapter announces every accepted respawn. Same-zone respawns
+        // (Wakeshore, Hearthmere) never change the hud zone id, so the
+        // travel trigger alone would miss them.
+        window.addEventListener(CHARACTER_RESPAWN_EVENT, () => {
           if (!gameplayStarted) return;
           persistCharacterQuietly();
         });
         const persistOnHide = (): void => {
-          // Never persist a dead character or an unstarted menu session.
+          // Never persist from an unstarted menu session, and skip the dead
+          // state: the TASK-710 death trigger already persisted the
+          // respawn-committed character the moment the player died.
           if (!gameplayStarted) return;
           if (renderer.combat.diagnostics()?.playerDead !== false) return;
           persistCharacterQuietly();

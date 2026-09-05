@@ -105,6 +105,7 @@ const combatHudModel: CombatHudReadModel = {
   gatheringProgress: 0,
   zoneId: "zone:ashtrail-expanse",
   zoneName: "Ashtrail Expanse",
+  respawnZoneName: "Hearthmere",
   questLabel: null,
   tutorial: null,
   minimap: {
@@ -793,6 +794,86 @@ describe("technical UI shell component", () => {
     expect(
       container.querySelector(".combat-paused-hud")?.contains(hud as Node),
     ).toBe(false);
+  });
+
+  it("shows the death screen only while dead and Respawn emits world.respawn", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    const worldCommands = vi.fn<(command: WorldUiCommand) => void>();
+    const captureWorld = (event: CustomEvent<WorldUiCommand>) => {
+      worldCommands(event.detail);
+    };
+    window.addEventListener(WORLD_COMMAND_EVENT, captureWorld);
+    document.body.append(container);
+
+    try {
+      await act(() => {
+        render(
+          <App
+            bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+            showCombatPrototype
+          />,
+          container,
+        );
+      });
+
+      // Alive: no death screen.
+      await publishCombatHud(combatHudModel);
+      expect(
+        container.querySelector('[data-testid="death-overlay"]'),
+      ).toBeNull();
+
+      // Dead: the overlay appears with original copy and the respawn
+      // destination from the read model, and the paused HUD stays hidden
+      // even though clicking the overlay unfocuses the canvas.
+      await publishCombatHud({
+        ...combatHudModel,
+        paused: true,
+        playerHealth: 0,
+        playerDead: true,
+        respawnZoneName: "Hearthmere",
+      });
+      const overlay = container.querySelector('[data-testid="death-overlay"]');
+      expect(overlay).not.toBeNull();
+      expect(overlay?.getAttribute("role")).toBe("alertdialog");
+      expect(overlay?.textContent).toContain("You have fallen");
+      expect(container.querySelector(".combat-paused-hud")).toBeNull();
+      const respawnButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="death-respawn"]',
+      );
+      expect(respawnButton?.textContent).toContain("Respawn in Hearthmere");
+
+      // A tutorial death names the tutorial zone, not the town (DEC-037).
+      await publishCombatHud({
+        ...combatHudModel,
+        playerHealth: 0,
+        playerDead: true,
+        zoneId: "zone:wakeshore-landing",
+        zoneName: "Wakeshore Landing",
+        respawnZoneName: "Wakeshore Landing",
+      });
+      expect(
+        container.querySelector('[data-testid="death-respawn"]')?.textContent,
+      ).toContain("Respawn in Wakeshore Landing");
+
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>('[data-testid="death-respawn"]')
+          ?.click();
+      });
+      expect(worldCommands).toHaveBeenCalledExactlyOnceWith({
+        type: "world.respawn",
+      });
+
+      // The respawned read model dismisses the overlay.
+      await publishCombatHud(combatHudModel);
+      expect(
+        container.querySelector('[data-testid="death-overlay"]'),
+      ).toBeNull();
+    } finally {
+      window.removeEventListener(WORLD_COMMAND_EVENT, captureWorld);
+      render(null, container);
+    }
   });
 
   it("renders cooldown and active status states from the combat read model", async () => {

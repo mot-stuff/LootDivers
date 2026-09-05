@@ -37,12 +37,14 @@ import {
 } from "../../core";
 import {
   CHARACTER_HUD_EVENT,
+  CHARACTER_RESPAWN_EVENT,
   ITEM_COMMAND_EVENT,
   ITEM_HUD_EVENT,
   PROFESSION_COMMAND_EVENT,
   PROGRESSION_COMMAND_EVENT,
   WORLD_COMMAND_EVENT,
   type CharacterHudReadModel,
+  type CharacterRespawnEventDetail,
   type CombatHudReadModel,
   type EquipmentItemHudReadModel,
   type InventoryHudReadModel,
@@ -519,6 +521,24 @@ export class CombatArenaPresentation {
       // TASK-703 New Game flow: the menu overlay travels through the same
       // validated path the automation hook uses (invalid ids are ignored).
       this.travelTo(command.zoneId);
+      return;
+    }
+    if (command.type === "world.respawn") {
+      // TASK-710 death screen: core validates (rejected while alive); an
+      // accepted respawn re-enters the destination zone, so redraw and
+      // force-refresh every HUD channel exactly like travel, then announce
+      // the respawn so the shell can fire the DEC-037 save trigger.
+      const result = this.#simulation.respawn();
+      if (result.accepted) {
+        this.drawArena();
+        this.render(0, true);
+        window.dispatchEvent(
+          new CustomEvent<CharacterRespawnEventDetail>(
+            CHARACTER_RESPAWN_EVENT,
+            { detail: { zoneId: result.zoneId } },
+          ),
+        );
+      }
       return;
     }
     if (command.type === "world.vendor-buy") {
@@ -1124,6 +1144,7 @@ export class CombatArenaPresentation {
           : 1 - state.gathering.ticksRemaining / state.gathering.totalTicks,
       zoneId: state.zoneId,
       zoneName: state.zoneName,
+      respawnZoneName: state.respawnZoneName,
       questLabel:
         state.quest.stage === "inactive"
           ? null
