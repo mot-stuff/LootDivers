@@ -1,6 +1,9 @@
 import type { ContentId, RuntimeEntityId } from "./ids";
 import type { RandomSource } from "./random";
 
+export const CORE_MODIFY_RESOURCE_EXECUTOR_ID =
+  "core:modify-resource" as ContentId;
+
 export const ABILITY_STAGES = [
   "request",
   "validate",
@@ -15,7 +18,8 @@ export const ABILITY_STAGES = [
 export type AbilityStage = (typeof ABILITY_STAGES)[number];
 
 export type AbilityTargetingMode = "self" | "entity" | "point" | "direction";
-export type AbilityStatPolicy = "snapshot" | "live";
+export type AbilityEntitySelector = "source" | "target";
+export type AbilityStatReadPolicy = "snapshot" | "live";
 export type CostSettlement = "pay" | "reserve";
 export type CostRefundPolicy = "none" | "reserved" | "all";
 export type CooldownStartPolicy = "pay" | "active" | "complete";
@@ -44,11 +48,22 @@ export interface AbilityCancellation {
   readonly cooldown: CancellationCooldownPolicy;
 }
 
+export interface AbilityStatCapture {
+  readonly subject: AbilityEntitySelector;
+  readonly statId: ContentId;
+}
+
+export interface AbilityStatRead {
+  readonly subject: AbilityEntitySelector;
+  readonly statId: ContentId;
+  readonly policy: AbilityStatReadPolicy;
+}
+
 export interface ModifyResourceEffect {
   readonly kind: "modify-resource";
   readonly resourceId: ContentId;
   readonly amount: number;
-  readonly recipient: "source" | "target";
+  readonly recipient: AbilityEntitySelector;
 }
 
 export interface TriggerAbilityEffect {
@@ -79,8 +94,7 @@ export interface AbilityDefinition {
   readonly costs: readonly AbilityCost[];
   readonly cooldown: AbilityCooldown;
   readonly cancellation: AbilityCancellation;
-  readonly statPolicy: AbilityStatPolicy;
-  readonly capturedStatIds: readonly ContentId[];
+  readonly statCaptures: readonly AbilityStatCapture[];
   readonly effects: readonly AbilityEffect[];
 }
 
@@ -100,6 +114,7 @@ export interface AbilityRequest {
 export type AbilityRejectionReason =
   | "ability-unknown"
   | "cooldown-active"
+  | "executor-unavailable"
   | "insufficient-resource"
   | "target-invalid"
   | "trigger-budget-exhausted"
@@ -110,6 +125,12 @@ export interface AbilityStageTransition {
   readonly tick: number;
 }
 
+export interface CapturedAbilityStat {
+  readonly subject: AbilityEntitySelector;
+  readonly statId: ContentId;
+  readonly value: number;
+}
+
 export interface AbilityExecutionSnapshot {
   readonly executionId: number;
   readonly abilityId: ContentId;
@@ -118,7 +139,7 @@ export interface AbilityExecutionSnapshot {
   readonly stage: AbilityStage;
   readonly stageElapsedTicks: number;
   readonly history: readonly AbilityStageTransition[];
-  readonly capturedStats?: ReadonlyMap<ContentId, number>;
+  readonly capturedStats: readonly CapturedAbilityStat[];
 }
 
 export type AbilityRequestResult =
@@ -136,18 +157,41 @@ export interface AbilityDefinitionSource {
   get(id: ContentId): AbilityDefinition | undefined;
 }
 
+export interface ResourcePaymentHandle {
+  readonly kind: "payment";
+  readonly token: number;
+}
+
+export interface ResourceReservationHandle {
+  readonly kind: "reservation";
+  readonly token: number;
+}
+
 export interface AbilityResourcePort {
   canSpend(
     entityId: RuntimeEntityId,
     resourceId: ContentId,
     amount: number,
   ): boolean;
-  debit(entityId: RuntimeEntityId, resourceId: ContentId, amount: number): void;
-  credit(
+  pay(
     entityId: RuntimeEntityId,
     resourceId: ContentId,
     amount: number,
-  ): void;
+  ): ResourcePaymentHandle;
+  reserve(
+    entityId: RuntimeEntityId,
+    resourceId: ContentId,
+    amount: number,
+  ): ResourceReservationHandle;
+  refund(handle: ResourcePaymentHandle): void;
+  commit(handle: ResourceReservationHandle): void;
+  release(handle: ResourceReservationHandle): void;
+}
+
+export interface AbilityCooldownHandle {
+  readonly token: number;
+  readonly entityId: RuntimeEntityId;
+  readonly abilityId: ContentId;
 }
 
 export interface AbilityCooldownPort {
@@ -161,8 +205,8 @@ export interface AbilityCooldownPort {
     abilityId: ContentId,
     atTick: number,
     durationTicks: number,
-  ): void;
-  clear(entityId: RuntimeEntityId, abilityId: ContentId): void;
+  ): AbilityCooldownHandle;
+  clear(handle: AbilityCooldownHandle): boolean;
 }
 
 export interface AbilityStatPort {
@@ -181,13 +225,19 @@ export interface AbilityEffectContext {
   readonly target: AbilityTarget;
   readonly tick: number;
   readonly random: RandomSource;
-  readStat(statId: ContentId): number;
+  entity(subject: AbilityEntitySelector): RuntimeEntityId;
+  readStat(read: AbilityStatRead): number;
 }
 
 export interface AbilityEffectExecutor<
   T extends AbilityEffect = AbilityEffect,
 > {
   execute(effect: T, context: AbilityEffectContext): void;
+}
+
+export interface AbilityExecutorRegistry {
+  has(kind: ContentId): boolean;
+  get(kind: ContentId): AbilityEffectExecutor | undefined;
 }
 
 export interface AbilityExecutionEvent {
@@ -204,5 +254,5 @@ export interface AbilityExecutionEventSink {
 
 export interface TriggerLimits {
   readonly maximumDepth: number;
-  readonly maximumEffects: number;
+  readonly maximumEffectsPerTick: number;
 }

@@ -1,51 +1,64 @@
 import {
-  type AbilityCooldownPort,
+  CORE_MODIFY_RESOURCE_EXECUTOR_ID,
+  type AbilityCooldownHandle,
   type AbilityDefinition,
   type AbilityDefinitionSource,
   type AbilityEffectContext,
-  type AbilityEffectExecutor,
   type AbilityExecutionEventSink,
   type AbilityExecutionSnapshot,
+  type AbilityExecutorRegistry,
   type AbilityRequest,
   type AbilityRequestResult,
   type AbilityRejectionReason,
   type AbilityResourcePort,
   type AbilityStage,
   type AbilityStageTransition,
+  type AbilityStatCapture,
   type AbilityStatPort,
   type AbilityTargetValidator,
+  type CapturedAbilityStat,
+  type ResourcePaymentHandle,
+  type ResourceReservationHandle,
   type TriggerLimits,
-} from "./ability-contracts";
-import type { ContentId } from "./ids";
+} from "./ability-runtime-contracts";
+import type { ContentId, RuntimeEntityId } from "./ids";
 import type { RandomSource } from "./random";
 
-interface TriggerBudget {
-  remainingEffects: number;
-}
+type SettledCost =
+  | { readonly kind: "payment"; readonly handle: ResourcePaymentHandle }
+  | {
+      readonly kind: "reservation";
+      readonly handle: ResourceReservationHandle;
+    };
 
 interface ExecutionRecord {
   readonly executionId: number;
   readonly request: AbilityRequest;
   readonly definition: AbilityDefinition;
-  readonly capturedStats?: ReadonlyMap<ContentId, number>;
+  readonly capturedStats: readonly CapturedAbilityStat[];
   readonly history: AbilityStageTransition[];
-  readonly triggerBudget: TriggerBudget;
   readonly triggerPath: readonly ContentId[];
+  readonly settledCosts: readonly SettledCost[];
   stage: AbilityStage;
   stageElapsedTicks: number;
   lastTick: number;
-  cooldownStarted: boolean;
+  cooldown: AbilityCooldownHandle | undefined;
+}
+
+interface QueuedTrigger {
+  readonly request: AbilityRequest;
+  readonly triggerPath: readonly ContentId[];
 }
 
 export interface AbilityExecutionDependencies {
   readonly definitions: AbilityDefinitionSource;
   readonly resources: AbilityResourcePort;
-  readonly cooldowns: AbilityCooldownPort;
+  readonly cooldowns: import("./ability-runtime-contracts").AbilityCooldownPort;
   readonly stats: AbilityStatPort;
   readonly targets: AbilityTargetValidator;
   readonly events: AbilityExecutionEventSink;
   readonly random: RandomSource;
-  readonly executors: ReadonlyMap<ContentId, AbilityEffectExecutor>;
+  readonly executors: AbilityExecutorRegistry;
   readonly triggerLimits: TriggerLimits;
 }
 
@@ -59,18 +72,29 @@ function requireLimits(limits: TriggerLimits): void {
   if (
     !Number.isSafeInteger(limits.maximumDepth) ||
     limits.maximumDepth < 0 ||
-    !Number.isSafeInteger(limits.maximumEffects) ||
-    limits.maximumEffects < 1
+    !Number.isSafeInteger(limits.maximumEffectsPerTick) ||
+    limits.maximumEffectsPerTick < 1
   ) {
     throw new RangeError(
-      "Trigger limits require a non-negative depth and positive effect budget.",
+      "Trigger limits require a non-negative depth and positive per-tick effect budget.",
     );
   }
 }
 
+function executorKind(effect: AbilityDefinition["effects"][number]) {
+  if (effect.kind === "trigger-ability") return undefined;
+  return effect.kind === "custom"
+    ? effect.executorKind
+    : CORE_MODIFY_RESOURCE_EXECUTOR_ID;
+}
+
 export class AbilityExecutionEngine {
   private readonly executions = new Map<number, ExecutionRecord>();
+  private readonly triggerQueue: QueuedTrigger[] = [];
   private nextExecutionId = 1;
+  private currentTick: number | undefined;
+  private remainingEffects = 0;
+  private flushingTriggers = false;
 
   public constructor(
     private readonly dependencies: AbilityExecutionDependencies,
@@ -79,34 +103,40 @@ export class AbilityExecutionEngine {
   }
 
   public request(request: AbilityRequest): AbilityRequestResult {
-    requireTick(request.requestedAtTick);
-    return this.requestWithTriggerState(
-      request,
-      { remainingEffects: this.dependencies.triggerLimits.maximumEffects },
-      [],
-    );
+    this.enterTick(request.requestedAtTick);
+    const result = this.requestQueued(request, []);
+    this.flushTriggerQueue();
+    return result;
   }
 
   public advance(executionId: number, tick: number): AbilityExecutionSnapshot {
-    requireTick(tick);
+    this.enterTick(tick);
     const record = this.requireExecution(executionId);
     if (record.stage === "complete" || record.stage === "cancel") {
       throw new Error(`Execution ${executionId} is already terminal.`);
     }
     if (tick !== record.lastTick + 1) {
       throw new RangeError(
-        `Execution ${executionId} must advance exactly one fixed tick from ${record.lastTick}.`,
+        `Execution ${executionId} must advance once at current simulation tick ${tick}.`,
       );
     }
-    record.lastTick = tick;
-    record.stageElapsedTicks += 1;
-    this.drainFinishedStages(record, tick);
+    this.advanceOneTick(record, tick);
+    this.flushTriggerQueue();
     return this.snapshot(record);
   }
 
   public cancel(executionId: number, tick: number): AbilityExecutionSnapshot {
-    requireTick(tick);
+    this.enterTick(tick);
     const record = this.requireExecution(executionId);
+    if (record.lastTick === tick - 1) {
+      this.advanceOneTick(record, tick);
+      this.flushTriggerQueue();
+    }
+    if (record.lastTick !== tick) {
+      throw new RangeError(
+        `Execution ${executionId} is not coherent with current simulation tick ${tick}.`,
+      );
+    }
     if (
       record.stage !== "startup" &&
       record.stage !== "active" &&
@@ -121,36 +151,15 @@ export class AbilityExecutionEngine {
         `Ability "${record.definition.id}" does not allow cancellation during "${record.stage}".`,
       );
     }
-    if (tick < record.lastTick) {
-      throw new RangeError(
-        "Cancellation cannot move simulation time backwards.",
-      );
-    }
 
-    const refund = record.definition.cancellation.refund;
-    for (const cost of record.definition.costs) {
-      if (
-        refund === "all" ||
-        (refund === "reserved" && cost.settlement === "reserve")
-      ) {
-        this.dependencies.resources.credit(
-          record.request.sourceId,
-          cost.resourceId,
-          cost.amount,
-        );
-      }
-    }
+    this.settleCancellation(record);
     if (
-      record.cooldownStarted &&
+      record.cooldown !== undefined &&
       record.definition.cancellation.cooldown === "clear"
     ) {
-      this.dependencies.cooldowns.clear(
-        record.request.sourceId,
-        record.definition.id,
-      );
-      record.cooldownStarted = false;
+      this.dependencies.cooldowns.clear(record.cooldown);
+      record.cooldown = undefined;
     }
-    record.lastTick = tick;
     this.transition(record, "cancel", tick);
     return this.snapshot(record);
   }
@@ -160,9 +169,23 @@ export class AbilityExecutionEngine {
     return record === undefined ? undefined : this.snapshot(record);
   }
 
-  private requestWithTriggerState(
+  private enterTick(tick: number): void {
+    requireTick(tick);
+    if (this.currentTick === undefined || tick === this.currentTick + 1) {
+      this.currentTick = tick;
+      this.remainingEffects =
+        this.dependencies.triggerLimits.maximumEffectsPerTick;
+      return;
+    }
+    if (tick !== this.currentTick) {
+      throw new RangeError(
+        `Ability operation tick ${tick} must equal current tick ${this.currentTick} or its immediate successor.`,
+      );
+    }
+  }
+
+  private requestQueued(
     request: AbilityRequest,
-    triggerBudget: TriggerBudget,
     triggerPath: readonly ContentId[],
   ): AbilityRequestResult {
     const history: AbilityStageTransition[] = [
@@ -192,12 +215,38 @@ export class AbilityExecutionEngine {
       return this.reject(request, history, "target-invalid");
     }
     if (
-      definition.costs.some(
-        (cost) =>
+      (definition.statCaptures.some(({ subject }) => subject === "target") ||
+        definition.effects.some(
+          (effect) =>
+            effect.kind === "modify-resource" && effect.recipient === "target",
+        )) &&
+      request.target.kind !== "entity"
+    ) {
+      return this.reject(request, history, "target-invalid");
+    }
+    if (
+      definition.effects.some((effect) => {
+        const kind = executorKind(effect);
+        return kind !== undefined && !this.dependencies.executors.has(kind);
+      })
+    ) {
+      return this.reject(request, history, "executor-unavailable");
+    }
+
+    const aggregateCosts = new Map<ContentId, number>();
+    for (const cost of definition.costs) {
+      aggregateCosts.set(
+        cost.resourceId,
+        (aggregateCosts.get(cost.resourceId) ?? 0) + cost.amount,
+      );
+    }
+    if (
+      [...aggregateCosts].some(
+        ([resourceId, amount]) =>
           !this.dependencies.resources.canSpend(
             request.sourceId,
-            cost.resourceId,
-            cost.amount,
+            resourceId,
+            amount,
           ),
       )
     ) {
@@ -205,29 +254,34 @@ export class AbilityExecutionEngine {
     }
 
     history.push({ stage: "pay", tick: request.requestedAtTick });
-    for (const cost of definition.costs) {
-      this.dependencies.resources.debit(
-        request.sourceId,
-        cost.resourceId,
-        cost.amount,
-      );
-    }
-    const capturedStats =
-      definition.statPolicy === "snapshot"
-        ? new Map(
-            definition.capturedStatIds.map(
-              (statId) =>
-                [
-                  statId,
-                  this.dependencies.stats.read(
-                    request.sourceId,
-                    statId,
-                    request.requestedAtTick,
-                  ),
-                ] as const,
-            ),
-          )
-        : undefined;
+    const capturedStats = definition.statCaptures.map((capture) => ({
+      ...capture,
+      value: this.dependencies.stats.read(
+        this.entityFor(request, capture),
+        capture.statId,
+        request.requestedAtTick,
+      ),
+    }));
+    const settledCosts = definition.costs.map((cost): SettledCost => {
+      if (cost.settlement === "reserve") {
+        return {
+          kind: "reservation",
+          handle: this.dependencies.resources.reserve(
+            request.sourceId,
+            cost.resourceId,
+            cost.amount,
+          ),
+        };
+      }
+      return {
+        kind: "payment",
+        handle: this.dependencies.resources.pay(
+          request.sourceId,
+          cost.resourceId,
+          cost.amount,
+        ),
+      };
+    });
     const executionId = this.nextExecutionId;
     this.nextExecutionId += 1;
     const record: ExecutionRecord = {
@@ -235,13 +289,13 @@ export class AbilityExecutionEngine {
       request,
       definition,
       history,
-      triggerBudget,
       triggerPath: [...triggerPath, definition.id],
+      settledCosts,
+      capturedStats,
       stage: "pay",
       stageElapsedTicks: 0,
       lastTick: request.requestedAtTick,
-      cooldownStarted: false,
-      ...(capturedStats === undefined ? {} : { capturedStats }),
+      cooldown: undefined,
     };
     this.executions.set(executionId, record);
     if (definition.cooldown.startsOn === "pay") {
@@ -252,6 +306,12 @@ export class AbilityExecutionEngine {
     return { accepted: true, execution: this.snapshot(record) };
   }
 
+  private advanceOneTick(record: ExecutionRecord, tick: number): void {
+    record.lastTick = tick;
+    record.stageElapsedTicks += 1;
+    this.drainFinishedStages(record, tick);
+  }
+
   private drainFinishedStages(record: ExecutionRecord, tick: number): void {
     let changed = true;
     while (changed) {
@@ -260,10 +320,10 @@ export class AbilityExecutionEngine {
         record.stage === "startup" &&
         record.stageElapsedTicks >= record.definition.timing.startupTicks
       ) {
-        this.transition(record, "active", tick);
         if (record.definition.cooldown.startsOn === "active") {
           this.startCooldown(record, tick);
         }
+        this.transition(record, "active", tick);
         this.executeEffects(record, tick);
         changed = true;
       } else if (
@@ -276,10 +336,11 @@ export class AbilityExecutionEngine {
         record.stage === "recovery" &&
         record.stageElapsedTicks >= record.definition.timing.recoveryTicks
       ) {
-        this.transition(record, "complete", tick);
+        this.commitReservations(record);
         if (record.definition.cooldown.startsOn === "complete") {
           this.startCooldown(record, tick);
         }
+        this.transition(record, "complete", tick);
         changed = true;
       }
     }
@@ -287,35 +348,45 @@ export class AbilityExecutionEngine {
 
   private executeEffects(record: ExecutionRecord, tick: number): void {
     for (const [effectIndex, effect] of record.definition.effects.entries()) {
-      if (record.triggerBudget.remainingEffects === 0) {
+      if (this.remainingEffects === 0) {
         this.publishRejection(record, tick, "trigger-budget-exhausted");
         return;
       }
-      record.triggerBudget.remainingEffects -= 1;
+      this.remainingEffects -= 1;
       if (effect.kind === "trigger-ability") {
-        this.requestWithTriggerState(
-          {
+        this.triggerQueue.push({
+          request: {
             abilityId: effect.abilityId,
             sourceId: record.request.sourceId,
             target: record.request.target,
             requestedAtTick: tick,
           },
-          record.triggerBudget,
-          record.triggerPath,
-        );
+          triggerPath: record.triggerPath,
+        });
         continue;
       }
-      const executorId =
-        effect.kind === "custom"
-          ? effect.executorKind
-          : ("core:modify-resource" as ContentId);
-      const executor = this.dependencies.executors.get(executorId);
+      const kind = executorKind(effect);
+      const executor =
+        kind === undefined ? undefined : this.dependencies.executors.get(kind);
       if (executor === undefined) {
-        throw new Error(
-          `No ability effect executor is registered for "${executorId}".`,
-        );
+        throw new Error(`Validated executor "${kind}" became unavailable.`);
       }
       executor.execute(effect, this.effectContext(record, effectIndex, tick));
+    }
+  }
+
+  private flushTriggerQueue(): void {
+    if (this.flushingTriggers) return;
+    this.flushingTriggers = true;
+    try {
+      while (this.triggerQueue.length > 0) {
+        const queued = this.triggerQueue.shift();
+        if (queued !== undefined) {
+          this.requestQueued(queued.request, queued.triggerPath);
+        }
+      }
+    } finally {
+      this.flushingTriggers = false;
     }
   }
 
@@ -332,23 +403,63 @@ export class AbilityExecutionEngine {
       target: record.request.target,
       tick,
       random: this.dependencies.random,
-      readStat: (statId) => {
-        if (record.capturedStats !== undefined) {
-          const value = record.capturedStats.get(statId);
-          if (value === undefined) {
+      entity: (subject) => this.entityFor(record.request, { subject }),
+      readStat: (read) => {
+        if (read.policy === "snapshot") {
+          const captured = record.capturedStats.find(
+            (entry) =>
+              entry.subject === read.subject && entry.statId === read.statId,
+          );
+          if (captured === undefined) {
             throw new Error(
-              `Snapshot stat "${statId}" was not declared by "${record.definition.id}".`,
+              `Snapshot ${read.subject} stat "${read.statId}" was not declared by "${record.definition.id}".`,
             );
           }
-          return value;
+          return captured.value;
         }
         return this.dependencies.stats.read(
-          record.request.sourceId,
-          statId,
+          this.entityFor(record.request, read),
+          read.statId,
           tick,
         );
       },
     };
+  }
+
+  private entityFor(
+    request: AbilityRequest,
+    selector: Pick<AbilityStatCapture, "subject">,
+  ): RuntimeEntityId {
+    if (selector.subject === "source") return request.sourceId;
+    if (request.target.kind !== "entity") {
+      throw new Error("Target entity selector requires an entity target.");
+    }
+    return request.target.entityId;
+  }
+
+  private settleCancellation(record: ExecutionRecord): void {
+    for (const settled of record.settledCosts) {
+      if (settled.kind === "reservation") {
+        if (
+          record.definition.cancellation.refund === "reserved" ||
+          record.definition.cancellation.refund === "all"
+        ) {
+          this.dependencies.resources.release(settled.handle);
+        } else {
+          this.dependencies.resources.commit(settled.handle);
+        }
+      } else if (record.definition.cancellation.refund === "all") {
+        this.dependencies.resources.refund(settled.handle);
+      }
+    }
+  }
+
+  private commitReservations(record: ExecutionRecord): void {
+    for (const settled of record.settledCosts) {
+      if (settled.kind === "reservation") {
+        this.dependencies.resources.commit(settled.handle);
+      }
+    }
   }
 
   private transition(
@@ -368,13 +479,12 @@ export class AbilityExecutionEngine {
   }
 
   private startCooldown(record: ExecutionRecord, tick: number): void {
-    this.dependencies.cooldowns.start(
+    record.cooldown = this.dependencies.cooldowns.start(
       record.request.sourceId,
       record.definition.id,
       tick,
       record.definition.cooldown.durationTicks,
     );
-    record.cooldownStarted = true;
   }
 
   private reject(
@@ -416,9 +526,7 @@ export class AbilityExecutionEngine {
       stage: record.stage,
       stageElapsedTicks: record.stageElapsedTicks,
       history: [...record.history],
-      ...(record.capturedStats === undefined
-        ? {}
-        : { capturedStats: new Map(record.capturedStats) }),
+      capturedStats: record.capturedStats.map((entry) => ({ ...entry })),
     };
   }
 
