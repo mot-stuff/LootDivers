@@ -111,11 +111,11 @@ Goal: create the basic ARPG loot loop.
 Features include item definitions, inventory, equipment, rarity, affixes, loot
 drops, stat integration, readable tooltips, and Ability Stone slotting.
 
-**Implementation candidate:** three equipment slots, a 12-slot inventory,
+**Status:** Complete. Independent Phase 3 QA passed on 2026-09-04 at `fbf65b4`.
+The accepted loop includes three equipment slots, a 12-slot inventory,
 common/magic/rare generation, deterministic enemy drops and pickup,
-equipment-derived health/damage, and configurable LMB/Q/E/F assignments are
-implemented. Gold and flask mechanics remain deferred. Independent QA is
-required before Phase 3 is complete.
+equipment-derived health/damage, readable tooltips, Ability Stone creation, and
+configurable LMB/Q/E/F assignments. Gold and flask mechanics remain deferred.
 
 ---
 
