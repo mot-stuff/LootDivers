@@ -43,6 +43,7 @@ interface ExecutionRecord {
   stageElapsedTicks: number;
   lastTick: number;
   cooldown: AbilityCooldownHandle | undefined;
+  workReserved: boolean;
 }
 
 interface QueuedTrigger {
@@ -171,7 +172,7 @@ export class AbilityExecutionEngine {
 
   private enterTick(tick: number): void {
     requireTick(tick);
-    if (this.currentTick === undefined || tick === this.currentTick + 1) {
+    if (this.currentTick === undefined || tick > this.currentTick) {
       this.currentTick = tick;
       this.remainingEffects =
         this.dependencies.triggerLimits.maximumEffectsPerTick;
@@ -179,7 +180,7 @@ export class AbilityExecutionEngine {
     }
     if (tick !== this.currentTick) {
       throw new RangeError(
-        `Ability operation tick ${tick} must equal current tick ${this.currentTick} or its immediate successor.`,
+        `Ability operation tick ${tick} cannot precede current tick ${this.currentTick}.`,
       );
     }
   }
@@ -252,6 +253,13 @@ export class AbilityExecutionEngine {
     ) {
       return this.reject(request, history, "insufficient-resource");
     }
+    const workReserved =
+      definition.timing.startupTicks === 0
+        ? this.reserveEffectWork(definition)
+        : false;
+    if (definition.timing.startupTicks === 0 && !workReserved) {
+      return this.reject(request, history, "trigger-budget-exhausted");
+    }
 
     history.push({ stage: "pay", tick: request.requestedAtTick });
     const capturedStats = definition.statCaptures.map((capture) => ({
@@ -296,6 +304,7 @@ export class AbilityExecutionEngine {
       stageElapsedTicks: 0,
       lastTick: request.requestedAtTick,
       cooldown: undefined,
+      workReserved,
     };
     this.executions.set(executionId, record);
     if (definition.cooldown.startsOn === "pay") {
@@ -320,11 +329,21 @@ export class AbilityExecutionEngine {
         record.stage === "startup" &&
         record.stageElapsedTicks >= record.definition.timing.startupTicks
       ) {
+        if (
+          !record.workReserved &&
+          !this.reserveEffectWork(record.definition)
+        ) {
+          this.abortForBudget(record, tick);
+          return;
+        }
+        record.workReserved = true;
         if (record.definition.cooldown.startsOn === "active") {
           this.startCooldown(record, tick);
         }
         this.transition(record, "active", tick);
+        if (this.executions.get(record.executionId)?.stage !== "active") return;
         this.executeEffects(record, tick);
+        if (this.executions.get(record.executionId)?.stage !== "active") return;
         changed = true;
       } else if (
         record.stage === "active" &&
@@ -348,11 +367,6 @@ export class AbilityExecutionEngine {
 
   private executeEffects(record: ExecutionRecord, tick: number): void {
     for (const [effectIndex, effect] of record.definition.effects.entries()) {
-      if (this.remainingEffects === 0) {
-        this.publishRejection(record, tick, "trigger-budget-exhausted");
-        return;
-      }
-      this.remainingEffects -= 1;
       if (effect.kind === "trigger-ability") {
         this.triggerQueue.push({
           request: {
@@ -373,6 +387,28 @@ export class AbilityExecutionEngine {
       }
       executor.execute(effect, this.effectContext(record, effectIndex, tick));
     }
+  }
+
+  private reserveEffectWork(definition: AbilityDefinition): boolean {
+    if (definition.effects.length > this.remainingEffects) return false;
+    this.remainingEffects -= definition.effects.length;
+    return true;
+  }
+
+  private abortForBudget(record: ExecutionRecord, tick: number): void {
+    for (const settled of record.settledCosts) {
+      if (settled.kind === "reservation") {
+        this.dependencies.resources.release(settled.handle);
+      } else {
+        this.dependencies.resources.refund(settled.handle);
+      }
+    }
+    if (record.cooldown !== undefined) {
+      this.dependencies.cooldowns.clear(record.cooldown);
+      record.cooldown = undefined;
+    }
+    this.publishRejection(record, tick, "trigger-budget-exhausted");
+    this.transition(record, "cancel", tick);
   }
 
   private flushTriggerQueue(): void {

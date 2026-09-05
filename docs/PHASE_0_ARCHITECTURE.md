@@ -758,6 +758,15 @@ simulation-tick work budget remain bounded. Deterministic tests cover each
 review finding. DEC-013 remains unchanged; independent acceptance is still
 pending.
 
+**Systems Designer second remediation record (2026-09-04):** Runtime tick
+admission now accepts arbitrary monotonic forward idle gaps, resets aggregate
+work once per newly observed tick, and rejects backward time. Activations reserve
+their complete effect batch atomically: immediate requests reject before
+settlement, while delayed activation failures terminally cancel, refund/release
+all settlements, and execute no effects. Observable active transitions now
+re-check terminal state, so synchronous cancellation cannot execute effects or
+fall through to completion. Regression tests reproduce all three review probes.
+
 ### TASK-P0-010 — Establish persistence foundation
 
 **Owner:** Gameplay Engineer

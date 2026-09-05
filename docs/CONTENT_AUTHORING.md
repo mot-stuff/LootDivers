@@ -128,3 +128,9 @@ costs cannot exceed their registered resource maximum. Nested trigger requests
 are queued FIFO after the parent's ordered effects, independent of child phase
 duration. The checked-in `fixture:` abilities and executors are contract
 evidence only and must not become gameplay content.
+
+Each activation atomically reserves its complete ordered effect count. Immediate
+activations reject before resource settlement when the current tick lacks work;
+delayed activations that cannot reserve are explicitly cancelled with payments
+refunded and reservations released. Forward idle tick gaps start one fresh
+budget for the observed tick; backward operations fail.

@@ -303,7 +303,7 @@ describe("ability runtime remediation contracts", () => {
     });
     const second = definition("fixture:budget-second", {
       timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
-      costs: [],
+      costs: [{ resourceId: mana, amount: 20, settlement: "reserve" }],
     });
     const source = new SequentialRuntimeEntityIds().next();
     const fixture = harness([first, second], {
@@ -311,16 +311,151 @@ describe("ability runtime remediation contracts", () => {
       maximumEffectsPerTick: 1,
     });
 
-    fixture.engine.request(selfRequest(first.id, source));
-    fixture.engine.request(selfRequest(second.id, source));
+    const firstResult = fixture.engine.request(selfRequest(first.id, source));
+    const secondResult = fixture.engine.request(selfRequest(second.id, source));
 
+    expect(firstResult).toMatchObject({ accepted: true });
+    expect(secondResult).toMatchObject({
+      accepted: false,
+      reason: "trigger-budget-exhausted",
+    });
     expect(fixture.effectLog).toEqual(["modify"]);
+    expect(fixture.resources.operations).toEqual([]);
     expect(fixture.events).toContainEqual(
       expect.objectContaining({
         abilityId: second.id,
         reason: "trigger-budget-exhausted",
       }),
     );
+  });
+
+  it("allows forward idle tick gaps while rejecting backward time", () => {
+    const ability = definition("fixture:idle-gap", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+      effects: [],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([ability]);
+
+    expect(
+      fixture.engine.request(selfRequest(ability.id, source, 0)),
+    ).toMatchObject({ accepted: true });
+    expect(
+      fixture.engine.request(selfRequest(ability.id, source, 10)),
+    ).toMatchObject({ accepted: true });
+    expect(() =>
+      fixture.engine.request(selfRequest(ability.id, source, 9)),
+    ).toThrow(/cannot precede current tick 10/);
+  });
+
+  it("rejects a queued child before settlement when aggregate work is exhausted", () => {
+    const childId = contentId("fixture:budget-child");
+    const parent = definition("fixture:budget-parent", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [{ resourceId: mana, amount: 5, settlement: "reserve" }],
+      statCaptures: [],
+      effects: [{ kind: "trigger-ability", abilityId: childId }],
+    });
+    const child = definition("fixture:budget-child", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      costs: [{ resourceId: mana, amount: 30, settlement: "reserve" }],
+      statCaptures: [],
+      effects: [
+        {
+          kind: "modify-resource",
+          resourceId: mana,
+          amount: 1,
+          recipient: "source",
+        },
+      ],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([parent, child], {
+      maximumDepth: 4,
+      maximumEffectsPerTick: 1,
+    });
+
+    expect(
+      fixture.engine.request(selfRequest(parent.id, source)),
+    ).toMatchObject({ accepted: true, execution: { stage: "complete" } });
+    expect(fixture.resources.operations).toEqual(["reserve:1:5", "commit:1"]);
+    expect(fixture.events).toContainEqual(
+      expect.objectContaining({
+        abilityId: child.id,
+        reason: "trigger-budget-exhausted",
+      }),
+    );
+  });
+
+  it("rolls back and cancels a delayed activation that cannot reserve work", () => {
+    const blocking = definition("fixture:activation-blocker", {
+      timing: { startupTicks: 1, activeTicks: 0, recoveryTicks: 0 },
+      costs: [],
+    });
+    const rejected = definition("fixture:activation-rejected", {
+      timing: { startupTicks: 1, activeTicks: 0, recoveryTicks: 0 },
+      costs: [{ resourceId: mana, amount: 25, settlement: "reserve" }],
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([blocking, rejected], {
+      maximumDepth: 4,
+      maximumEffectsPerTick: 1,
+    });
+    const first = fixture.engine.request(selfRequest(blocking.id, source));
+    const second = fixture.engine.request(selfRequest(rejected.id, source));
+    if (!first.accepted || !second.accepted)
+      throw new Error("fixture rejected");
+
+    fixture.engine.advance(first.execution.executionId, 1);
+    const cancelled = fixture.engine.advance(second.execution.executionId, 1);
+
+    expect(cancelled.stage).toBe("cancel");
+    expect(fixture.resources.operations).toEqual(["reserve:1:25", "release:1"]);
+    expect(fixture.resources.balance).toBe(100);
+    expect(fixture.events).toContainEqual(
+      expect.objectContaining({
+        abilityId: rejected.id,
+        reason: "trigger-budget-exhausted",
+      }),
+    );
+    expect(
+      fixture.events.some(
+        (event) => event.abilityId === rejected.id && event.stage === "active",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not execute or complete after an active observer cancels reentrantly", () => {
+    const ability = definition("fixture:reentrant-cancel", {
+      timing: { startupTicks: 0, activeTicks: 0, recoveryTicks: 0 },
+      cancellation: {
+        allowedDuring: ["active"],
+        refund: "all",
+        cooldown: "clear",
+      },
+    });
+    const source = new SequentialRuntimeEntityIds().next();
+    const fixture = harness([ability]);
+    fixture.setEventHook((event) => {
+      if (event.stage === "active") {
+        fixture.engine.cancel(event.executionId, event.tick);
+      }
+    });
+
+    const result = fixture.engine.request(selfRequest(ability.id, source));
+
+    expect(result).toMatchObject({
+      accepted: true,
+      execution: { stage: "cancel" },
+    });
+    expect(fixture.effectLog).toEqual([]);
+    expect(fixture.resources.operations).toEqual(["pay:1:10", "refund:1"]);
+    expect(
+      fixture.events.some(
+        (event) => event.abilityId === ability.id && event.stage === "complete",
+      ),
+    ).toBe(false);
   });
 
   it("retains runtime trigger cycle and chain-depth bounds", () => {
