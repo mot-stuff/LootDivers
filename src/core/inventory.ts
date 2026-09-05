@@ -1,7 +1,7 @@
 import type { AbilityStoneStack, ItemInstance } from "./item-generation";
 import type { PersistentInstanceId } from "./ids";
 
-export const INVENTORY_SLOT_COUNT = 12;
+export const INVENTORY_SLOT_COUNT = 48;
 export const ABILITY_STONE_STACK_LIMIT = 9;
 
 export type InventoryAddFailure = "inventory-full" | "duplicate-instance";

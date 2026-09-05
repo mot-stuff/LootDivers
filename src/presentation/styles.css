@@ -118,14 +118,21 @@ body.combat-mode #app,
   font-size: 0.85rem;
 }
 
-.combat-vitals-hud {
+.combat-vitals-stack {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   right: 1rem;
   bottom: 1rem;
   display: grid;
-  gap: 0.45rem;
+  gap: 0.4rem;
   width: min(14rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.combat-vitals-hud {
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
   padding: 0.55rem 0.65rem;
   border: 1px solid rgb(196 205 217 / 55%);
   border-radius: 0.45rem;
@@ -354,13 +361,11 @@ body.combat-mode #app,
 }
 
 .inventory-menu-toggle {
-  position: absolute;
-  z-index: 3;
-  top: 1rem;
-  right: 1rem;
+  justify-self: end;
   min-height: 2.4rem;
   padding: 0.45rem 0.7rem;
   background: rgb(8 17 31 / 92%);
+  pointer-events: auto;
 }
 
 .inventory-menu-toggle kbd,
@@ -434,11 +439,18 @@ body.combat-mode #app,
   overflow: auto;
 }
 
+.inventory-grid-scroll {
+  overflow-y: auto;
+  max-height: min(32rem, 58vh);
+  margin-bottom: 0.7rem;
+  padding-right: 0.25rem;
+}
+
 .inventory-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin: 0 0 0.7rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -446,7 +458,7 @@ body.combat-mode #app,
 .inventory-slot {
   position: relative;
   width: 100%;
-  min-height: 4.5rem;
+  min-height: 3.6rem;
   padding: 0.35rem;
   overflow: hidden;
   border-color: #46617e;
@@ -734,31 +746,6 @@ body.combat-mode #app,
   text-align: center;
 }
 
-.character-summary dl {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin: 0;
-}
-
-.character-summary dl div {
-  min-width: 8rem;
-  padding: 0.55rem;
-  border: 1px solid #29405e;
-  border-radius: 0.35rem;
-  background: #101a2b;
-}
-
-.character-summary dt {
-  color: #91a8c6;
-  font-size: 0.68rem;
-}
-
-.character-summary dd {
-  margin: 0.15rem 0 0;
-  font-weight: 800;
-}
-
 .stone-choice {
   padding: 0.75rem;
   border: 1px solid #7c6bb0;
@@ -826,7 +813,7 @@ body.combat-mode #app,
 }
 
 @media (max-width: 700px) {
-  .combat-vitals-hud {
+  .combat-vitals-stack {
     right: 0.5rem;
     bottom: 0.5rem;
     width: min(11.5rem, calc(100vw - 1rem));
@@ -863,9 +850,8 @@ body.combat-mode #app,
     text-overflow: ellipsis;
   }
 
-  .inventory-menu-toggle {
-    top: 0.5rem;
-    right: 0.5rem;
+  .inventory-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .item-menu-layout {
@@ -883,7 +869,7 @@ body.combat-mode #app,
 }
 
 @media (max-width: 420px) {
-  .combat-vitals-hud {
+  .combat-vitals-stack {
     bottom: 8.5rem;
   }
 

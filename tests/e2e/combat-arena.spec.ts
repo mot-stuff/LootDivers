@@ -568,6 +568,8 @@ for (const viewport of [
     );
 
     const hud = page.getByTestId("combat-vitals-hud");
+    const inventoryToggle = page.locator(".inventory-menu-toggle");
+    const stack = page.getByTestId("combat-vitals-stack");
     const rows = hud.locator(":scope > .combat-vitals-row");
     const labels = hud.locator(".combat-vitals-label");
     await expect(hud).toHaveCount(1);
@@ -608,6 +610,16 @@ for (const viewport of [
     expect((hudBox?.y ?? 0) + (hudBox?.height ?? 0)).toBeLessThanOrEqual(
       viewport.height,
     );
+    await expect(stack).toBeVisible();
+    await expect(inventoryToggle).toBeVisible();
+    const toggleBox = await inventoryToggle.boundingBox();
+    expect(toggleBox).not.toBeNull();
+    expect((toggleBox?.y ?? 0) + (toggleBox?.height ?? 0)).toBeLessThanOrEqual(
+      hudBox?.y ?? 0,
+    );
+    expect(
+      viewport.width - ((toggleBox?.x ?? 0) + (toggleBox?.width ?? 0)),
+    ).toBeGreaterThanOrEqual(viewport.width <= 700 ? 6 : 14);
 
     const actionBar = page.getByTestId("combat-action-hud");
     await expect(actionBar).toBeVisible();

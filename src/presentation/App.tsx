@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 
-import { FOUNDATION_ID, slotAcceptsKind } from "../core";
+import { FOUNDATION_ID, INVENTORY_SLOT_COUNT, slotAcceptsKind } from "../core";
 import type {
   FixtureSaveState,
   PersistenceStatus,
@@ -40,7 +40,7 @@ interface CombatVitalsProps {
 
 const EMPTY_ITEM_HUD: InventoryHudReadModel = {
   revision: 0,
-  inventorySlots: Array.from({ length: 12 }, (_, index) => ({
+  inventorySlots: Array.from({ length: INVENTORY_SLOT_COUNT }, (_, index) => ({
     index,
     item: null,
   })),
@@ -232,14 +232,17 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
   const [selection, setSelection] = useState<ItemSelection | null>(null);
   const [drag, setDrag] = useState<ItemDragState | null>(null);
   const item = selectedItem(model, selection);
-  const inventorySlots = Array.from({ length: 12 }, (_, index) => {
-    return (
-      model.inventorySlots.find((slot) => slot.index === index) ?? {
-        index,
-        item: null,
-      }
-    );
-  });
+  const inventorySlots = Array.from(
+    { length: INVENTORY_SLOT_COUNT },
+    (_, index) => {
+      return (
+        model.inventorySlots.find((slot) => slot.index === index) ?? {
+          index,
+          item: null,
+        }
+      );
+    },
+  );
   const selectedInventoryIndex =
     selection?.kind === "inventory" ? selection.index : null;
   const stoneChoices = model.abilityChoices.filter(
@@ -370,48 +373,53 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
           data-drop-inventory
         >
           <h3 id="inventory-slots-title">Inventory</h3>
-          <ol class="inventory-grid" aria-label="12 inventory slots">
-            {inventorySlots.map((slot) => (
-              <li key={slot.index}>
-                <button
-                  type="button"
-                  class={
-                    selection?.kind === "inventory" &&
-                    selection.index === slot.index
-                      ? "inventory-slot selected"
-                      : "inventory-slot"
-                  }
-                  data-rarity={slot.item?.rarity}
-                  aria-label={
-                    slot.item === null
-                      ? `Inventory slot ${slot.index + 1}, empty`
-                      : `Inventory slot ${slot.index + 1}, ${slot.item.displayName}`
-                  }
-                  onClick={() =>
-                    setSelection({ kind: "inventory", index: slot.index })
-                  }
-                  onFocus={() =>
-                    setSelection({ kind: "inventory", index: slot.index })
-                  }
-                  onPointerDown={(event) => {
-                    if (slot.item?.kind === "equipment") {
-                      beginDrag(
-                        event,
-                        { kind: "inventory", index: slot.index },
-                        slot.item,
-                      );
+          <div class="inventory-grid-scroll">
+            <ol
+              class="inventory-grid"
+              aria-label={`${INVENTORY_SLOT_COUNT} inventory slots`}
+            >
+              {inventorySlots.map((slot) => (
+                <li key={slot.index}>
+                  <button
+                    type="button"
+                    class={
+                      selection?.kind === "inventory" &&
+                      selection.index === slot.index
+                        ? "inventory-slot selected"
+                        : "inventory-slot"
                     }
-                  }}
-                >
-                  <span>{slot.item?.displayName ?? "Empty"}</span>
-                  {slot.item?.kind === "ability-stone" &&
-                    slot.item.quantity > 1 && (
-                      <small>×{slot.item.quantity}</small>
-                    )}
-                </button>
-              </li>
-            ))}
-          </ol>
+                    data-rarity={slot.item?.rarity}
+                    aria-label={
+                      slot.item === null
+                        ? `Inventory slot ${slot.index + 1}, empty`
+                        : `Inventory slot ${slot.index + 1}, ${slot.item.displayName}`
+                    }
+                    onClick={() =>
+                      setSelection({ kind: "inventory", index: slot.index })
+                    }
+                    onFocus={() =>
+                      setSelection({ kind: "inventory", index: slot.index })
+                    }
+                    onPointerDown={(event) => {
+                      if (slot.item?.kind === "equipment") {
+                        beginDrag(
+                          event,
+                          { kind: "inventory", index: slot.index },
+                          slot.item,
+                        );
+                      }
+                    }}
+                  >
+                    <span>{slot.item?.displayName ?? "Empty"}</span>
+                    {slot.item?.kind === "ability-stone" &&
+                      slot.item.quantity > 1 && (
+                        <small>×{slot.item.quantity}</small>
+                      )}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </div>
           {selection?.kind === "inventory" &&
             item?.kind === "equipment" &&
             (item.slotKind === "ring" ? (
@@ -517,23 +525,6 @@ function ItemMenu({ model, onClose, onCommand }: ItemMenuProps) {
         </section>
 
         <ItemTooltip item={item} />
-
-        <section
-          class="character-summary"
-          aria-labelledby="character-summary-title"
-        >
-          <h3 id="character-summary-title">Character</h3>
-          <dl>
-            <div>
-              <dt>Maximum health</dt>
-              <dd>{model.playerMaximumHealth}</dd>
-            </div>
-            <div>
-              <dt>Outgoing damage</dt>
-              <dd>{model.outgoingAbilityDamagePercent}%</dd>
-            </div>
-          </dl>
-        </section>
 
         {item?.kind === "ability-stone" && selectedInventoryIndex !== null && (
           <section class="stone-choice" aria-labelledby="stone-choice-title">
@@ -1092,25 +1083,27 @@ export function App({
         </div>
       </section>
 
-      {showCombatPrototype && <CombatVitals model={combatHud} />}
       {showCombatPrototype && <CombatActionBar model={combatHud} />}
       {showCombatPrototype && (
-        <button
-          type="button"
-          class="inventory-menu-toggle"
-          aria-expanded={itemMenuOpen}
-          aria-controls="inventory-menu"
-          aria-keyshortcuts="I"
-          onClick={() => {
-            if (itemMenuOpen) {
-              closeItemMenu();
-            } else {
-              setItemMenuOpen(true);
-            }
-          }}
-        >
-          Inventory <kbd>I</kbd>
-        </button>
+        <div class="combat-vitals-stack" data-testid="combat-vitals-stack">
+          <button
+            type="button"
+            class="inventory-menu-toggle"
+            aria-expanded={itemMenuOpen}
+            aria-controls="inventory-menu"
+            aria-keyshortcuts="I"
+            onClick={() => {
+              if (itemMenuOpen) {
+                closeItemMenu();
+              } else {
+                setItemMenuOpen(true);
+              }
+            }}
+          >
+            Inventory <kbd>I</kbd>
+          </button>
+          <CombatVitals model={combatHud} />
+        </div>
       )}
       {showCombatPrototype && itemMenuOpen && (
         <ItemMenu

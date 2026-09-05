@@ -13,7 +13,10 @@ import {
   WINTER_PULSE_ID,
   createAbilityStoneStack,
   definitionById,
+  MAXIMUM_HEALTH_STAT_ID,
+  applyOutgoingAbilityDamage,
   generateEquipmentItem,
+  modifiersForEquipment,
   persistentInstanceId,
 } from "../../src/core";
 
@@ -755,21 +758,21 @@ describe("CombatArenaSimulation", () => {
         abilityId: BASIC_CLEAVE_ID,
         target: undefined,
         startupTicks: 5,
-        expectedDamage: 26,
+        baseDamage: 25,
         enemyX: 690,
       },
       {
         abilityId: CINDER_DART_ID,
         target: undefined,
         startupTicks: 22,
-        expectedDamage: 31,
+        baseDamage: 30,
         enemyX: 750,
       },
       {
         abilityId: WINTER_PULSE_ID,
         target: { kind: "point" as const, x: 750, y: 400 },
         startupTicks: 12,
-        expectedDamage: 21,
+        baseDamage: 20,
         enemyX: 750,
       },
     ];
@@ -785,13 +788,15 @@ describe("CombatArenaSimulation", () => {
         },
       });
       equipCommonWeapon(simulation);
+      const expectedDamage = applyOutgoingAbilityDamage(
+        testCase.baseDamage,
+        simulation.characterItemLoadout().stats,
+      );
       expect(
         simulation.requestAbility(testCase.abilityId, testCase.target).accepted,
       ).toBe(true);
       step(simulation, testCase.startupTicks);
-      expect(simulation.diagnostics().enemy.health).toBe(
-        100 - testCase.expectedDamage,
-      );
+      expect(simulation.diagnostics().enemy.health).toBe(100 - expectedDamage);
     }
   });
 
@@ -805,21 +810,29 @@ describe("CombatArenaSimulation", () => {
     });
     simulation.addCharacterItem(chest);
     simulation.applyPlayerDamage({ amount: 30, sourceId: "enemy" });
+    const chestHealth = modifiersForEquipment(chest)
+      .filter(
+        (modifier) =>
+          modifier.statId === MAXIMUM_HEALTH_STAT_ID &&
+          modifier.operation === "flat",
+      )
+      .reduce((total, modifier) => total + modifier.value, 0);
+    const equippedMax = 100 + chestHealth;
 
     expect(simulation.equipCharacterItem(0)).toEqual({ accepted: true });
     expect(simulation.diagnostics()).toMatchObject({
-      playerHealth: 80,
-      playerMaxHealth: 110,
+      playerHealth: 70 + chestHealth,
+      playerMaxHealth: equippedMax,
     });
     expect(simulation.characterItemLoadout()).toMatchObject({
       equipment: { chest },
-      stats: { maximumHealth: 110 },
+      stats: { maximumHealth: equippedMax },
     });
 
     simulation.reset();
     expect(simulation.diagnostics()).toMatchObject({
-      playerHealth: 110,
-      playerMaxHealth: 110,
+      playerHealth: equippedMax,
+      playerMaxHealth: equippedMax,
     });
     expect(simulation.unequipCharacterItem("chest")).toEqual({
       accepted: true,
@@ -840,13 +853,21 @@ describe("CombatArenaSimulation", () => {
       },
     });
     equipCommonWeapon(simulation);
+    const focusedDamage = Math.floor(
+      30 *
+        simulation.characterItemLoadout().stats
+          .outgoingAbilityDamageMultiplier *
+        1.2,
+    );
 
     expect(simulation.requestAbility(DEFIANT_SIGNAL_ID).accepted).toBe(true);
     step(simulation, 15);
     expect(simulation.requestAbility(CINDER_DART_ID).accepted).toBe(true);
     step(simulation, 22);
 
-    expect(simulation.diagnostics().enemy.health).toBe(13);
+    expect(simulation.diagnostics().enemy.health).toBe(
+      DEFAULT_COMBAT_ARENA_CONFIG.enemy.maxHealth - focusedDamage,
+    );
     expect(
       simulation
         .drainEvents()
@@ -855,6 +876,6 @@ describe("CombatArenaSimulation", () => {
             event.type === "damage-applied" &&
             event.targetId === DEFAULT_COMBAT_ARENA_CONFIG.enemy.id,
         ),
-    ).toContainEqual(expect.objectContaining({ amount: 37 }));
+    ).toContainEqual(expect.objectContaining({ amount: focusedDamage }));
   });
 });

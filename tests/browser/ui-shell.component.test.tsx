@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { installKeyboardCapture } from "../../src/adapters/browser/keyboard-capture";
 import { createReadModelChannel } from "../../src/adapters/ui/read-model-channel";
+import { INVENTORY_SLOT_COUNT } from "../../src/core";
 import { App } from "../../src/presentation/App";
 import type {
   CombatHudReadModel,
@@ -771,7 +772,8 @@ describe("technical UI shell component", () => {
 
       expect(
         container.querySelectorAll(".inventory-grid .inventory-slot"),
-      ).toHaveLength(12);
+      ).toHaveLength(INVENTORY_SLOT_COUNT);
+      expect(container.querySelector(".inventory-grid-scroll")).not.toBeNull();
       expect(
         container.querySelectorAll(".paper-doll .equipment-slot"),
       ).toHaveLength(9);
@@ -792,8 +794,9 @@ describe("technical UI shell component", () => {
         "ring-1",
         "ring-2",
       ]);
-      expect(container.textContent).toContain("Maximum health124");
-      expect(container.textContent).toContain("Outgoing damage112%");
+      expect(container.textContent).not.toContain("Character");
+      expect(container.textContent).not.toContain("Maximum health");
+      expect(container.textContent).not.toContain("Outgoing damage");
 
       const cleaver = container.querySelector<HTMLButtonElement>(
         '[aria-label*="Tempered Worn Cleaver"]',

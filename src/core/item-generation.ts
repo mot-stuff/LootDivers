@@ -48,7 +48,7 @@ export interface AffixCountRange {
 export const AFFIX_COUNTS_BY_RARITY: Readonly<
   Record<GeneratableItemRarity, AffixCountRange>
 > = {
-  common: { minimum: 0, maximum: 0 },
+  common: { minimum: 1, maximum: 1 },
   magic: { minimum: 1, maximum: 2 },
   rare: { minimum: 3, maximum: 4 },
 };

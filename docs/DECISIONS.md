@@ -1427,3 +1427,49 @@ DEC-019 remains the governing Phase 3 item architecture; this decision extends
 its scope without moving authority. DEC-010/DEC-013 simulation and ability
 rules are unchanged. DEC-011 canonical content and DEC-014 persistence
 directions are unchanged.
+
+---
+
+# DEC-021
+
+### Status
+
+Accepted for the Phase 3 inventory-capacity and common-affix follow-up.
+
+### Date
+
+2026-09-05
+
+### Decision
+
+Increase inventory capacity to 48 scrollable slots, give Common equipment
+exactly one rolled affix, move the inventory toggle above the HP/MP/XP
+vitals, and remove the inventory-screen Character summary.
+
+This supersedes the DEC-019/DEC-020 12-slot capacity and the rule that Common
+items roll no affixes. Magic remains 1–2 affixes and Rare remains 3–4.
+
+### Why
+
+The 12-slot bag filled immediately in play, Common drops could appear with no
+stats at all, and the Character block belongs on a later dedicated character
+screen rather than inside inventory.
+
+### Tradeoffs
+
+- A 48-slot bag is still a prototype bound, not unlimited storage.
+- Common and Magic can both roll a single affix; rarity still distinguishes
+  Magic's chance at a second affix and its blue presentation.
+- Character-derived health and damage totals are no longer shown in the
+  inventory menu until the Phase 4 character screen exists.
+
+### Systems Affected
+
+- Inventory capacity and item generation
+- Preact inventory/HUD layout
+- docs/ITEMIZATION.md and docs/ROADMAP.md
+
+### Relationship to Earlier Decisions
+
+DEC-019 and DEC-020 remain the governing Phase 3 architecture except where
+this decision changes inventory size and Common affix count.

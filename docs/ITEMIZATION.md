@@ -12,11 +12,11 @@ Loot should create interesting decisions rather than only larger numbers.
 
 Phase 3 proves a focused loot loop rather than the final item model:
 
-- a 12-slot inventory;
+- a 48-slot scrollable inventory;
 - nine equipment slots: Helmet, Chest, Amulet, Belt, Boots, Main Hand,
   Offhand, Ring 1, and Ring 2;
 - non-stackable equipment and Ability Stone stacks of up to nine;
-- Common equipment with no affixes, Magic equipment with one or two affixes,
+- Common equipment with one affix, Magic equipment with one or two affixes,
   and Rare equipment with three or four distinct legal affixes;
 - one deterministic equipment drop per enemy kill and one guaranteed Ability
   Stone on the first kill of a run;

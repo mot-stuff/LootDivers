@@ -44,6 +44,21 @@ function equipment(
   });
 }
 
+function expectedEquipmentStats(
+  ...items: ReturnType<typeof generateEquipmentItem>[]
+) {
+  return items.reduce(
+    (stats, item) => {
+      for (const modifier of modifiersForEquipment(item)) {
+        if (modifier.operation === "flat") stats.health += modifier.value;
+        else stats.damage += modifier.value;
+      }
+      return stats;
+    },
+    { health: 100, damage: 10_000 },
+  );
+}
+
 describe("Phase 3 item generation", () => {
   it("repeats the complete generated result, including tiers, for a seed", () => {
     const options = {
@@ -136,6 +151,16 @@ describe("Phase 3 item generation", () => {
     }
   });
 
+  it("gives common equipment exactly one rolled affix", () => {
+    for (const base of EQUIPMENT_BASE_CATALOG) {
+      const item = equipment(7, base.id, "common", 7);
+      expect(item.affixes).toHaveLength(1);
+      expect(modifiersForEquipment(item).length).toBe(
+        base.baseModifiers.length + 1,
+      );
+    }
+  });
+
   it("rejects reserved unique rarity in generation and validation", () => {
     expect(() =>
       generateEquipmentItem({
@@ -215,7 +240,7 @@ describe("Phase 3 inventory and equipment", () => {
     });
     expect(
       inventory.slots().filter((item) => item?.kind === "equipment"),
-    ).toHaveLength(10);
+    ).toHaveLength(INVENTORY_SLOT_COUNT - 2);
   });
 
   it("swaps equipped items and additively aggregates only the two prototype stats", () => {
@@ -229,24 +254,18 @@ describe("Phase 3 inventory and equipment", () => {
 
     expect(character.equipFromInventory(0)).toEqual({ accepted: true });
     expect(character.equipFromInventory(2)).toEqual({ accepted: true });
+    const commonLoadout = expectedEquipmentStats(commonWeapon, chest);
     expect(character.stats()).toEqual({
-      maximumHealth: 110,
-      outgoingAbilityDamageBasisPoints: 10_500,
-      outgoingAbilityDamageMultiplier: 1.05,
+      maximumHealth: commonLoadout.health,
+      outgoingAbilityDamageBasisPoints: commonLoadout.damage,
+      outgoingAbilityDamageMultiplier: commonLoadout.damage / 10_000,
     });
 
     expect(character.equipFromInventory(1)).toEqual({ accepted: true });
     expect(character.inventorySlots()[1]).toEqual(commonWeapon);
     expect(character.equipment()["main-hand"]).toEqual(rareWeapon);
 
-    const expected = modifiersForEquipment(rareWeapon).reduce(
-      (stats, modifier) => {
-        if (modifier.operation === "flat") stats.health += modifier.value;
-        else stats.damage += modifier.value;
-        return stats;
-      },
-      { health: 110, damage: 10_000 },
-    );
+    const expected = expectedEquipmentStats(rareWeapon, chest);
     expect(character.stats()).toMatchObject({
       maximumHealth: expected.health,
       outgoingAbilityDamageBasisPoints: expected.damage,
@@ -341,16 +360,10 @@ describe("Phase 3 inventory and equipment", () => {
         else expectedDamage += modifier.value;
       }
     }
-    expect(character.stats()).toMatchObject({
+    expect(character.stats()).toEqual({
       maximumHealth: expectedHealth,
       outgoingAbilityDamageBasisPoints: expectedDamage,
-    });
-    // Common bases carry deterministic base modifiers: 5+10+4+3+6 health
-    // across helmet/chest/belt/boots/offhand and +5% weapon damage.
-    expect(character.stats()).toEqual({
-      maximumHealth: 128,
-      outgoingAbilityDamageBasisPoints: 10_500,
-      outgoingAbilityDamageMultiplier: 1.05,
+      outgoingAbilityDamageMultiplier: expectedDamage / 10_000,
     });
   });
 });
