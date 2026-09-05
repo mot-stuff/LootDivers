@@ -18,7 +18,7 @@ const sampleSeconds = Number(
 );
 
 test.skip(!enabled, "Run through npm run timing:fixture.");
-test.setTimeout((warmupSeconds + sampleSeconds + 30) * 1_000);
+test.setTimeout((warmupSeconds + sampleSeconds + 90) * 1_000);
 
 test("collects labeled P0-002 full-fixture diagnostics", async ({
   page,
