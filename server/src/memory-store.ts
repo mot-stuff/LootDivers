@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type {
+  AuditableCharacter,
   CharacterListRow,
   CharacterRecord,
   DataStore,
+  SaveRejectionCount,
   SaveResult,
   SessionRecord,
   UserRecord,
@@ -43,10 +45,18 @@ interface MemoryCharacter {
  * every dev machine; the same contract suite also runs against real
  * Postgres when TEST_DATABASE_URL is set — see test/README note).
  */
+interface MemorySaveRejection {
+  readonly userId: string;
+  readonly characterId: string;
+  readonly code: string;
+  readonly createdAt: string;
+}
+
 export class MemoryStore implements DataStore {
   readonly #users = new Map<string, UserRecord>();
   readonly #sessions = new Map<string, SessionRecord>();
   readonly #characters = new Map<string, MemoryCharacter>();
+  readonly #saveRejections: MemorySaveRejection[] = [];
   #now: () => string;
 
   public constructor(now: () => string = () => new Date().toISOString()) {
@@ -62,7 +72,13 @@ export class MemoryStore implements DataStore {
         return Promise.resolve("email-taken");
       }
     }
-    const record: UserRecord = { id: randomUUID(), email, passwordHash };
+    const record: UserRecord = {
+      id: randomUUID(),
+      email,
+      passwordHash,
+      bannedAt: null,
+      banReason: null,
+    };
     this.#users.set(record.id, record);
     return Promise.resolve(record);
   }
@@ -195,6 +211,76 @@ export class MemoryStore implements DataStore {
     }
     this.#characters.delete(characterId);
     return Promise.resolve(true);
+  }
+
+  public banUser(userId: string, reason: string): Promise<boolean> {
+    const user = this.#users.get(userId);
+    if (user === undefined) {
+      return Promise.resolve(false);
+    }
+    this.#users.set(userId, {
+      ...user,
+      bannedAt: this.#now(),
+      banReason: reason,
+    });
+    return Promise.resolve(true);
+  }
+
+  public unbanUser(userId: string): Promise<boolean> {
+    const user = this.#users.get(userId);
+    if (user === undefined) {
+      return Promise.resolve(false);
+    }
+    this.#users.set(userId, { ...user, bannedAt: null, banReason: null });
+    return Promise.resolve(true);
+  }
+
+  public recordSaveRejection(
+    userId: string,
+    characterId: string,
+    code: string,
+  ): Promise<void> {
+    this.#saveRejections.push({
+      userId,
+      characterId,
+      code,
+      createdAt: this.#now(),
+    });
+    return Promise.resolve();
+  }
+
+  public listSaveRejectionCounts(): Promise<readonly SaveRejectionCount[]> {
+    const counts = new Map<string, number>();
+    for (const rejection of this.#saveRejections) {
+      counts.set(rejection.userId, (counts.get(rejection.userId) ?? 0) + 1);
+    }
+    const rows = [...counts.entries()]
+      .map(([userId, count]) => ({
+        userId,
+        email: this.#users.get(userId)?.email ?? "(deleted account)",
+        count,
+      }))
+      .sort((a, b) => a.email.localeCompare(b.email));
+    return Promise.resolve(rows);
+  }
+
+  public listCharactersForAudit(): Promise<readonly AuditableCharacter[]> {
+    const rows = [...this.#characters.values()]
+      .filter((character) => character.envelope !== null)
+      .map((character) => ({
+        userId: character.userId,
+        email: this.#users.get(character.userId)?.email ?? "(deleted account)",
+        characterId: character.id,
+        characterName: character.name,
+        level: character.level,
+        envelope: character.envelope,
+      }))
+      .sort(
+        (a, b) =>
+          a.email.localeCompare(b.email) ||
+          a.characterName.localeCompare(b.characterName),
+      );
+    return Promise.resolve(rows);
   }
 
   public ping(): Promise<void> {

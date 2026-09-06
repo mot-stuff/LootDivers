@@ -27,7 +27,9 @@ describe.skipIf(databaseUrl === undefined)("postgres-backed contract", () => {
     }
     const pool = createPool(databaseUrl);
     await runMigrations(pool);
-    await pool.query("truncate characters, sessions, users cascade");
+    await pool.query(
+      "truncate save_rejections, characters, sessions, users cascade",
+    );
     return {
       store: new PgStore(pool),
       cleanup: async () => {

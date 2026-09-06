@@ -13,7 +13,7 @@ import {
   verifyPassword,
 } from "./auth.js";
 import type { ServerConfig } from "./config.js";
-import type { DataStore } from "./store.js";
+import type { DataStore, UserRecord } from "./store.js";
 import {
   CHARACTER_SLOT_LIMIT,
   ENVELOPE_MAX_BYTES,
@@ -53,6 +53,13 @@ export interface AppDependencies {
 interface SessionInfo {
   readonly userId: string;
   readonly tokenHash: string;
+  readonly user: UserRecord;
+}
+
+function bannedMessage(user: UserRecord): string {
+  return user.banReason === null || user.banReason === ""
+    ? "This account has been banned."
+    : `This account has been banned: ${user.banReason}`;
 }
 
 function sendError(
@@ -179,7 +186,19 @@ export async function buildApp(
       );
       return null;
     }
-    return { userId: session.userId, tokenHash };
+    const user = await store.findUserById(session.userId);
+    if (user === null) {
+      await sendError(reply, 401, "unauthorized", "Account no longer exists.");
+      return null;
+    }
+    // TASK-718 (DEC-044): the ban flag is checked on every authenticated
+    // request, so existing sessions stop working the moment an account is
+    // banned — no session sweep needed.
+    if (user.bannedAt !== null) {
+      await sendError(reply, 403, "account-banned", bannedMessage(user));
+      return null;
+    }
+    return { userId: session.userId, tokenHash, user };
   }
 
   interface CredentialsBody {
@@ -262,6 +281,11 @@ export async function buildApp(
         "Email or password is incorrect.",
       );
     }
+    // Ban check only after the credentials verified, so ban status is never
+    // disclosed to someone who does not hold the password (DEC-044).
+    if (user.bannedAt !== null) {
+      return sendError(reply, 403, "account-banned", bannedMessage(user));
+    }
     await establishSession(reply, user.id);
     return reply.status(200).send({ userId: user.id });
   });
@@ -280,11 +304,9 @@ export async function buildApp(
     if (session === null) {
       return reply;
     }
-    const user = await store.findUserById(session.userId);
-    if (user === null) {
-      return sendError(reply, 401, "unauthorized", "Account no longer exists.");
-    }
-    return reply.status(200).send({ userId: user.id, email: user.email });
+    return reply
+      .status(200)
+      .send({ userId: session.user.id, email: session.user.email });
   });
 
   app.get("/characters", async (request, reply) => {
@@ -425,18 +447,33 @@ export async function buildApp(
           "level must be an integer between 1 and 1000.",
         );
       }
+      // TASK-718 (DEC-044): every content rejection below leaves one row in
+      // the save_rejections audit trail (account + character + code); the
+      // audit report surfaces per-account totals for a HUMAN ban decision.
+      const rejectedUserId = session.userId;
+      const rejectedCharacterId = characterId;
+      const rejectSave = async (
+        status: number,
+        code: string,
+        message: string,
+      ): Promise<FastifyReply> => {
+        await store.recordSaveRejection(
+          rejectedUserId,
+          rejectedCharacterId,
+          code,
+        );
+        return sendError(reply, status, code, message);
+      };
       const shape = inspectEnvelopeShape(body.envelope);
       if (shape === null) {
-        return sendError(
-          reply,
+        return rejectSave(
           422,
           "invalid-envelope",
           "envelope is not a recognizable save envelope.",
         );
       }
       if (shape.serializedBytes > ENVELOPE_MAX_BYTES) {
-        return sendError(
-          reply,
+        return rejectSave(
           413,
           "envelope-too-large",
           `Serialized envelope exceeds ${String(ENVELOPE_MAX_BYTES)} bytes.`,
@@ -448,11 +485,10 @@ export async function buildApp(
       // The blob is still STORED verbatim; the load path never parses.
       const validated = await validateSaveEnvelope(body.envelope);
       if (!validated.ok) {
-        return sendError(reply, 422, validated.code, validated.message);
+        return rejectSave(422, validated.code, validated.message);
       }
       if (validated.save.progression.level !== body.level) {
-        return sendError(
-          reply,
+        return rejectSave(
           422,
           "level-mismatch",
           "level must equal the save's progression level.",
@@ -471,8 +507,7 @@ export async function buildApp(
         return sendError(reply, 404, "not-found", "No such character.");
       }
       if (saved === "stale-revision") {
-        return sendError(
-          reply,
+        return rejectSave(
           409,
           "stale-revision",
           "The submitted save's revision is not newer than the stored save.",

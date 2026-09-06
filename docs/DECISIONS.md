@@ -3407,3 +3407,102 @@ server-authoritative handling of that state.
   server accepts — one validator, no server release skew risk beyond
   ordinary deploy ordering (deploy the API before or with a client that
   saves new content).
+
+---
+
+# DEC-044
+
+## Anti-cheat enforcement: rejection log, retroactive audit sweep, manual ban tooling — no auto-ban
+
+Date: 2026-09-05 (TASK-718)
+
+## Context
+
+DEC-043 (TASK-717) rejects forged saves at write time, but says nothing
+about blobs stored before validation shipped, states that slip through a
+rule gap closed later, or what happens to the accounts that keep sending
+forgeries. The owner's directive (roadmap): "check the db for modified
+values and ban/delete those characters if we detect hacked values" — the
+Hero Siege pattern of sweeping stored data and banning cheaters.
+
+## Decision
+
+1. **Every write-time content rejection is logged.** Each DEC-043 4xx
+   from `PUT /characters/:id/save` (shape, size cap, checksum, version,
+   invalid state, level mismatch, stale revision) appends one lean row to
+   a new `save_rejections` table: account id, targeted character id,
+   rejection code, timestamp — no blob storage. `character_id` has no
+   foreign key so the trail outlives character deletion; rows cascade
+   with the account they judge. The pre-DEC-043 `invalid-level`
+   body-metadata check is not logged (transport shape, not forgery
+   signal), nor is the Fastify transport-level 413 (no session context in
+   the error handler).
+2. **Accounts gain a reversible ban flag** (`users.banned_at`,
+   `users.ban_reason`, migration `0002`). Enforcement is the session
+   hook: every authenticated request loads the user and answers
+   403 `account-banned` when flagged, so existing sessions stop working
+   on their next request with no session sweep, and unban restores them
+   intact. Login checks the flag only after credential verification, so
+   ban status is never disclosed to someone without the password.
+3. **A retroactive audit sweep re-runs the DEC-043 validator over every
+   stored blob** (`npm run audit`, `server/src/audit.ts` over the pure
+   `save-audit.ts`; on the droplet via
+   `docker compose exec api npm run audit`). Because the validator is the
+   client's own live core/persistence code, rule changes re-apply to
+   history automatically. The report prints one line per stored save —
+   account email, character name, verdict, rejection codes — plus
+   per-account write-time rejection totals, and exits 1 when any stored
+   save is invalid.
+4. **Banning is script-only tooling**, no admin HTTP endpoints — zero new
+   network attack surface. `npm run ban -- <emailOrId> "<reason>"` and
+   `npm run unban -- <emailOrId>` run on the droplet inside the api
+   container. Character deletion stays a manual, deliberate `psql` act;
+   the ban script's header documents the SQL rather than automating
+   destruction.
+5. **No auto-ban in v1.** Rejection counts and audit verdicts are
+   *signals*; a human reads the report and decides. This mirrors the
+   owner's Hero Siege reference (detect → ban) while staying reversible:
+   a validator bug cannot mass-ban paying players, an unban is one
+   command, and nothing is ever deleted by software.
+
+## Alternatives Considered
+
+- **Auto-ban on N rejections or on an invalid stored blob:** rejected for
+  v1 — DEC-043 explicitly validates plausibility, not authenticity, and a
+  validator/content bug would convert into immediate wrongful bans. The
+  log keeps the evidence so policy can harden later without new plumbing.
+- **Automated character deletion in the audit/ban tooling:** rejected —
+  destruction is irreversible; the owner deletes deliberately via
+  documented SQL after reading the report.
+- **Session deletion at ban time instead of the auth-hook check:**
+  rejected — deletion alone is not airtight (a login re-mints a session,
+  so login must check the flag anyway) and loses the free unban-restores-
+  sessions property. The hook costs one indexed user lookup per
+  authenticated request, acceptable at this scale (and `/auth/session`
+  now reuses that lookup instead of making its own).
+- **Admin HTTP endpoints for ban/audit:** rejected — a compromised or
+  brute-forced admin route is a worse outcome than SSH-gated scripts on
+  infrastructure the owner already controls.
+- **Storing rejected blobs for forensics:** rejected — 1 MiB × spam
+  would turn the audit trail into a disk-filling attack; codes plus the
+  stored (last valid) blob are enough to judge an account.
+
+## Consequences
+
+- The enforcement chain is now: write-time rejection (DEC-043) →
+  rejection log → periodic/us-triggered `npm run audit` → human `npm run
+  ban` → manual SQL deletion if warranted. Each step is independently
+  testable and the contract suite pins all of them against MemoryStore
+  and Postgres.
+- Banned accounts see 403 `account-banned` (with the operator's reason)
+  on login and on any authenticated call; the client surfaces it through
+  the existing inline-error paths.
+- Authenticated routes cost one extra user lookup per request (the ban
+  check); `GET /auth/session` is net unchanged (its user fetch moved into
+  the shared hook).
+- The audit sweep also cross-checks the `level` list-metadata column
+  against the save's progression level, the same consistency the write
+  path enforces.
+- A banned account's characters and blobs remain stored (evidence and
+  reversibility); slot-limit and name-uniqueness semantics are untouched.
+- Rate limiting on `/auth/login` already throttles ban-status probing.

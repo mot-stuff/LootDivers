@@ -1,8 +1,10 @@
 import type pg from "pg";
 import type {
+  AuditableCharacter,
   CharacterListRow,
   CharacterRecord,
   DataStore,
+  SaveRejectionCount,
   SaveResult,
   SessionRecord,
   UserRecord,
@@ -19,6 +21,24 @@ interface CharacterRow {
   readonly revision: number;
   readonly blob: unknown;
   readonly updated_at: Date;
+}
+
+interface UserRow {
+  readonly id: string;
+  readonly email: string;
+  readonly password_hash: string;
+  readonly banned_at: Date | null;
+  readonly ban_reason: string | null;
+}
+
+function toUserRecord(row: UserRow): UserRecord {
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    bannedAt: row.banned_at === null ? null : row.banned_at.toISOString(),
+    banReason: row.ban_reason,
+  };
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -50,7 +70,13 @@ export class PgStore implements DataStore {
       if (row === undefined) {
         throw new Error("Insert returned no row.");
       }
-      return { id: row.id, email, passwordHash };
+      return {
+        id: row.id,
+        email,
+        passwordHash,
+        bannedAt: null,
+        banReason: null,
+      };
     } catch (error) {
       if (isUniqueViolation(error)) {
         return "email-taken";
@@ -60,27 +86,23 @@ export class PgStore implements DataStore {
   }
 
   public async findUserByEmail(email: string): Promise<UserRecord | null> {
-    const result = await this.#pool.query<{
-      id: string;
-      email: string;
-      password_hash: string;
-    }>(`select id, email, password_hash from users where email = $1`, [email]);
+    const result = await this.#pool.query<UserRow>(
+      `select id, email, password_hash, banned_at, ban_reason
+       from users where email = $1`,
+      [email],
+    );
     const row = result.rows[0];
-    return row === undefined
-      ? null
-      : { id: row.id, email: row.email, passwordHash: row.password_hash };
+    return row === undefined ? null : toUserRecord(row);
   }
 
   public async findUserById(id: string): Promise<UserRecord | null> {
-    const result = await this.#pool.query<{
-      id: string;
-      email: string;
-      password_hash: string;
-    }>(`select id, email, password_hash from users where id = $1`, [id]);
+    const result = await this.#pool.query<UserRow>(
+      `select id, email, password_hash, banned_at, ban_reason
+       from users where id = $1`,
+      [id],
+    );
     const row = result.rows[0];
-    return row === undefined
-      ? null
-      : { id: row.id, email: row.email, passwordHash: row.password_hash };
+    return row === undefined ? null : toUserRecord(row);
   }
 
   public async createSession(session: SessionRecord): Promise<void> {
@@ -251,6 +273,82 @@ export class PgStore implements DataStore {
       [characterId, userId],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  public async banUser(userId: string, reason: string): Promise<boolean> {
+    const result = await this.#pool.query(
+      `update users set banned_at = now(), ban_reason = $2 where id = $1`,
+      [userId, reason],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  public async unbanUser(userId: string): Promise<boolean> {
+    const result = await this.#pool.query(
+      `update users set banned_at = null, ban_reason = null where id = $1`,
+      [userId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  public async recordSaveRejection(
+    userId: string,
+    characterId: string,
+    code: string,
+  ): Promise<void> {
+    await this.#pool.query(
+      `insert into save_rejections (user_id, character_id, code)
+       values ($1, $2, $3)`,
+      [userId, characterId, code],
+    );
+  }
+
+  public async listSaveRejectionCounts(): Promise<
+    readonly SaveRejectionCount[]
+  > {
+    const result = await this.#pool.query<{
+      user_id: string;
+      email: string;
+      count: string;
+    }>(
+      `select r.user_id, u.email, count(*)::text as count
+       from save_rejections r
+       join users u on u.id = r.user_id
+       group by r.user_id, u.email
+       order by u.email`,
+    );
+    return result.rows.map((row) => ({
+      userId: row.user_id,
+      email: row.email,
+      count: Number.parseInt(row.count, 10),
+    }));
+  }
+
+  public async listCharactersForAudit(): Promise<
+    readonly AuditableCharacter[]
+  > {
+    const result = await this.#pool.query<{
+      user_id: string;
+      email: string;
+      character_id: string;
+      name: string;
+      level: number;
+      blob: unknown;
+    }>(
+      `select c.user_id, u.email, c.id as character_id, c.name, c.level, c.blob
+       from characters c
+       join users u on u.id = c.user_id
+       where c.blob is not null
+       order by u.email, lower(c.name)`,
+    );
+    return result.rows.map((row) => ({
+      userId: row.user_id,
+      email: row.email,
+      characterId: row.character_id,
+      characterName: row.name,
+      level: row.level,
+      envelope: row.blob,
+    }));
   }
 
   public async ping(): Promise<void> {
