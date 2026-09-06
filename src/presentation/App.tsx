@@ -172,6 +172,11 @@ export interface AppProps {
   readonly onExitGame?: (
     destination: SystemMenuExitDestination,
   ) => void | Promise<void>;
+  /**
+   * TASK-719: true while character save triggers are failing; the HUD shows
+   * a persistent warning so a broken save pipeline is never silent.
+   */
+  readonly saveWarning?: boolean;
 }
 
 export type SystemMenuExitDestination = "character-select" | "main-menu";
@@ -2315,6 +2320,7 @@ export function App({
   accountGate,
   keybinds,
   onExitGame,
+  saveWarning,
 }: AppProps) {
   // The shared store is a stable singleton; tests inject their own.
   const keybindsStore = keybinds ?? sharedKeybinds();
@@ -2877,6 +2883,13 @@ export function App({
           onClose={() => emitWorldCommand({ type: "world.close-vendor" })}
           onCommand={emitWorldCommand}
         />
+      )}
+
+      {showCombatPrototype && saveWarning === true && !mainMenuOpen && (
+        <div class="save-warning" role="alert" data-testid="save-warning">
+          Progress is not being saved — check your connection. Recent play may
+          be lost.
+        </div>
       )}
 
       {showCombatPrototype && combatHud.playerDead && !mainMenuOpen && (

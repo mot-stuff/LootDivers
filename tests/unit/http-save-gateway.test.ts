@@ -226,6 +226,21 @@ describe("HttpSaveRepository", () => {
     expect(second.revision).toBe(2);
   });
 
+  it("marks save PUTs keepalive so a page-hide flush survives (TASK-719)", async () => {
+    const server = fakeServer();
+    const seen: (boolean | undefined)[] = [];
+    const repository = makeRepository((input, init) => {
+      if (init?.method === "PUT") {
+        seen.push(init.keepalive);
+      }
+      return server.fetch(input, init);
+    });
+
+    const simulation = new CombatArenaSimulation(DEFAULT_COMBAT_ARENA_CONFIG);
+    await repository.save(simulation.captureCharacterSave());
+    expect(seen).toEqual([true]);
+  });
+
   it("reports a never-saved character as not-found", async () => {
     const server = fakeServer();
     const repository = makeRepository(server.fetch);

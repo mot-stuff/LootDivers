@@ -259,6 +259,7 @@ export {
   ZONE_CATALOG,
   ZONE_IDS,
   isZoneId,
+  loginSpawnZoneId,
   vendorOfferById,
   zoneById,
   zoneEnemies,

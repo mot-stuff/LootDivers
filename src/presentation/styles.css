@@ -2144,6 +2144,25 @@ a:focus-visible {
   }
 }
 
+/* TASK-719 failing-save warning: a persistent banner on the DEC-029 danger
+   tokens; visible until a save trigger lands again. */
+.save-warning {
+  position: fixed;
+  z-index: 7;
+  top: clamp(0.5rem, 2vh, 1rem);
+  left: 50%;
+  max-width: min(92vw, 34rem);
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--ui-danger);
+  border-radius: 6px;
+  background: var(--ui-panel-bg);
+  color: var(--ui-danger-text);
+  font-size: 0.85rem;
+  text-align: center;
+  transform: translateX(-50%);
+  box-shadow: 0 0 12px rgb(226 91 82 / 25%);
+}
+
 /* TASK-710 death screen (DEC-037): translucent full-screen backdrop with a
    framed panel on the DEC-029 tokens. Sits below the main menu (z 10). */
 .death-overlay {

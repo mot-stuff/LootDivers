@@ -3276,6 +3276,40 @@ Continue, even on origins where no local play exists.
   you can still play") is gone; the unavailable message now says an
   account is needed.
 
+## Amendment (TASK-719): reliable save triggers for server-only saves
+
+Date: 2026-09-05. The owner reported that logged-in progress "resets to
+tutorial stage" on re-login. Reproduced against the real API app on
+`MemoryStore` (`server/src/dev.ts`, added for this): every PUT the client
+managed to send was accepted (no 422/409 — TASK-717 validation was not
+the cause), but a tutorial-only session sends almost none. The DEC-034
+triggers were travel, death, respawn, and page hide — in a session that
+never leaves Wakeshore Landing, the page-hide save is the ONLY carrier
+of banked steps and XP, and the browser aborts its in-flight HTTP PUT
+when the document is destroyed at tab close. The server was left holding
+the revision-1 save written on the travel INTO the tutorial, i.e. an
+empty tutorial. This loss mode was invisible locally because IndexedDB
+commits in microseconds; an HTTP round trip does not.
+
+Fix (client-side, where the truth was):
+
+- **New DEC-034 triggers:** banking a tutorial step and leveling up
+  persist immediately (watched on the combat HUD read model), and a
+  30-second autosave cadence bounds any remaining loss window. A
+  state-fingerprint check in the save queue skips redundant uploads, so
+  idle ticks are free.
+- **Keepalive page-hide:** `ApiClient` marks save PUTs `keepalive` (for
+  bodies under the 64 KiB browser cap), giving the page-hide flush a
+  chance to outlive the document. It remains best-effort by design; the
+  event triggers above are the correctness story.
+- **Failing saves are loud:** a failed trigger now logs `console.error`
+  and raises a persistent HUD banner ("Progress is not being saved…",
+  `data-testid="save-warning"`) until a save lands again.
+- Coverage: `tests/e2e/character-save-real-api.spec.ts` replays the
+  owner's journey against the real API app (auto-skips when the local
+  `npm run dev:memory` API is not listening, so CI is unaffected);
+  unit tests pin the keepalive flag and the new spawn rule (DEC-045).
+
 ---
 
 # DEC-043
@@ -3506,3 +3540,56 @@ Hero Siege pattern of sweeping stored data and banning cheaters.
 - A banned account's characters and blobs remain stored (evidence and
   reversibility); slot-limit and name-uniqueness semantics are untouched.
 - Rate limiting on `/auth/login` already throttles ban-status probing.
+
+---
+
+# DEC-045
+
+## Login spawn rule: a completed tutorial never loads back into the tutorial zone
+
+Date: 2026-09-05 (TASK-719, owner rule. DEC-044 is reserved for the
+parallel TASK-718 audit tooling — planning-time IDs kept in numeric
+order, as with DEC-040/041.)
+
+## Context
+
+The owner's rule, verbatim intent: "If I login I should spawn in the
+nearest town if I completed the tutorial." A character's save can say
+"tutorial zone" after the tutorial is done — progress lost to an
+unlanded final save (the defect fixed in the DEC-042 amendment), or a
+deliberate post-completion revisit before quitting. Loading such a
+character back onto the tutorial shore reads as a reset even when all
+progression survived.
+
+## Decision
+
+`CombatArenaSimulation.restoreCharacterSave` resolves its destination
+through `loginSpawnZoneId(zoneId, tutorialComplete)` (core,
+`world-zones.ts`): when the save's banked tutorial steps cover the full
+tutorial AND the saved zone is the tutorial zone, the character spawns
+at the nearest town instead. "Nearest town" is derived from zone data —
+the zone's DEC-037 respawn destination when that is a town, else the
+first portal leading to a town (the tutorial's exit road → Hearthmere),
+else the first town in the catalog. Tutorial-incomplete characters and
+non-tutorial zones load exactly where they saved. The rule applies to
+every restore path (server character select, local Continue on dev
+origins) — it is a load rule, not an HTTP-flow rule.
+
+## Alternatives Considered
+
+- Using the tutorial zone's own `respawnZoneId`: rejected — DEC-037
+  deliberately points Wakeshore's respawn at itself so a tutorial DEATH
+  never ejects a newcomer; the login rule needs the opposite for
+  completed characters, so it derives the town instead of overloading
+  the death mapping.
+- Rewriting the stored save server-side: rejected — DEC-032 stores blobs
+  verbatim; the client-side load rule self-heals the stored zone on the
+  next save trigger anyway.
+
+## Consequences
+
+- A completed-tutorial character who deliberately saved in Wakeshore
+  re-enters at Hearthmere on their next login; revisiting the shore is
+  one portal hop away and this is the owner-preferred trade.
+- Unit coverage in `tests/unit/character-save.test.ts` pins the pure
+  rule for every zone and both restore paths through the simulation.

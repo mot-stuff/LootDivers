@@ -82,6 +82,7 @@ export class ApiClient {
     method: string,
     path: string,
     body?: unknown,
+    options?: { keepalive?: boolean },
   ): Promise<{ status: number; body: T }> {
     const init: RequestInit = {
       method,
@@ -90,6 +91,18 @@ export class ApiClient {
     if (body !== undefined) {
       init.headers = { "Content-Type": "application/json" };
       init.body = JSON.stringify(body);
+    }
+    // TASK-719: `keepalive` lets an in-flight request outlive its document,
+    // so the DEC-034 page-hide save trigger's PUT survives a tab close or
+    // navigation. Browsers cap keepalive bodies at 64 KiB, so it is only
+    // requested for payloads safely under that cap; larger saves fall back
+    // to a regular fetch (best effort, as before).
+    if (
+      options?.keepalive === true &&
+      typeof init.body === "string" &&
+      init.body.length <= 60_000
+    ) {
+      init.keepalive = true;
     }
     const response = await this.#fetch(`${this.#origin}${path}`, init);
     if (!response.ok) {
@@ -172,6 +185,7 @@ export class ApiClient {
       "PUT",
       `/characters/${id}/save`,
       { envelope, level },
+      { keepalive: true },
     );
     return result.body.revision;
   }

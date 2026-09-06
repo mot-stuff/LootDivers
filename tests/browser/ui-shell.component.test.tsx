@@ -718,6 +718,37 @@ describe("technical UI shell component", () => {
     ).toBeNull();
   });
 
+  it("shows the failing-save warning only while saveWarning is set (TASK-719)", async () => {
+    const channel = createReadModelChannel(readyModel);
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+        />,
+        container,
+      );
+    });
+    expect(container.querySelector('[data-testid="save-warning"]')).toBeNull();
+
+    await act(() => {
+      render(
+        <App
+          bindings={{ models: channel.source, intents: { emit: vi.fn() } }}
+          showCombatPrototype
+          saveWarning
+        />,
+        container,
+      );
+    });
+    const warning = container.querySelector('[data-testid="save-warning"]');
+    expect(warning).not.toBeNull();
+    expect(warning?.getAttribute("role")).toBe("alert");
+    expect(warning?.textContent).toContain("Progress is not being saved");
+  });
+
   it("renders one compact player vitals HUD without enemy DOM UI", async () => {
     const channel = createReadModelChannel(readyModel);
     const container = document.createElement("div");

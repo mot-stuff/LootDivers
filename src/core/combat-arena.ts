@@ -75,7 +75,11 @@ import {
   parseCharacterSave,
   type CharacterSave,
 } from "./character-save";
-import { TutorialTracker, type TutorialReadModel } from "./tutorial";
+import {
+  TUTORIAL_STEP_IDS,
+  TutorialTracker,
+  type TutorialReadModel,
+} from "./tutorial";
 import {
   ASHTRAIL_ENEMY,
   ASHTRAIL_EXPANSE_ID,
@@ -84,6 +88,7 @@ import {
   WAKESHORE_LANDING_ID,
   WAKESHORE_SCUTTLER_ID,
   ZONE_CATALOG,
+  loginSpawnZoneId,
   vendorOfferById,
   zoneById,
   type PortalDefinition,
@@ -1605,7 +1610,9 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
    * tutorial steps, instance-ID generators) is replaced, vitals refill to
    * their recomputed maximums, and the session re-enters the saved zone at
    * its spawn point (respawning that zone's encounter, mirroring DEC-030
-   * re-entry semantics). The value is re-validated via `parseCharacterSave`;
+   * re-entry semantics). The destination is resolved through
+   * `loginSpawnZoneId` (TASK-719, DEC-045): a completed-tutorial character
+   * whose save says tutorial-zone spawns at the nearest town instead. The value is re-validated via `parseCharacterSave`;
    * invalid saves throw `RangeError` and leave no partial restore observable
    * to callers that treat the throw as a failed load.
    */
@@ -1629,7 +1636,14 @@ export class CombatArenaSimulation implements CombatArenaEventReader {
     this.#playerHealth.reset();
     this.#manaMaximumSubunits = this.manaMaximumSubunits();
     this.#manaSubunits = this.#manaMaximumSubunits;
-    this.travelTo(parsed.zoneId);
+    // TASK-719 (DEC-045): a completed-tutorial character never loads into
+    // the tutorial zone — the saved zone resolves to the nearest town.
+    this.travelTo(
+      loginSpawnZoneId(
+        parsed.zoneId,
+        parsed.tutorialBankedSteps.length === TUTORIAL_STEP_IDS.length,
+      ),
+    );
   }
 
   public diagnostics(): CombatArenaDiagnostics {

@@ -12,13 +12,18 @@ import {
   EQUIPMENT_BASE_CATALOG,
   FIXED_STEP_SECONDS,
   GOLD_MAX_TOTAL,
+  HEARTHMERE_ID,
   HOLLOWDEEP_ID,
   STARTING_GOLD,
+  TUTORIAL_STEP_IDS,
+  WAKESHORE_LANDING_ID,
   WINTER_PULSE_ID,
+  ZONE_CATALOG,
   createAbilityStoneStack,
   definitionById,
   experienceToNextLevel,
   generateEquipmentItem,
+  loginSpawnZoneId,
   parseCharacterSave,
   persistentInstanceId,
   type CharacterSave,
@@ -526,5 +531,55 @@ describe("CharacterSaveService boot read model", () => {
 
     await service.save(save);
     expect(written).toEqual([save]);
+  });
+});
+
+describe("login spawn rule (TASK-719, DEC-045)", () => {
+  it("keeps every zone for tutorial-incomplete characters", () => {
+    for (const zone of ZONE_CATALOG) {
+      expect(loginSpawnZoneId(zone.id, false)).toBe(zone.id);
+    }
+  });
+
+  it("keeps non-tutorial zones for completed characters", () => {
+    expect(loginSpawnZoneId(HEARTHMERE_ID, true)).toBe(HEARTHMERE_ID);
+    expect(loginSpawnZoneId(HOLLOWDEEP_ID, true)).toBe(HOLLOWDEEP_ID);
+  });
+
+  it("resolves a completed-tutorial save in the tutorial zone to the town", () => {
+    expect(loginSpawnZoneId(WAKESHORE_LANDING_ID, true)).toBe(HEARTHMERE_ID);
+  });
+
+  it("restores a completed-tutorial save stranded in the tutorial zone into town", () => {
+    // The owner rule: a character who finished the tutorial must never load
+    // back into the tutorial zone, even when the save says so (progress lost
+    // to an unlanded final save, or a post-completion revisit).
+    const save = playedSimulation().captureCharacterSave();
+    const stranded: CharacterSave = {
+      ...save,
+      zoneId: WAKESHORE_LANDING_ID,
+      tutorialBankedSteps: [...TUTORIAL_STEP_IDS],
+    };
+
+    const restored = new CombatArenaSimulation(DEFAULT_COMBAT_ARENA_CONFIG);
+    restored.restoreCharacterSave(stranded);
+    expect(restored.diagnostics().zoneId).toBe(HEARTHMERE_ID);
+    // Everything except the spawn zone still round-trips.
+    const recaptured = restored.captureCharacterSave();
+    expect(recaptured).toEqual({ ...stranded, zoneId: HEARTHMERE_ID });
+  });
+
+  it("resumes a tutorial-incomplete save in the tutorial zone as saved", () => {
+    const save = playedSimulation().captureCharacterSave();
+    const midTutorial: CharacterSave = {
+      ...save,
+      zoneId: WAKESHORE_LANDING_ID,
+      tutorialBankedSteps: ["move", "attack"],
+    };
+
+    const restored = new CombatArenaSimulation(DEFAULT_COMBAT_ARENA_CONFIG);
+    restored.restoreCharacterSave(midTutorial);
+    expect(restored.diagnostics().zoneId).toBe(WAKESHORE_LANDING_ID);
+    expect(restored.captureCharacterSave()).toEqual(midTutorial);
   });
 });
