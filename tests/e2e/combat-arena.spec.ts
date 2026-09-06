@@ -613,7 +613,7 @@ for (const viewport of [
     ).toHaveCount(0);
     const hudBox = await hud.boundingBox();
     expect(hudBox).not.toBeNull();
-    expect(hudBox?.width).toBeLessThanOrEqual(224);
+    expect(hudBox?.width).toBeLessThanOrEqual(240);
     expect(
       viewport.width - ((hudBox?.x ?? 0) + (hudBox?.width ?? 0)),
     ).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);

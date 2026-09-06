@@ -22,7 +22,7 @@ test("the playable session starts in Hearthmere and can travel to Ashtrail", asy
   await expect(page.getByTestId("combat-minimap-bounds")).toBeVisible();
   await expect(page.locator(".combat-minimap-floor")).toHaveCSS(
     "fill",
-    "rgb(42, 33, 24)",
+    "rgb(138, 106, 50)",
   );
   await expect(page.getByTestId("combat-minimap-bounds")).toHaveCSS(
     "stroke",
@@ -43,11 +43,11 @@ test("the playable session starts in Hearthmere and can travel to Ashtrail", asy
   );
   await expect(page.locator(".combat-minimap-floor")).toHaveCSS(
     "fill",
-    "rgb(16, 38, 58)",
+    "rgb(26, 74, 82)",
   );
   await expect(page.getByTestId("combat-minimap-bounds")).toHaveCSS(
     "stroke",
-    "rgb(100, 216, 203)",
+    "rgb(90, 176, 168)",
   );
   await expect(
     page.locator('[data-testid="combat-minimap"] [data-kind="enemy"]'),

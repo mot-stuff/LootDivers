@@ -14,18 +14,26 @@ function gitOutput(...arguments_: string[]): string {
   }
 }
 
+const enableLocalApiProxy = process.env.CI !== "true";
+
 export default defineConfig({
   plugins: [preact()],
   server: {
     // Local login/signup (DEC-032): homepage posts to same-origin `/api`.
     // The memory-store API listens on 8790 (`server`: `npm run dev:memory`).
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:8790",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
+    // CI e2e starts Vite without that API; proxying would 502 and fail
+    // specs that require a clean console. Playwright mocks `/api` instead.
+    ...(enableLocalApiProxy
+      ? {
+          proxy: {
+            "/api": {
+              target: "http://127.0.0.1:8790",
+              changeOrigin: true,
+              rewrite: (path: string) => path.replace(/^\/api/, ""),
+            },
+          },
+        }
+      : {}),
     watch: {
       // Windows EBUSY on public/assets/branding/logo.png (OneDrive/AV lock).
       ignored: ["**/public/assets/branding/**"],
