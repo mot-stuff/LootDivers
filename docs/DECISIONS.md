@@ -2993,6 +2993,84 @@ can differ from merge order, as with DEC-035/036/037.)
 
 ---
 
+# DEC-040
+
+## Playing requires an account; local play becomes an automation/dev door
+
+Date: 2026-09-05 (TASK-714, owner decision)
+
+## Context
+
+Through TASK-709, `/play/` offered two peer modes: server characters for
+a signed-in session on the custom domain, and the local New Game/Continue
+menu (IndexedDB saves, DEC-034) everywhere else, including for signed-out
+visitors. The owner has decided there is no account-optional mode:
+characters live on accounts, so progress survives devices and browser
+data clears, and the economy/persistence roadmap assumes server-owned
+state. Meanwhile the entire e2e suite and local development boot through
+the local path with no API server.
+
+## Decision
+
+1. **`/play/` requires a signed-in account on every player-reachable
+   origin.** On any non-loopback host (custom domain, `*.pages.dev`,
+   anything public — `isLocalDevHostname` in
+   `src/adapters/http/session-probe.ts` is the boundary), the menu boot
+   resolves the session first ("Checking your session…"), then either
+   composes the DEC-036 character select or renders the **account
+   required** screen: DEC-029-themed, original copy, and one CTA linking
+   to the homepage `/`, which owns login/signup (DEC-035). No local
+   New Game/Continue is rendered, so a signed-out visitor has no playable
+   state. A live session whose character list is unreachable gets the
+   service-unreachable screen with Try Again (refetch) and a homepage
+   link — never local play, which would silently fork progress off the
+   account.
+2. **Character select gains Log out.** It calls `POST /auth/logout`
+   (TASK-707 contract; the cookie is HttpOnly so only the API can clear
+   it) and navigates to the homepage on success; on network failure it
+   surfaces the standard inline error and stays put, since the session
+   is still live.
+3. **The automation/dev door stays open, deliberately.** `?autostart`
+   and the fixture flags (`?automation`, `?fullFixture`,
+   `?persistenceTest`) boot local IndexedDB play with no menu, and plain
+   loads on loopback/LAN origins keep the local menu; `?accountTest`
+   (DEC-036) follows real-player gating so Playwright can drive the gate
+   itself. This bypass is acceptable because it exists only behind
+   explicit query flags or on origins no player can reach, it is not
+   reachable through any UI, it grants nothing server-side (no session,
+   no server character rows), and server saves still require a real
+   session cookie the door cannot mint. The e2e suite and local dev
+   depend on it byte-for-byte.
+
+## Alternatives Considered
+
+- Keeping the signed-out local menu with a login pointer (the TASK-709
+  interim): rejected by the owner — orphaned local progress and a split
+  save story.
+- Removing the local path entirely and mocking the API in every spec:
+  rejected; it would rewrite ~30 green specs and couple every gameplay
+  test to the accounts contract for zero player-facing gain.
+- Gating by build flavor (dev build keeps local play): rejected; one
+  artifact ships everywhere (DEC-035), and explicit runtime flags are
+  the established automation contract (DEC-031).
+
+## Consequences
+
+- `*.pages.dev` previews now show the account-required screen instead of
+  playable local state; owner smoke-testing of gameplay moves to the
+  custom domain (or a dev server), while homepage/asset checks stay on
+  previews.
+- Local IndexedDB saves become invisible to real players; DEC-034
+  Continue semantics now serve only the dev door, and a future cleanup
+  may retire the local menu once automation migrates.
+- `tests/e2e/character-create.spec.ts` pins the gate: signed-out gets
+  the account-required screen (homepage CTA navigates), unreachable
+  lists offer retry instead of local fallback, logout round-trips to
+  `/`, and plain loopback loads plus `?autostart` stay byte-identical
+  with zero API traffic.
+
+---
+
 # DEC-041
 
 ## System menu: Escape-opened pause menu, device-local keybinds with swap semantics, save-then-navigate exits

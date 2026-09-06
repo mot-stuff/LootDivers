@@ -1841,16 +1841,58 @@ a:focus-visible {
 }
 
 /* TASK-709 account-aware menu (DEC-036): character select and the barbarian
-   create screen, additive on the DEC-029 tokens. */
-.main-menu-login {
+   create screen, additive on the DEC-029 tokens. TASK-714 (DEC-040) adds
+   the account-required gate screens and the logout affordance. */
+.account-gate-copy {
+  margin: 0;
+  max-width: 24rem;
+  color: var(--ui-text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.account-home-link {
   color: var(--ui-accent);
   font-size: 0.82rem;
   text-align: center;
 }
 
-.main-menu-login:hover,
-.main-menu-login:focus-visible {
+.account-home-link:hover,
+.account-home-link:focus-visible {
   color: var(--ui-focus);
+}
+
+.account-home-cta {
+  display: block;
+  width: min(15.5rem, 100%);
+  padding: 0.7rem 1.2rem;
+  border: 1px solid var(--ui-accent-soft);
+  border-radius: 0.4rem;
+  background-color: var(--ui-panel-bg-raised);
+  background-image: var(--ui-panel-vignette);
+  box-shadow: inset 0 0 0 1px var(--ui-inlay);
+  color: var(--ui-heading);
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+.account-home-cta:hover,
+.account-home-cta:focus-visible {
+  border-color: var(--ui-accent);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-inlay),
+    0 0 1.1rem var(--ui-accent-glow);
+  color: var(--ui-focus);
+}
+
+.account-retry {
+  width: min(15.5rem, 100%);
+  color: var(--ui-heading);
+}
+
+.account-logout {
+  font-size: 0.75rem;
 }
 
 .account-menu {

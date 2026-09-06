@@ -17,7 +17,10 @@ import {
 } from "./adapters/browser/persistence-platform";
 import { ApiClient, ApiError } from "./adapters/http/api-client";
 import { HttpSaveRepository } from "./adapters/http/http-save-repository";
-import { probeAuthSession } from "./adapters/http/session-probe";
+import {
+  isLocalDevHostname,
+  probeAuthSession,
+} from "./adapters/http/session-probe";
 import { preflightWebGL2 } from "./adapters/browser/webgl2";
 import { bootPhaser, fixtureFailureDiagnostics } from "./adapters/phaser/boot";
 import type { ZoneLifecycleDiagnostics } from "./adapters/phaser/isometric-world";
@@ -221,6 +224,18 @@ const showMainMenu = combatPrototype && !autostart;
  * without it local origins remain purely local.
  */
 const accountAutomation = fixtureParameters.has("accountTest");
+/**
+ * TASK-714 (DEC-040): playing requires an account on every player-reachable
+ * origin. The gate applies to the plain menu boot on any non-loopback host
+ * (custom domain, `*.pages.dev`, public hosts) and under `?accountTest` so
+ * e2e can drive it. The remaining ungated paths are the automation/dev
+ * doors: `?autostart` and the fixture flags (explicit query parameters that
+ * players never see and that grant nothing server-side), plus plain loads
+ * on loopback/LAN dev origins that no player can reach.
+ */
+const accountGateApplies =
+  showMainMenu &&
+  (accountAutomation || !isLocalDevHostname(window.location.hostname));
 document.body.classList.toggle("combat-mode", combatPrototype);
 const emptyViewport: CanvasViewportReadModel = {
   cssWidth: 0,
@@ -291,7 +306,15 @@ let characterSaveMenu: MainMenuCharacterSaveModel = {
 let continueSavedCharacter: (() => boolean) | null = null;
 /** TASK-709 account menu state (null on local origins / signed out). */
 let accountMenu: AccountMenuModel | null = null;
-let accountLoginUrl: string | null = null;
+/**
+ * TASK-714 account gate state: "checking" while the boot session resolves
+ * on a gated origin, "signed-out" when it resolved without a session (the
+ * menu shows the account-required screen), null when a session exists or
+ * the origin is an ungated dev door.
+ */
+let accountGate: "checking" | "signed-out" | null = accountGateApplies
+  ? "checking"
+  : null;
 let accountClient: ApiClient | null = null;
 /** Set once the renderer boots; restores a server save into the sim. */
 let restoreServerCharacter: ((save: CharacterSave) => boolean) | null = null;
@@ -380,7 +403,7 @@ function renderApp(): void {
       }}
       account={accountMenu}
       accountActions={accountActions}
-      accountLoginUrl={accountLoginUrl}
+      accountGate={accountGate}
       keybinds={keybinds}
       onExitGame={(destination) => exitGame(destination)}
     />,
@@ -531,6 +554,41 @@ const accountActions: AccountMenuActions = {
     await refreshAccountCharacters();
     return true;
   },
+  async retry() {
+    // TASK-714: recover from the "unavailable" state without a reload.
+    if (accountClient === null || accountMenu === null) return;
+    setAccountMenu({
+      ...accountMenu,
+      phase: "loading",
+      busy: false,
+      error: null,
+      notice: null,
+    });
+    await refreshAccountCharacters();
+  },
+  async logout() {
+    // TASK-714 (DEC-040): end the session server-side (the cookie is
+    // HttpOnly, so only the API can clear it), then hand off to the
+    // homepage, which owns auth.
+    if (accountClient === null) return false;
+    if (accountMenu !== null) {
+      setAccountMenu({ ...accountMenu, busy: true, error: null });
+    }
+    try {
+      await accountClient.logout();
+    } catch {
+      if (accountMenu !== null) {
+        setAccountMenu({
+          ...accountMenu,
+          busy: false,
+          error: "Could not log out — the account service is unreachable.",
+        });
+      }
+      return false;
+    }
+    window.location.assign("/");
+    return true;
+  },
 };
 
 /**
@@ -552,17 +610,11 @@ async function resolveAccountSession(): Promise<{
     } catch {
       // Unreachable mock API: treated as signed out.
     }
-    accountLoginUrl = "/";
-    renderApp();
     return null;
   }
   const probe = await probeAuthSession();
-  if (probe.apiOrigin === null) return null; // Local origin: nothing changes.
-  if (probe.session === null) {
-    accountLoginUrl = "/";
-    renderApp();
-    return null;
-  }
+  if (probe.apiOrigin === null) return null; // No API on this origin.
+  if (probe.session === null) return null;
   return { origin: probe.apiOrigin, email: probe.session.email };
 }
 
@@ -573,8 +625,18 @@ async function initAccountMenu(): Promise<void> {
     return;
   }
   const resolved = await resolveAccountSession();
-  if (resolved === null) return;
+  if (resolved === null) {
+    // TASK-714 (DEC-040): on gated origins a missing session locks the
+    // menu behind the account-required screen; ungated dev origins keep
+    // the local menu.
+    if (accountGateApplies) {
+      accountGate = "signed-out";
+      renderApp();
+    }
+    return;
+  }
   if (gameplayStarted) return; // The player already started a local game.
+  accountGate = null;
   accountClient = new ApiClient(resolved.origin);
   setAccountMenu({
     email: resolved.email,

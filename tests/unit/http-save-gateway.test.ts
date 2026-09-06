@@ -6,6 +6,7 @@ import { ApiClient, ApiError } from "../../src/adapters/http/api-client";
 import { HttpSaveRepository } from "../../src/adapters/http/http-save-repository";
 import {
   deriveApiOrigin,
+  isLocalDevHostname,
   probeAuthSession,
 } from "../../src/adapters/http/session-probe";
 import {
@@ -46,6 +47,22 @@ describe("deriveApiOrigin", () => {
     expect(deriveApiOrigin("192.168.1.50")).toBeNull();
     expect(deriveApiOrigin("lootdivers.pages.dev")).toBeNull();
     expect(deriveApiOrigin("api.example.com")).toBeNull();
+  });
+});
+
+describe("isLocalDevHostname (DEC-040 gate boundary)", () => {
+  it("treats only loopback and LAN IPs as the ungated dev door", () => {
+    expect(isLocalDevHostname("localhost")).toBe(true);
+    expect(isLocalDevHostname("127.0.0.1")).toBe(true);
+    expect(isLocalDevHostname("192.168.1.50")).toBe(true);
+    expect(isLocalDevHostname("[::1]")).toBe(true);
+  });
+
+  it("gates every player-reachable host, including Pages previews", () => {
+    expect(isLocalDevHostname("example.com")).toBe(false);
+    expect(isLocalDevHostname("www.example.com")).toBe(false);
+    expect(isLocalDevHostname("lootdivers.pages.dev")).toBe(false);
+    expect(isLocalDevHostname("api.example.com")).toBe(false);
   });
 });
 

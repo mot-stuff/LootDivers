@@ -15,6 +15,7 @@ import {
 import {
   App,
   type AccountCharacterModel,
+  type AccountGateState,
   type AccountMenuActions,
   type AccountMenuModel,
 } from "../../src/presentation/App";
@@ -2017,10 +2018,24 @@ describe("technical UI shell component", () => {
     { id: "c-2", name: "Ash", className: "barbarian", level: 2 },
   ];
 
+  function stubActions(
+    overrides?: Partial<AccountMenuActions>,
+  ): AccountMenuActions {
+    return {
+      select: vi.fn<AccountMenuActions["select"]>(() => Promise.resolve(null)),
+      create: vi.fn<AccountMenuActions["create"]>(() => Promise.resolve(null)),
+      remove: vi.fn<AccountMenuActions["remove"]>(() => Promise.resolve(false)),
+      retry: vi.fn<AccountMenuActions["retry"]>(() => Promise.resolve()),
+      logout: vi.fn<AccountMenuActions["logout"]>(() => Promise.resolve(true)),
+      ...overrides,
+    };
+  }
+
   function mountAccountMenu(
-    account: AccountMenuModel,
+    account: AccountMenuModel | null,
     actions: AccountMenuActions,
     onGameplayStarted: () => void = () => undefined,
+    accountGate: AccountGateState = null,
   ) {
     const channel = createReadModelChannel(readyModel);
     const container = document.createElement("div");
@@ -2033,6 +2048,7 @@ describe("technical UI shell component", () => {
         account={account}
         accountActions={actions}
         onGameplayStarted={onGameplayStarted}
+        accountGate={accountGate}
       />,
       container,
     );
@@ -2043,13 +2059,7 @@ describe("technical UI shell component", () => {
     const select = vi.fn<AccountMenuActions["select"]>(() =>
       Promise.resolve<"fresh" | "restored" | null>("restored"),
     );
-    const actions: AccountMenuActions = {
-      select,
-      create: vi.fn<AccountMenuActions["create"]>(() =>
-        Promise.resolve<"fresh" | null>("fresh"),
-      ),
-      remove: vi.fn<AccountMenuActions["remove"]>(() => Promise.resolve(true)),
-    };
+    const actions = stubActions({ select });
     const onGameplayStarted = vi.fn();
     const worldCommands = vi.fn<(command: WorldUiCommand) => void>();
     const captureWorld = (event: CustomEvent<WorldUiCommand>) => {
@@ -2096,11 +2106,7 @@ describe("technical UI shell component", () => {
     const create = vi.fn<AccountMenuActions["create"]>(() =>
       Promise.resolve<"fresh" | null>("fresh"),
     );
-    const actions: AccountMenuActions = {
-      select: vi.fn<AccountMenuActions["select"]>(() => Promise.resolve(null)),
-      create,
-      remove: vi.fn<AccountMenuActions["remove"]>(() => Promise.resolve(true)),
-    };
+    const actions = stubActions({ create });
     const onGameplayStarted = vi.fn();
     const worldCommands = vi.fn<(command: WorldUiCommand) => void>();
     const captureWorld = (event: CustomEvent<WorldUiCommand>) => {
@@ -2184,11 +2190,7 @@ describe("technical UI shell component", () => {
     const remove = vi.fn<AccountMenuActions["remove"]>(() =>
       Promise.resolve(true),
     );
-    const actions: AccountMenuActions = {
-      select: vi.fn<AccountMenuActions["select"]>(() => Promise.resolve(null)),
-      create: vi.fn<AccountMenuActions["create"]>(() => Promise.resolve(null)),
-      remove,
-    };
+    const actions = stubActions({ remove });
     const fullRoster: AccountCharacterModel[] = [
       ...accountCharacters,
       { id: "c-3", name: "D'Marr", className: "barbarian", level: 11 },
@@ -2244,12 +2246,11 @@ describe("technical UI shell component", () => {
     }
   });
 
-  it("falls back to the local menu with a notice when the list is unavailable", () => {
-    const actions: AccountMenuActions = {
-      select: vi.fn<AccountMenuActions["select"]>(() => Promise.resolve(null)),
-      create: vi.fn<AccountMenuActions["create"]>(() => Promise.resolve(null)),
-      remove: vi.fn<AccountMenuActions["remove"]>(() => Promise.resolve(false)),
-    };
+  // TASK-714 (DEC-040): account-required gate and logout.
+
+  it("shows the service-unreachable gate with retry instead of local play", async () => {
+    const retry = vi.fn<AccountMenuActions["retry"]>(() => Promise.resolve());
+    const actions = stubActions({ retry });
     const container = mountAccountMenu(
       accountModel({
         phase: "unavailable",
@@ -2258,18 +2259,97 @@ describe("technical UI shell component", () => {
       actions,
     );
     try {
+      // No character select and, per DEC-040, no local New Game either.
       expect(
         container.querySelector('[data-testid="account-select"]'),
       ).toBeNull();
       expect(
-        container.querySelector<HTMLButtonElement>(
-          '[data-testid="main-menu-new-game"]',
-        )?.disabled,
-      ).toBe(false);
+        container.querySelector('[data-testid="main-menu-new-game"]'),
+      ).toBeNull();
       expect(
         container.querySelector('[data-testid="account-unavailable"]')
           ?.textContent,
       ).toContain("unreachable");
+      expect(
+        container
+          .querySelector('[data-testid="account-gate-home"]')
+          ?.getAttribute("href"),
+      ).toBe("/");
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>('[data-testid="account-retry"]')
+          ?.click();
+      });
+      expect(retry).toHaveBeenCalledTimes(1);
+    } finally {
+      render(null, container);
+    }
+  });
+
+  it("gates a signed-out visitor behind the account-required screen", () => {
+    const container = mountAccountMenu(
+      null,
+      stubActions(),
+      () => undefined,
+      "signed-out",
+    );
+    try {
+      const gate = container.querySelector('[data-testid="account-required"]');
+      expect(gate).not.toBeNull();
+      expect(gate?.textContent).toContain("Account Required");
+      expect(
+        container
+          .querySelector('[data-testid="account-required-home"]')
+          ?.getAttribute("href"),
+      ).toBe("/");
+      // No local play and no playable state behind the gate.
+      expect(
+        container.querySelector('[data-testid="main-menu-new-game"]'),
+      ).toBeNull();
+      expect(
+        container.querySelector('[data-testid="main-menu-continue"]'),
+      ).toBeNull();
+    } finally {
+      render(null, container);
+    }
+  });
+
+  it("shows a session-checking state while the gate resolves", () => {
+    const container = mountAccountMenu(
+      null,
+      stubActions(),
+      () => undefined,
+      "checking",
+    );
+    try {
+      expect(
+        container.querySelector('[data-testid="account-checking"]'),
+      ).not.toBeNull();
+      expect(
+        container.querySelector('[data-testid="main-menu-new-game"]'),
+      ).toBeNull();
+    } finally {
+      render(null, container);
+    }
+  });
+
+  it("logs out from character select through the injected action", async () => {
+    const logout = vi.fn<AccountMenuActions["logout"]>(() =>
+      Promise.resolve(true),
+    );
+    const actions = stubActions({ logout });
+    const container = mountAccountMenu(
+      accountModel({ characters: accountCharacters }),
+      actions,
+    );
+    try {
+      await act(async () => {
+        container
+          .querySelector<HTMLButtonElement>('[data-testid="account-logout"]')
+          ?.click();
+        await flushAsync();
+      });
+      expect(logout).toHaveBeenCalledTimes(1);
     } finally {
       render(null, container);
     }
