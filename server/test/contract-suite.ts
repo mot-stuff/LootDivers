@@ -193,6 +193,35 @@ export function runContractSuite(
       expect(response.json()).toEqual({ status: "ok" });
     });
 
+    it("CORS preflights allow PUT and DELETE from the site origin", async () => {
+      // Regression (2026-09-05, live): the default preflight allow-list is
+      // GET,HEAD,POST, so browsers silently blocked every cross-origin
+      // save PUT and character DELETE after a 204 preflight. Node clients
+      // never see CORS, so only this header assertion guards it.
+      for (const method of ["PUT", "DELETE"]) {
+        const response = await app.inject({
+          method: "OPTIONS",
+          url: "/characters/some-id/save",
+          headers: {
+            origin: "https://example.test",
+            "access-control-request-method": method,
+            "access-control-request-headers": "content-type",
+          },
+        });
+        expect(response.statusCode).toBe(204);
+        expect(response.headers["access-control-allow-origin"]).toBe(
+          "https://example.test",
+        );
+        expect(response.headers["access-control-allow-credentials"]).toBe(
+          "true",
+        );
+        const allowed = String(
+          response.headers["access-control-allow-methods"] ?? "",
+        );
+        expect(allowed).toContain(method);
+      }
+    });
+
     it("signup auto-logs-in, rejects duplicates and invalid credentials", async () => {
       const session = await signup("dupe-check@example.test");
       expect(session.userId).toMatch(/[0-9a-f-]{36}/i);

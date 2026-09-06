@@ -91,6 +91,14 @@ export async function buildApp(
   await app.register(fastifyCors, {
     origin: [...config.corsOrigins],
     credentials: true,
+    // Fastify's default preflight allow-list is GET,HEAD,POST only, which
+    // made browsers block every cross-origin save (PUT) and character
+    // delete (DELETE) after a 204 preflight — observed live 2026-09-05:
+    // OPTIONS succeeded, the real request never arrived. Node-side tests
+    // and same-origin dev proxies never see CORS, hence the gap.
+    methods: ["GET", "HEAD", "POST", "PUT", "DELETE"],
+    // Cache preflights so the client isn't re-asking every few seconds.
+    maxAge: 86400,
   });
   if (dependencies.rateLimits !== false) {
     await app.register(fastifyRateLimit, {
