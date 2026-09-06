@@ -556,6 +556,16 @@ Players should not need to download the entire future game before reaching the f
 
 # Multiplayer
 
+**Owner amendment (2026-09-05): Loot Divers is an MMO ARPG. There is no
+single-player product.** The current client-local simulation is a
+development scaffold that lets gameplay be proven quickly; it is not the
+shipping architecture. Server-authoritative simulation is the target for
+all shared play, and the migration to it must be planned as its own phase
+before any shared-world, trading, or leaderboard feature ships. Every new
+system should be built with the expectation that its authoritative copy
+eventually runs on the server (the deterministic, framework-free core
+exists precisely so the same simulation can run headless server-side).
+
 Multiplayer is NOT required for the first vertical slice.
 
 However, eventual multiplayer is a serious possibility.

@@ -272,6 +272,15 @@ flagged for review. The endgame answer remains server-authoritative
 simulation for any shared-economy play, and that decision must be made
 before multiplayer — not retrofitted after.
 
+Owner clarification (2026-09-05): **Loot Divers is an MMO ARPG — there is
+no single-player product.** The client-local simulation is a development
+scaffold for proving gameplay, not the shipping architecture. The
+server-authority migration is therefore not a contingency but a planned
+phase: the deterministic core simulation moves to (or is verified by) the
+server for all shared play, clients send inputs and render state, and the
+plausibility/rate validation above becomes a transitional layer, not the
+end state. GAME_VISION.md § Multiplayer carries the same amendment.
+
 ## Deferred systems
 
 Do not build without approval: multiplayer, guilds, shared trading economy,
