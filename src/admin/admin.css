@@ -1,0 +1,303 @@
+/*
+ * Loot Divers admin panel theme (TASK-721, DEC-047).
+ *
+ * Builds on the homepage stylesheet (src/home/home.css, imported by
+ * src/admin/main.ts), which carries the DEC-029 token mirror — this file
+ * only adds the panel-specific layout on top of those tokens.
+ */
+
+/* The gate/panel swap and the two-step confirms rely on the `hidden`
+   attribute; author `display` values would silently override the UA's
+   [hidden] rule (display:flex beats it), so pin it. */
+[hidden] {
+  display: none !important;
+}
+
+.admin-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+  padding-top: clamp(0.5rem, 3vh, 1.5rem);
+}
+
+.admin-title {
+  margin: 0;
+  font-family: var(--ui-font-heading);
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  letter-spacing: 0.05em;
+  color: var(--ui-heading);
+}
+
+.admin-session-line {
+  margin: 0;
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  font-size: 0.9rem;
+  color: var(--ui-text-dim);
+}
+
+.admin-home-link {
+  color: var(--ui-accent-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 0.9rem;
+}
+
+.admin-home-link:hover,
+.admin-home-link:focus-visible {
+  color: var(--ui-focus);
+  outline: none;
+}
+
+.admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-gate-copy {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.admin-section-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ui-text-dim);
+  line-height: 1.45;
+}
+
+.admin-field-label {
+  display: block;
+  margin: 0.6rem 0 0.25rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-dim);
+}
+
+.admin-inline-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+
+.admin-lookup-form input,
+.admin-news-form input:not([type="hidden"]),
+.admin-news-form textarea,
+.admin-ban-form input {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--ui-border-dim);
+  border-radius: 3px;
+  background: var(--ui-panel-bg-solid);
+  color: var(--ui-text-bright);
+  font: inherit;
+}
+
+.admin-lookup-form input:focus-visible,
+.admin-news-form input:focus-visible,
+.admin-news-form textarea:focus-visible,
+.admin-ban-form input:focus-visible {
+  outline: 1px solid var(--ui-focus);
+  border-color: var(--ui-accent);
+}
+
+.admin-button {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 3px;
+  background: var(--ui-panel-bg-raised);
+  color: var(--ui-accent);
+  font-family: var(--ui-font-heading);
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-button:hover:not(:disabled),
+.admin-button:focus-visible {
+  color: var(--ui-focus);
+  border-color: var(--ui-accent);
+  outline: none;
+}
+
+.admin-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.admin-button-quiet {
+  border-color: var(--ui-border-dim);
+  color: var(--ui-text-dim);
+}
+
+.admin-status {
+  min-height: 1.2em;
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.admin-status[data-tone="error"] {
+  color: var(--ui-danger-text);
+}
+
+.admin-status[data-tone="success"] {
+  color: var(--ui-ready);
+}
+
+.admin-account-card {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--ui-border-dim);
+  padding-top: 0.75rem;
+}
+
+.admin-account-card h3 {
+  margin: 0 0 0.4rem;
+  font-family: var(--ui-font-heading);
+  color: var(--ui-text-bright);
+}
+
+.admin-account-card h4 {
+  margin: 0.9rem 0 0.3rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-dim);
+}
+
+.admin-ban-state {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+
+.admin-ban-state[data-banned="true"] {
+  color: var(--ui-danger-text);
+}
+
+.admin-ban-state[data-banned="false"] {
+  color: var(--ui-ready);
+}
+
+.admin-detail-row {
+  display: flex;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  padding: 0.1rem 0;
+}
+
+.admin-detail-term {
+  min-width: 7.5rem;
+  color: var(--ui-text-dim);
+}
+
+.admin-detail-value {
+  overflow-wrap: anywhere;
+}
+
+.admin-character-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.admin-account-actions {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.admin-ban-form {
+  width: 100%;
+}
+
+.admin-confirm-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.admin-table {
+  width: 100%;
+  margin: 0.4rem 0 0.9rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--ui-border-dim);
+  overflow-wrap: anywhere;
+}
+
+.admin-table th {
+  color: var(--ui-heading);
+  font-family: var(--ui-font-heading);
+  letter-spacing: 0.04em;
+}
+
+.admin-rejections h3,
+.admin-news-list h3 {
+  margin: 0.9rem 0 0.2rem;
+  font-size: 0.95rem;
+  font-family: var(--ui-font-heading);
+  color: var(--ui-text-bright);
+}
+
+.admin-news-form textarea {
+  resize: vertical;
+}
+
+.admin-news-list {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.admin-news-entry {
+  border-top: 1px solid var(--ui-border-dim);
+  padding-top: 0.7rem;
+}
+
+.admin-news-entry h3 {
+  margin: 0 0 0.2rem;
+  font-family: var(--ui-font-heading);
+  font-size: 1rem;
+  color: var(--ui-text-bright);
+}
+
+.admin-news-meta {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  color: var(--ui-text-dim);
+}
+
+.admin-news-body {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.admin-news-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin-news-empty {
+  font-size: 0.88rem;
+  color: var(--ui-text-dim);
+}

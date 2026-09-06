@@ -67,6 +67,16 @@
             </p>
           </div>
         </div>
+        <!-- TASK-721 (DEC-047): visible only for admin sessions (display
+             gating; the /admin/ page and API re-check server-side). -->
+        <a
+          class="home-admin-link"
+          href="/admin/"
+          data-testid="home-admin-link"
+          hidden
+        >
+          Admin tools
+        </a>
         <p class="home-play-note">Free in your browser. No download.</p>
       </header>
 

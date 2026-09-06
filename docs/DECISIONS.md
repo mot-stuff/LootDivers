@@ -3698,3 +3698,87 @@ could change — useless for a web admin panel.
 - The contract suite covers the guard (401/403 per route), ban/unban via
   API, the rejection log, the account lookup, news CRUD and ordering,
   and the preflight — against MemoryStore and Postgres.
+
+# DEC-047
+
+## The admin panel: a third MPA page at /admin/, display-only isAdmin gating, homepage news from the live feed
+
+Date: 2026-09-05 (TASK-721)
+
+## Context
+
+DEC-046 shipped the admin API (account lookup, ban/unban, the
+save-rejection audit signal, news CRUD) and reserved the UI for this
+task. The owner wants the tools reachable from the homepage, plus a way
+back to the homepage from the character select and creation screens.
+
+## Decision
+
+1. **Placement: "/admin/" is a third entry of the Vite multi-page build**
+   (`admin/index.html` + `src/admin/main.ts`), beside "/" and "/play/".
+   Like the homepage it is plain TypeScript — no Phaser, no Preact — and
+   it imports the homepage stylesheet, so the DEC-029 token mirror stays
+   in exactly one place (`src/home/home.css`); `src/admin/admin.css` only
+   adds panel layout. The shared `apiBaseForHost` moved to
+   `src/home/api-base.ts` so both pages import it without side effects.
+2. **Access model: display gating client-side, enforcement server-side.**
+   The homepage session probe reads the DEC-046 `isAdmin` flag and un-hides
+   an "Admin tools" link; the /admin/ page probes the session itself and
+   shows a themed "admin access required" state for signed-out or
+   non-admin visitors. Both are pure display decisions — every /admin/*
+   route re-checks the session server-side and answers 401/403 regardless
+   of anything the client renders. Hiding the page or its link is NOT the
+   security boundary and never will be.
+3. **Panel tools** (all DEC-046 endpoints, DEC-029 theme): account lookup
+   by email with characters and ban state; ban with a required reason and
+   a two-step confirm (the 409 `target-is-admin` answer surfaces
+   verbatim); unban with a two-step confirm; the save-rejection log
+   (recent rows + per-account counts); and a news manager with create,
+   edit, and confirmed delete.
+4. **The homepage news section now renders from `GET /news`**, so panel
+   edits go live without a deploy. The repo's `src/home/news.json` stays
+   as the fallback for an unreachable API, a malformed response, or an
+   empty feed — the pre-API behavior is the degraded mode, never a blank
+   panel.
+5. **XSS rule restated as implementation:** every admin-entered and
+   API-returned string (news titles/bodies especially — they are plain
+   text/markdown) renders through `textContent`/text nodes. Neither page
+   uses `innerHTML` anywhere.
+6. **Navigation:** character select and character creation at /play/ each
+   carry a "Back to home" anchor to "/" — plain navigation, the session
+   stays alive (logout remains its own explicit button, DEC-040).
+7. **Dev seam for tests:** the MemoryStore dev entry (`server/src/dev.ts`,
+   TASK-719) gains a `POST /dev/promote` route so the admin-journey e2e
+   can promote a fresh signup. It exists only in that dev entry point —
+   `buildApp` never registers it — production role grants remain CLI-only
+   (DEC-046).
+
+## Alternatives Considered
+
+- **An admin section inside the homepage:** rejected — the tools would
+  ship to every visitor and bloat the light "/" entry; a separate MPA
+  page keeps the homepage lean and the admin chunk unreferenced until an
+  admin navigates.
+- **Preact for the panel:** rejected — the panel is forms and tables; the
+  homepage's vanilla-TS pattern is lighter and already proven.
+- **Hiding /admin/ entirely from non-admins (404):** rejected — a static
+  host serves the HTML to anyone regardless; an honest "access required"
+  state is clearer than pretending the page does not exist, and the API
+  guard makes the knowledge worthless.
+- **Dropping news.json now that the feed is live:** rejected — the
+  fallback keeps the homepage meaningful when the API is down and keeps
+  CI (which runs with no API) deterministic.
+
+## Consequences
+
+- The Pages deploy publishes a third HTML entry; `public/_headers` gained
+  no-cache rules for /admin, /admin/, and /admin/index.html.
+- e2e coverage: admin link visibility per session, the access-required
+  states, panel flows against route mocks (lookup/ban/unban/409,
+  rejections, news CRUD), homepage news from the API with static
+  fallback, an XSS-inertness check on news rendering, Back to Home from
+  both account screens, and a real-API admin journey against the
+  MemoryStore dev server (skips when the API is not running).
+- The panel is intentionally minimal (one owner, pre-alpha); pagination,
+  audit trails of admin actions, and richer account tooling can extend
+  the same page when needed.

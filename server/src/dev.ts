@@ -19,10 +19,29 @@ async function main(): Promise<void> {
     PORT: process.env.PORT ?? "8790",
     HOST: process.env.HOST ?? "127.0.0.1",
   });
+  const store = new MemoryStore();
   const app = await buildApp({
-    store: new MemoryStore(),
+    store,
     config,
     rateLimits: false,
+  });
+  // TASK-721: dev-only admin promotion seam. In production admin is granted
+  // exclusively via the CLI (DEC-046); this route exists only in this
+  // memory-store entry point — buildApp never registers it — so the e2e
+  // admin-journey spec can promote a freshly signed-up user.
+  app.post("/dev/promote", async (request, reply) => {
+    const { email } = (request.body ?? {}) as { email?: unknown };
+    const user =
+      typeof email === "string"
+        ? await store.findUserByEmail(email.trim().toLowerCase())
+        : null;
+    if (user === null) {
+      return reply
+        .status(404)
+        .send({ error: { code: "not-found", message: "No such account." } });
+    }
+    await store.setAdmin(user.id, true);
+    return reply.status(200).send({ id: user.id, isAdmin: true });
   });
   await app.listen({ port: config.port, host: config.host });
   console.log(

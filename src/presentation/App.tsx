@@ -1321,6 +1321,14 @@ function AccountMenuSection({
         >
           Back to character select
         </button>
+        {/* TASK-721: plain navigation home — the session stays alive. */}
+        <a
+          class="account-back account-home-return"
+          data-testid="account-create-home"
+          href="/"
+        >
+          Back to home
+        </a>
       </section>
     );
   }
@@ -1471,6 +1479,14 @@ function AccountMenuSection({
           {account.error}
         </p>
       )}
+      {/* TASK-721: plain navigation home — no logout, the session stays. */}
+      <a
+        class="account-back account-home-return"
+        data-testid="account-select-home"
+        href="/"
+      >
+        Back to home
+      </a>
     </section>
   );
 }

@@ -3,8 +3,14 @@
  *
  * The "/" entry of the multi-page build: branding, news, auth forms, and
  * the Play link into "/play/". Deliberately light — no Phaser, no Preact,
- * no game code. News is a repo-owned JSON file imported at build time, so
- * the owner publishes an entry by editing that file and pushing.
+ * no game code.
+ *
+ * TASK-721 (DEC-047): news renders from the public GET /news feed so the
+ * admin panel's edits go live without a deploy; the repo-owned JSON file
+ * remains the fallback when the API is unreachable or the feed is empty.
+ * The session probe also carries `isAdmin`, which only toggles the admin
+ * panel link's visibility — the server is the real gate on every admin
+ * route.
  *
  * The auth forms target the Phase 8 v1 API contract
  * (docs/tasks/PHASE8-KICKOFF.md §2): POST /auth/login and /auth/signup
@@ -21,6 +27,8 @@
  */
 import newsEntries from "./news.json";
 
+import { apiBaseForHost } from "./api-base";
+
 import "./home.css";
 
 interface NewsEntry {
@@ -35,23 +43,7 @@ const SERVER_UNAVAILABLE_MESSAGE =
   "The account server is unreachable right now. Try again in a moment — " +
   "an account is needed to dive.";
 
-/**
- * Resolves the account API base URL (v1 contract: the API lives at
- * `api.<domain>` of the custom-domain origin). On localhost and
- * *.pages.dev there is no account API — the same-origin "/api" base fails
- * soft into the server-unavailable state and gives Playwright a stable
- * path to mock.
- */
-export function apiBaseForHost(hostname: string): string {
-  if (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname.endsWith(".pages.dev")
-  ) {
-    return "/api";
-  }
-  return `https://api.${hostname.replace(/^www\./, "")}`;
-}
+export { apiBaseForHost };
 
 export function validateCredentials(
   email: string,
@@ -74,10 +66,43 @@ function requireElement<T extends Element>(selector: string): T {
   return element;
 }
 
-function renderNews(list: HTMLOListElement): void {
-  const entries = [...(newsEntries as readonly NewsEntry[])].sort((a, b) =>
-    b.date.localeCompare(a.date),
+function isNewsEntry(value: unknown): value is NewsEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry["date"] === "string" &&
+    typeof entry["title"] === "string" &&
+    typeof entry["body"] === "string"
   );
+}
+
+/**
+ * TASK-721 (DEC-047): the live feed is the source of truth; the repo-owned
+ * news.json is the fallback for an unreachable API, a malformed response,
+ * or an empty feed (nothing has been published through the panel yet).
+ */
+async function loadNewsEntries(): Promise<readonly NewsEntry[]> {
+  const fallback = newsEntries as readonly NewsEntry[];
+  try {
+    const response = await fetch(
+      `${apiBaseForHost(window.location.hostname)}/news`,
+    );
+    if (!response.ok) return fallback;
+    const body: unknown = await response.json();
+    if (!Array.isArray(body)) return fallback;
+    const entries = body.filter((entry) => isNewsEntry(entry));
+    return entries.length > 0 ? entries : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function renderNews(
+  list: HTMLOListElement,
+  source: readonly NewsEntry[],
+): void {
+  list.replaceChildren();
+  const entries = [...source].sort((a, b) => b.date.localeCompare(a.date));
   for (const entry of entries) {
     const item = document.createElement("li");
     item.className = "home-news-entry";
@@ -150,6 +175,8 @@ async function submitCredentials(
 
 interface HomeSession {
   readonly email: string;
+  /** TASK-721: display gating only — every admin route 401/403s server-side. */
+  readonly isAdmin: boolean;
 }
 
 /**
@@ -164,9 +191,12 @@ async function probeSession(): Promise<HomeSession | null> {
       { credentials: "include" },
     );
     if (!response.ok) return null;
-    const body = (await response.json()) as { email?: unknown };
+    const body = (await response.json()) as {
+      email?: unknown;
+      isAdmin?: unknown;
+    };
     return typeof body.email === "string" && body.email !== ""
-      ? { email: body.email }
+      ? { email: body.email, isAdmin: body.isAdmin === true }
       : null;
   } catch {
     return null;
@@ -177,6 +207,11 @@ async function probeSession(): Promise<HomeSession | null> {
 function applySessionUi(session: HomeSession | null): void {
   requireElement<HTMLElement>(".home-cta-signed-out").hidden = session !== null;
   requireElement<HTMLElement>(".home-cta-signed-in").hidden = session === null;
+  // The admin entry shows only for admin sessions (TASK-721, DEC-047); this
+  // is pure display gating — the /admin/ page and every admin API route
+  // re-check the session server-side.
+  requireElement<HTMLAnchorElement>(".home-admin-link").hidden =
+    session === null || !session.isAdmin;
   if (session !== null) {
     requireElement<HTMLSpanElement>(".home-session-email").textContent =
       session.email;
@@ -297,9 +332,16 @@ function wireAuthForms(
   };
 }
 
-renderNews(requireElement<HTMLOListElement>(".home-news-list"));
+void loadNewsEntries().then((entries) => {
+  renderNews(requireElement<HTMLOListElement>(".home-news-list"), entries);
+});
 const setAuthMode = wireAuthForms((email) => {
-  applySessionUi({ email });
+  // Switch the hero immediately, then re-probe so an admin session also
+  // reveals the admin entry without a reload.
+  applySessionUi({ email, isAdmin: false });
+  void probeSession().then((session) => {
+    if (session !== null) applySessionUi(session);
+  });
 });
 wireHeroCta(setAuthMode);
 wireLogout();
