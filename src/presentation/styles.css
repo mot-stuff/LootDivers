@@ -645,7 +645,9 @@ body.combat-mode #app,
 .combat-paused-hud {
   position: absolute;
   z-index: 2;
-  top: 8rem;
+  /* Below the thickened diagnostic title (5px candy frame). 8rem
+     overlapped the title by a fraction of a pixel at 1280x720. */
+  top: 9.5rem;
   left: 1rem;
   display: grid;
   gap: 0.2rem;
@@ -1728,8 +1730,9 @@ a:focus-visible {
   z-index: 10;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
+  overflow-y: auto;
   padding: clamp(0.75rem, 3vh, 2rem);
   background-color: #0a3a8c;
   background-image:
@@ -1962,6 +1965,16 @@ a:focus-visible {
   width: min(26rem, 100%);
 }
 
+/* Create is taller than select (class card + form). Keep the two back
+   links on one row so "Back to home" stays on-screen at 1280x720. */
+.account-create {
+  grid-template-columns: 1fr 1fr;
+}
+
+.account-create > :not(.account-back) {
+  grid-column: 1 / -1;
+}
+
 .account-heading {
   margin: 0;
   color: var(--ui-heading);
@@ -2102,6 +2115,10 @@ a.account-home-return {
   margin-top: 0.4rem;
 }
 
+.account-create a.account-home-return {
+  margin-top: 0;
+}
+
 a.account-home-return:hover {
   color: var(--ui-focus);
 }
@@ -2207,9 +2224,18 @@ a.account-home-return:hover {
   text-align: center;
 }
 
-@media (max-height: 640px) {
+@media (max-height: 720px) {
+  .main-menu-panel:has(.account-create) {
+    gap: 0.7rem;
+    padding: 0.9rem 1.5rem;
+  }
+
+  .main-menu-panel:has(.account-create) .main-menu-logo {
+    width: min(14rem, 100%);
+  }
+
   .barbarian-idle-preview {
-    transform: scale(1.4);
+    transform: scale(1.45);
   }
 
   .account-menu {
