@@ -208,7 +208,7 @@ test("a signed-in session lists heroes and create flows into the tutorial with s
     };
   });
   expect(animation.name).toBe("barbarian-idle-preview");
-  expect(animation.image).toContain("/assets/characters/barbarian/Idle.png");
+  expect(animation.image).toContain("/assets/characters/diver/Idle.png");
   expect(animation.playState).toBe("running");
   // The flipbook visibly advances: the background x-offset changes between
   // two samples one frame-step apart.

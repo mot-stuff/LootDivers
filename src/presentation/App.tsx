@@ -206,8 +206,8 @@ const EMPTY_FLASK_HUD: readonly CombatFlaskHudReadModel[] = [
 const EMPTY_MINIMAP: MinimapHudReadModel = {
   width: 1_200,
   height: 800,
-  floorColor: "#10263a",
-  edgeColor: "#64d8cb",
+  floorColor: "#1a4a52",
+  edgeColor: "#5ab0a8",
   walkable: { x: 18, y: 18, width: 1_164, height: 764 },
   markers: [],
 };
@@ -1266,7 +1266,7 @@ function AccountMenuSection({
             class="barbarian-idle-preview"
             data-testid="account-create-preview"
             role="img"
-            aria-label="Barbarian idle animation preview"
+            aria-label="Diver idle animation preview"
           ></span>
           <div class="account-class-copy">
             <h3>Barbarian</h3>

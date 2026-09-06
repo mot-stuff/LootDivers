@@ -317,20 +317,20 @@ export class CombatArenaPresentation {
     }
     if (!this.#automationPaused) {
       this.#simulation.setMovement(input.movementX, input.movementY);
-      if (input.hasPointer) {
-        this.#lastPointerX = input.pointerX;
-        this.#lastPointerY = input.pointerY;
-      }
-      const aimOriginY = playerPoint.y - 8;
-      const pointerPoint = this.scene.cameras.main.getWorldPoint(
-        this.#lastPointerX,
-        this.#lastPointerY,
-      );
-      const aim = this.inverseProjectDelta(
-        pointerPoint.x - playerPoint.x,
-        pointerPoint.y - aimOriginY,
-      );
-      this.#simulation.setAim(aim.x, aim.y);
+    if (input.hasPointer) {
+      this.#lastPointerX = input.pointerX;
+      this.#lastPointerY = input.pointerY;
+    }
+    const aimOriginY = playerPoint.y - 8;
+    const pointerPoint = this.scene.cameras.main.getWorldPoint(
+      this.#lastPointerX,
+      this.#lastPointerY,
+    );
+    const aim = this.inverseProjectDelta(
+      pointerPoint.x - playerPoint.x,
+      pointerPoint.y - aimOriginY,
+    );
+    this.#simulation.setAim(aim.x, aim.y);
       for (const slot of input.abilitySlotsRequested) {
         this.#simulation.requestAbilitySlot(slot, {
           kind: "point",
@@ -654,12 +654,28 @@ export class CombatArenaPresentation {
       ({ x, y }) => new Phaser.Math.Vector2(x, y),
     );
 
+    const skyCenterX = (top.x + bottom.x) * 0.5;
+    const skyTopY = Math.min(top.y, right.y, bottom.y, left.y) - 2200;
+    const skyBands = [0x4a96c8, 0x5aa8d4, 0x7abee0, 0xa0d2ea, 0xc4e4f2];
+    const skyW = 5200;
+    const skyH = 4200;
+    const bandH = skyH / skyBands.length;
+    for (let i = 0; i < skyBands.length; i++) {
+      this.#arenaGraphics.fillStyle(skyBands[i]!, 1);
+      this.#arenaGraphics.fillRect(
+        skyCenterX - skyW * 0.5,
+        skyTopY + i * bandH,
+        skyW,
+        bandH + 2,
+      );
+    }
+
     this.#arenaGraphics.fillStyle(zone.floorColor, 0.98);
     this.#arenaGraphics.fillPoints(points, true);
     this.#arenaGraphics.lineStyle(5, zone.edgeColor, 1);
     this.#arenaGraphics.strokePoints(points, true);
 
-    this.#arenaGraphics.lineStyle(1, 0x31536a, 0.55);
+    this.#arenaGraphics.lineStyle(1, 0x6a8a80, 0.18);
     for (let x = 80; x < this.#simulation.config.width; x += 80) {
       const start = this.project(x, 0);
       const end = this.project(x, this.#simulation.config.height);
@@ -702,10 +718,10 @@ export class CombatArenaPresentation {
           ? 0xf9f3a6
           : 0x5ce1e6;
     if (!this.#barbarian.ready) {
-      // The sprite ships its own frame-aligned cast shadow; the ellipse
-      // only backs the geometric fallback while textures load.
+      // The diver sprite bakes its contact shadow; the ellipse only
+      // backs the geometric fallback while textures load.
       this.#playerGraphics.fillStyle(playerColor, 0.24);
-      this.#playerGraphics.fillEllipse(point.x, point.y + 8, 52, 25);
+    this.#playerGraphics.fillEllipse(point.x, point.y + 8, 52, 25);
     }
     this.#barbarianDiagnostics = this.#barbarian.update({
       canvasX: point.x,
@@ -725,14 +741,14 @@ export class CombatArenaPresentation {
     });
     if (!this.#barbarianDiagnostics.ready) {
       this.#playerGraphics.fillStyle(playerColor, 1);
-      this.#playerGraphics.fillCircle(point.x, point.y - 8, 17);
-      this.#playerGraphics.lineStyle(5, 0x08111f, 1);
-      this.#playerGraphics.lineBetween(
-        point.x,
-        point.y - 8,
-        facingEndX,
-        facingEndY,
-      );
+    this.#playerGraphics.fillCircle(point.x, point.y - 8, 17);
+    this.#playerGraphics.lineStyle(5, 0x08111f, 1);
+    this.#playerGraphics.lineBetween(
+      point.x,
+      point.y - 8,
+      facingEndX,
+      facingEndY,
+    );
     }
     const cameraMatrix = this.scene.cameras.main.matrixCombined;
     cameraMatrix.transformPoint(

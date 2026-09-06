@@ -16,6 +16,21 @@ function gitOutput(...arguments_: string[]): string {
 
 export default defineConfig({
   plugins: [preact()],
+  server: {
+    // Local login/signup (DEC-032): homepage posts to same-origin `/api`.
+    // The memory-store API listens on 8790 (`server`: `npm run dev:memory`).
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8790",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+    watch: {
+      // Windows EBUSY on public/assets/branding/logo.png (OneDrive/AV lock).
+      ignored: ["**/public/assets/branding/**"],
+    },
+  },
   define: {
     __RARPG_BUILD_COMMIT__: JSON.stringify(gitOutput("rev-parse", "HEAD")),
     __RARPG_BUILD_DIRTY__: JSON.stringify(

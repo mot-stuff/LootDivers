@@ -40,7 +40,7 @@ const LOGICAL_WORLD_HEIGHT = 540;
 // Combat camera magnification on top of the fit-to-viewport zoom, so the
 // player sprite reads larger. The camera recenters on the player every
 // frame, so this only trades visible world area for character presence.
-const COMBAT_CAMERA_ZOOM = 1.3;
+const COMBAT_CAMERA_ZOOM = 1.05;
 let lastFixtureFailureDiagnostics: SyntheticPresentationDiagnostics | null =
   null;
 
@@ -513,7 +513,7 @@ export function bootPhaser(
         // Phaser 4.2.1's GameConfig declaration omits WebGL2RenderingContext,
         // although its WebGL renderer accepts and uses the supplied context.
         context: context as unknown as CanvasRenderingContext2D,
-        backgroundColor: "#101a2b",
+        backgroundColor: "#5aa8d4",
         render: {
           antialias: true,
           transparent: false,

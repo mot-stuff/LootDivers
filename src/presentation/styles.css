@@ -1,52 +1,75 @@
 /*
- * RARPG fantasy UI theme (TASK-701 / DEC-029).
+ * Loot Divers UI theme (DEC-029, logo/character restyle 2026-09-06).
  *
- * All themed rules consume the :root design tokens below. Rarity colors and
- * the health/mana/XP bar colors are intentionally preserved from the
- * pre-theme UI. Minimap floor/edge colors are simulation data delivered as
+ * Tokens follow the logo and sphere-diver: bright navy cavern, thick
+ * candy-cyan frames, glossy gold CTAs, and rounded plastic faces.
+ * Rarity colors and the health/mana/XP bar colors stay as previously
+ * defined. Minimap floor/edge colors are simulation data delivered as
  * inline SVG attributes and MUST NOT be overridden here.
  */
 :root {
-  /* Surfaces: deep charcoal/umber. */
-  --ui-page-bg: #0e0a07;
-  --ui-panel-bg: rgb(24 18 12 / 92%);
-  --ui-panel-bg-solid: #17110b;
-  --ui-panel-bg-raised: #241b11;
+  /* Surfaces: casual-mobile plastic cards on a navy cavern. */
+  --ui-page-bg: #04101c;
+  --ui-panel-bg: rgb(16 78 132 / 94%);
+  --ui-panel-bg-solid: #0e4a82;
+  --ui-panel-bg-raised: #1a90c4;
   --ui-panel-vignette: linear-gradient(
     180deg,
-    rgb(94 64 30 / 22%),
-    rgb(0 0 0 / 0%) 38%,
-    rgb(0 0 0 / 24%)
+    rgb(255 255 255 / 36%) 0%,
+    rgb(120 230 255 / 12%) 34%,
+    rgb(0 30 70 / 20%) 100%
   );
+  --ui-radius: 1.55rem;
+  --ui-radius-card: 1.05rem;
+  --ui-radius-pill: 999px;
+  --ui-frame: 5px;
+  --ui-rim: #140c38;
+  --ui-panel-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 44%),
+    inset 0 -6px 0 rgb(0 24 56 / 32%),
+    0 0 0 5px #1a1048,
+    0 8px 0 #0a0618,
+    0 18px 28px rgb(0 0 0 / 42%);
+  --ui-button-face: linear-gradient(180deg, #4ae0ff, #1288bc);
+  --ui-button-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 48%),
+    inset 0 -4px 0 rgb(0 30 50 / 25%),
+    0 6px 0 #0a2040;
+  --ui-gold-face: linear-gradient(180deg, #fff08a, #ffc01a 58%, #f0a400);
+  --ui-gold-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 62%),
+    inset 0 -4px 0 rgb(180 110 0 / 32%),
+    0 6px 0 #8a5a00;
+  --ui-heading-stroke: 0 3px 0 #140c38;
 
-  /* Frames: aged brass with a dark inlay line. */
-  --ui-border: #6d5731;
-  --ui-border-strong: #98783d;
-  --ui-border-dim: #46381f;
-  --ui-inlay: #0a0703;
+  /* Frames: thick candy cyan over a dark rim. */
+  --ui-border: #4ae4ff;
+  --ui-border-strong: #9cffff;
+  --ui-border-dim: #1c6e8c;
+  --ui-inlay: #041320;
 
-  /* Ember-gold accent. */
-  --ui-accent: #e0a935;
-  --ui-accent-soft: #cfa75c;
-  --ui-accent-glow: rgb(224 169 53 / 30%);
-  --ui-focus: #ffdf9e;
+  /* Treasure gold, with cyan focus like the character highlight. */
+  --ui-accent: #ffe14d;
+  --ui-accent-soft: #fff08a;
+  --ui-accent-glow: rgb(255 225 77 / 45%);
+  --ui-focus: #9cffff;
 
-  /* Parchment text. */
-  --ui-text: #ecdfc3;
-  --ui-text-bright: #f9f0da;
-  --ui-text-dim: #b3a17f;
-  --ui-heading: #e9c87f;
+  /* Bright cool text. */
+  --ui-text: #e8f8ff;
+  --ui-text-bright: #ffffff;
+  --ui-text-dim: #9fd4e8;
+  --ui-heading: #fff3a0;
 
   /* Keycaps. */
-  --ui-key-bg: #2e2213;
-  --ui-key-border: #8b6f3c;
+  --ui-key-bg: #12405c;
+  --ui-key-border: #4ce4ff;
 
   /* Functional states (kept distinguishable from the gold accent). */
   --ui-ready: #7fbf72;
   --ui-warn: #ffd27d;
   --ui-danger: #e25b52;
   --ui-danger-text: #ffc9c2;
-  --ui-muted-state: #9b8e75;
+  --ui-muted-state: #7fa8bc;
   --ui-arcane: #8a76c0;
 
   /* Rarity colors: preserved exactly from the pre-theme UI. */
@@ -54,10 +77,9 @@
   --rarity-rare: #f0c75e;
   --rarity-unique: #ff8000;
 
-  /* Typography. */
+  /* Typography: rounded system stack to match the bubbly logo. */
   --ui-font-heading:
-    "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman",
-    serif;
+    "Trebuchet MS", "Segoe UI", "Avenir Next", ui-rounded, system-ui, sans-serif;
 
   color: var(--ui-text);
   background: var(--ui-page-bg);
@@ -93,6 +115,7 @@ body.combat-mode {
   height: 100vh;
   padding: 0;
   overflow: hidden;
+  background: #5aa8d4;
 }
 
 body.combat-mode #app,
@@ -110,9 +133,9 @@ body.combat-mode #app,
 }
 
 /*
- * Shared framed-panel treatment: brass outer border, dark inlay, inner
- * brass hairline, warm vignette, and ember-gold corner brackets drawn by
- * an absolutely-positioned pseudo-element (absolute so it never becomes a
+ * Shared framed-panel treatment: thick candy-cyan rim, glossy plastic
+ * face, chunky drop, and gold corner brackets drawn by an
+ * absolutely-positioned pseudo-element (absolute so it never becomes a
  * grid item inside grid panels).
  */
 .combat-shell .diagnostic-shell,
@@ -122,13 +145,11 @@ body.combat-mode #app,
 .combat-paused-hud,
 .item-menu {
   position: relative;
-  border: 1px solid var(--ui-border);
+  border: var(--ui-frame) solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
   background-color: var(--ui-panel-bg);
   background-image: var(--ui-panel-vignette);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    inset 0 0 0 2px var(--ui-border-dim),
-    0 0.6rem 1.8rem rgb(0 0 0 / 45%);
+  box-shadow: var(--ui-panel-shadow);
 }
 
 .combat-shell .diagnostic-shell::after,
@@ -160,14 +181,14 @@ body.combat-mode #app,
     right bottom;
   background-repeat: no-repeat;
   background-size:
-    0.7rem 1px,
-    1px 0.7rem,
-    0.7rem 1px,
-    1px 0.7rem,
-    0.7rem 1px,
-    1px 0.7rem,
-    0.7rem 1px,
-    1px 0.7rem;
+    0.95rem 3px,
+    3px 0.95rem,
+    0.95rem 3px,
+    3px 0.95rem,
+    0.95rem 3px,
+    3px 0.95rem,
+    0.95rem 3px,
+    3px 0.95rem;
   pointer-events: none;
 }
 
@@ -179,7 +200,7 @@ body.combat-mode #app,
   width: auto;
   margin: 0;
   padding: 0.65rem 0.8rem;
-  border-radius: 0.45rem;
+  border-radius: 1.15rem;
   pointer-events: none;
 }
 
@@ -255,7 +276,7 @@ body.combat-mode #app,
   gap: 0.45rem;
   width: 100%;
   padding: 0.55rem 0.65rem;
-  border-radius: 0.45rem;
+  border-radius: 1.15rem;
   pointer-events: none;
 }
 
@@ -268,7 +289,7 @@ body.combat-mode #app,
   gap: 0.25rem;
   width: min(11.5rem, calc(100vw - 2rem));
   padding: 0.4rem 0.45rem 0.5rem;
-  border-radius: 0.45rem;
+  border-radius: 1.1rem;
   pointer-events: none;
 }
 
@@ -286,7 +307,7 @@ body.combat-mode #app,
   display: block;
   width: 100%;
   aspect-ratio: 3 / 2;
-  border-radius: 0.25rem;
+  border-radius: 0.75rem;
 }
 
 /*
@@ -296,7 +317,7 @@ body.combat-mode #app,
  * colors are preserved from the pre-theme UI.
  */
 .combat-minimap-void {
-  fill: #0b0805;
+  fill: #5aa8d4;
 }
 
 .combat-minimap-bounds {
@@ -350,7 +371,7 @@ body.combat-mode #app,
   gap: 0.3rem;
   width: min(18rem, calc(100vw - 2rem));
   padding: 0.4rem;
-  border-radius: 0.45rem;
+  border-radius: 1.1rem;
   pointer-events: none;
 }
 
@@ -371,10 +392,10 @@ body.combat-mode #app,
   gap: 0.15rem;
   min-height: 2.5rem;
   overflow: hidden;
-  border: 1px solid var(--ui-border-dim);
-  border-radius: 0.3rem;
+  border: 2px solid var(--ui-border);
+  border-radius: 0.75rem;
   background:
-    radial-gradient(circle at 50% 60%, #3a2c1a 0 22%, transparent 24%),
+    radial-gradient(circle at 50% 60%, #1a5a78 0 22%, transparent 24%),
     var(--ui-panel-bg-raised);
 }
 
@@ -444,8 +465,8 @@ body.combat-mode #app,
 .combat-flask-feedback {
   margin: 0.25rem 0 0;
   padding: 0.2rem 0.4rem;
-  border: 1px solid var(--ui-border-dim);
-  border-radius: 0.3rem;
+  border: 2px solid var(--ui-border);
+  border-radius: 0.7rem;
   color: var(--ui-text-bright);
   background: var(--ui-panel-bg-raised);
   font-size: 0.56rem;
@@ -462,12 +483,12 @@ body.combat-mode #app,
   min-height: 4.2rem;
   padding: 0.3rem;
   overflow: hidden;
-  border: 1px solid var(--ui-border);
-  border-radius: 0.35rem;
+  border: 2px solid var(--ui-border);
+  border-radius: 0.8rem;
   background:
-    radial-gradient(circle at 50% 48%, #3a2c1a 0 24%, transparent 26%),
+    radial-gradient(circle at 50% 48%, #1a5a78 0 24%, transparent 26%),
     var(--ui-panel-bg-raised);
-  box-shadow: inset 0 0 0 1px var(--ui-inlay);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 20%);
 }
 
 .combat-ability[data-state="ready"] {
@@ -578,9 +599,9 @@ body.combat-mode #app,
 }
 
 .combat-vitals-meter {
-  height: 0.75rem;
+  height: 0.85rem;
   overflow: hidden;
-  border-radius: 0.25rem;
+  border-radius: 999px;
 }
 
 /* Vitals keep their pre-theme fill colors so HP/MP/XP stay recognizable. */
@@ -630,7 +651,7 @@ body.combat-mode #app,
   gap: 0.2rem;
   padding: 0.55rem 0.75rem;
   border-color: var(--ui-accent-soft);
-  border-radius: 0.45rem;
+  border-radius: 1.1rem;
   color: var(--ui-heading);
 }
 
@@ -673,12 +694,9 @@ body.combat-mode #app,
   margin: auto;
   overflow: hidden;
   border-color: var(--ui-border-strong);
-  border-radius: 0.7rem;
-  background-color: rgb(23 17 11 / 98%);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    inset 0 0 0 2px var(--ui-border-dim),
-    0 1.5rem 5rem rgb(0 0 0 / 70%);
+  border-radius: 1.35rem;
+  background-color: rgb(10 36 62 / 98%);
+  box-shadow: var(--ui-panel-shadow);
 }
 
 .item-menu:focus {
@@ -691,8 +709,26 @@ body.combat-mode #app,
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.8rem 1rem;
-  border-bottom: 1px solid var(--ui-border-dim);
+  padding: 0.85rem 1.1rem;
+  background: var(--ui-gold-face);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 50%),
+    0 4px 0 #8a5a00;
+}
+
+.item-menu > header .eyebrow {
+  color: #5a3a10;
+}
+
+.item-menu > header button {
+  min-height: 2.3rem;
+  border-color: #ffd0c4;
+  border-radius: var(--ui-radius-pill);
+  background: linear-gradient(180deg, #ff8a7a, #d4453a);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 40%),
+    0 5px 0 #7a1810;
+  color: #fff;
 }
 
 .item-menu h2,
@@ -702,10 +738,12 @@ body.combat-mode #app,
 }
 
 .item-menu h2 {
-  color: var(--ui-text-bright);
+  color: #12304a;
   font-family: var(--ui-font-heading);
   font-size: clamp(1.15rem, 3vw, 1.65rem);
-  letter-spacing: 0.02em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
 }
 
 .item-menu h3 {
@@ -738,19 +776,23 @@ body.combat-mode #app,
 }
 
 .inventory-gold-coin {
-  width: 0.7rem;
-  height: 0.7rem;
+  width: 1.05rem;
+  height: 1.05rem;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fde68a, #facc15 55%, #b45309);
-  border: 1px solid #92700c;
+  background: radial-gradient(circle at 35% 30%, #fff6b0, #ffd24a 55%, #b45309);
+  border: 3px solid #8a5a00;
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 55%),
+    0 2px 0 #5a3a00;
   flex: none;
 }
 
 .inventory-gold-label {
-  color: #93a4b8;
+  color: var(--ui-text-dim);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .inventory-gold-amount {
@@ -781,9 +823,16 @@ body.combat-mode #app,
   min-height: 3.6rem;
   padding: 0.35rem;
   overflow: hidden;
-  border-color: var(--ui-border-dim);
-  background: var(--ui-panel-bg-raised);
+  border: 3px solid #0a3868;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, #5ec8f0, #2186b4);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 38%),
+    0 3px 0 #082040;
+  color: #08304a;
   font-size: 0.72rem;
+  font-weight: 800;
+  text-shadow: none;
 }
 
 .inventory-slot span {
@@ -918,13 +967,20 @@ body.combat-mode #app,
   width: 100%;
   min-height: 3.75rem;
   padding: 0.35rem;
-  border-color: var(--ui-border);
+  border: 3px solid #0a3868;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, #5ec8f0, #2186b4);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 38%),
+    0 3px 0 #082040;
+  color: #08304a;
   text-align: left;
+  text-shadow: none;
   touch-action: none;
 }
 
 .equipment-slot strong {
-  color: var(--ui-heading);
+  color: #08304a;
   font-size: 0.62rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -932,7 +988,7 @@ body.combat-mode #app,
 
 .equipment-slot span {
   overflow: hidden;
-  color: var(--ui-text);
+  color: #08304a;
   font-size: 0.72rem;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -976,7 +1032,7 @@ body.combat-mode #app,
 }
 
 .equipment-slot.drop-hover {
-  background: #223018;
+  background: #2a7a40;
 }
 
 .inventory-panel.drop-valid {
@@ -994,9 +1050,9 @@ body.combat-mode #app,
   z-index: 6;
   max-width: 11rem;
   padding: 0.3rem 0.5rem;
-  border: 1px solid var(--ui-accent);
-  border-radius: 0.35rem;
-  background: rgb(23 17 11 / 95%);
+  border: 2px solid var(--ui-accent);
+  border-radius: 0.75rem;
+  background: rgb(10 36 62 / 95%);
   font-size: 0.72rem;
   pointer-events: none;
   transform: translate(0.75rem, 0.75rem);
@@ -1025,10 +1081,10 @@ body.combat-mode #app,
 .item-tooltip {
   min-height: 12rem;
   padding: 0.85rem;
-  border: 1px solid var(--ui-border);
-  border-radius: 0.45rem;
+  border: 2px solid var(--ui-border);
+  border-radius: 1rem;
   background: var(--ui-panel-bg-raised);
-  box-shadow: inset 0 0 0 1px var(--ui-inlay);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 22%);
 }
 
 .item-tooltip.rarity-magic {
@@ -1337,6 +1393,7 @@ h1 {
   font-family: var(--ui-font-heading);
   font-size: clamp(1.7rem, 4vw, 2.8rem);
   letter-spacing: 0.02em;
+  text-shadow: var(--ui-heading-stroke);
 }
 
 .diagnostics {
@@ -1525,18 +1582,23 @@ h1 {
 
 button {
   min-height: 2.75rem;
-  padding: 0.65rem 0.9rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 0.35rem;
-  color: inherit;
-  background: var(--ui-panel-bg-raised);
+  padding: 0.65rem 0.95rem;
+  border: 3px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-card);
+  color: var(--ui-text-bright);
+  background: var(--ui-button-face);
+  box-shadow: var(--ui-button-shadow);
   font: inherit;
+  font-weight: 800;
+  text-shadow: 0 2px 0 #041820;
   cursor: pointer;
 }
 
 button:hover:not(:disabled) {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0.5rem var(--ui-accent-glow);
+  border-color: var(--ui-accent-soft);
+  box-shadow:
+    var(--ui-button-shadow),
+    0 0 0.7rem var(--ui-accent-glow);
 }
 
 button:focus-visible,
@@ -1586,14 +1648,11 @@ a:focus-visible {
   gap: 0.3rem;
   width: min(21rem, calc(100vw - 2rem));
   padding: 0.55rem 0.8rem 0.65rem;
-  border: 1px solid var(--ui-border);
-  border-radius: 0.45rem;
+  border: var(--ui-frame) solid var(--ui-border-strong);
+  border-radius: 1.15rem;
   background-color: var(--ui-panel-bg);
   background-image: var(--ui-panel-vignette);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    inset 0 0 0 2px var(--ui-border-dim),
-    0 0.6rem 1.8rem rgb(0 0 0 / 45%);
+  box-shadow: var(--ui-panel-shadow);
   text-align: center;
   transform: translateX(-50%);
   pointer-events: none;
@@ -1623,14 +1682,14 @@ a:focus-visible {
     right bottom;
   background-repeat: no-repeat;
   background-size:
-    0.7rem 1px,
-    1px 0.7rem,
-    0.7rem 1px,
-    1px 0.7rem,
-    0.7rem 1px,
-    1px 0.7rem,
-    0.7rem 1px,
-    1px 0.7rem;
+    0.95rem 3px,
+    3px 0.95rem,
+    0.95rem 3px,
+    3px 0.95rem,
+    0.95rem 3px,
+    3px 0.95rem,
+    0.95rem 3px,
+    3px 0.95rem;
   pointer-events: none;
 }
 
@@ -1672,18 +1731,20 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   padding: clamp(0.75rem, 3vh, 2rem);
-  background-color: var(--ui-page-bg);
+  background-color: #0a3a8c;
   background-image:
+    radial-gradient(circle, rgb(255 255 255 / 16%) 1.3px, transparent 1.7px),
     radial-gradient(
       ellipse 120% 90% at 50% -20%,
-      rgb(224 169 53 / 14%),
+      rgb(80 230 255 / 32%),
       transparent 55%
     ),
     radial-gradient(
       ellipse 130% 100% at 50% 115%,
-      rgb(94 64 30 / 26%),
+      rgb(255 210 74 / 16%),
       transparent 60%
     );
+  background-size: 26px 26px, auto, auto;
 }
 
 .main-menu-panel {
@@ -1694,15 +1755,13 @@ a:focus-visible {
   width: min(34rem, 100%);
   max-height: 100%;
   padding: clamp(1.25rem, 4vh, 2.75rem) clamp(1.25rem, 5vw, 3rem);
-  border: 1px solid var(--ui-border);
-  border-radius: 0.6rem;
+  border: var(--ui-frame) solid var(--ui-border-strong);
+  border-radius: 1.5rem;
   background-color: var(--ui-panel-bg);
   background-image: var(--ui-panel-vignette);
   box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    inset 0 0 0 2px var(--ui-border-dim),
-    0 0 4.5rem var(--ui-accent-glow),
-    0 1.2rem 3rem rgb(0 0 0 / 60%);
+    var(--ui-panel-shadow),
+    0 0 4.5rem var(--ui-accent-glow);
 }
 
 .main-menu-panel::after {
@@ -1729,14 +1788,14 @@ a:focus-visible {
     right bottom;
   background-repeat: no-repeat;
   background-size:
-    1.1rem 1px,
-    1px 1.1rem,
-    1.1rem 1px,
-    1px 1.1rem,
-    1.1rem 1px,
-    1px 1.1rem,
-    1.1rem 1px,
-    1px 1.1rem;
+    1.25rem 3px,
+    3px 1.25rem,
+    1.25rem 3px,
+    3px 1.25rem,
+    1.25rem 3px,
+    3px 1.25rem,
+    1.25rem 3px,
+    3px 1.25rem;
   pointer-events: none;
 }
 
@@ -1755,20 +1814,18 @@ a:focus-visible {
 
 .main-menu-button {
   position: relative;
-  padding: 0.7rem 1.2rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 0.4rem;
-  background-color: var(--ui-panel-bg-raised);
-  background-image: var(--ui-panel-vignette);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    0 0.35rem 0.9rem rgb(0 0 0 / 40%);
-  color: var(--ui-text-bright);
+  padding: 0.8rem 1.2rem;
+  border: 4px solid #8eefff;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-button-face);
+  box-shadow: var(--ui-button-shadow);
+  color: #fff;
   font-family: var(--ui-font-heading);
   font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  text-shadow: 0 3px 0 #041820;
   cursor: pointer;
   transition:
     border-color 120ms ease,
@@ -1778,12 +1835,11 @@ a:focus-visible {
 
 .main-menu-button:hover:enabled,
 .main-menu-button:focus-visible {
-  border-color: var(--ui-accent);
+  border-color: var(--ui-accent-soft);
   box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    0 0 1.1rem var(--ui-accent-glow),
-    0 0.35rem 0.9rem rgb(0 0 0 / 40%);
-  color: var(--ui-focus);
+    var(--ui-button-shadow),
+    0 0 1.2rem var(--ui-accent-glow);
+  color: #fff8d0;
 }
 
 .main-menu-button:focus-visible {
@@ -1792,8 +1848,11 @@ a:focus-visible {
 }
 
 .main-menu-new-game {
-  border-color: var(--ui-accent-soft);
-  color: var(--ui-heading);
+  border-color: #fff6b0;
+  background: var(--ui-gold-face);
+  box-shadow: var(--ui-gold-shadow);
+  color: #12304a;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
 }
 
 .main-menu-new-game:disabled {
@@ -1867,23 +1926,24 @@ a:focus-visible {
   display: block;
   width: min(15.5rem, 100%);
   padding: 0.7rem 1.2rem;
-  border: 1px solid var(--ui-accent-soft);
-  border-radius: 0.4rem;
-  background-color: var(--ui-panel-bg-raised);
-  background-image: var(--ui-panel-vignette);
-  box-shadow: inset 0 0 0 1px var(--ui-inlay);
-  color: var(--ui-heading);
+  border: 3px solid #fff6b0;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-gold-face);
+  box-shadow: var(--ui-gold-shadow);
+  color: #12304a;
   font-size: 0.95rem;
+  font-weight: 800;
+  text-align: center;
   text-decoration: none;
 }
 
 .account-home-cta:hover,
 .account-home-cta:focus-visible {
-  border-color: var(--ui-accent);
+  border-color: var(--ui-focus);
   box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
+    var(--ui-gold-shadow),
     0 0 1.1rem var(--ui-accent-glow);
-  color: var(--ui-focus);
+  color: #061018;
 }
 
 .account-retry {
@@ -1941,10 +2001,11 @@ a:focus-visible {
   gap: 0.15rem;
   justify-items: start;
   padding: 0.55rem 0.9rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 0.4rem;
+  border: 2px solid var(--ui-border-strong);
+  border-radius: 1rem;
   background-color: var(--ui-panel-bg-raised);
   background-image: var(--ui-panel-vignette);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 22%);
   color: var(--ui-text);
   text-align: left;
   cursor: pointer;
@@ -2052,10 +2113,11 @@ a.account-home-return:hover {
   align-items: center;
   width: 100%;
   padding: 0.8rem 0.9rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 0.4rem;
+  border: 2px solid var(--ui-border-strong);
+  border-radius: 1.15rem;
   background-color: var(--ui-panel-bg-raised);
   background-image: var(--ui-panel-vignette);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 22%);
 }
 
 .account-class-copy {
@@ -2078,19 +2140,19 @@ a.account-home-return:hover {
   line-height: 1.45;
 }
 
-/* South-facing idle row of the 1920x1024 barbarian sheet: 15 frames of
-   128px, row index 2 (E, SE, S clockwise from east). A pure CSS steps()
+/* South-facing idle row of the 384x768 diver sheet: 4 frames of 96px,
+   row index 2 (E, SE, S clockwise from east). A pure CSS steps()
    flipbook — no Phaser on the menu. */
 .barbarian-idle-preview {
-  width: 128px;
-  height: 128px;
-  background: url("/assets/characters/barbarian/Idle.png") no-repeat 0 -256px;
+  width: 96px;
+  height: 96px;
+  background: url("/assets/characters/diver/Idle.png") no-repeat 0 -192px;
   image-rendering: pixelated;
-  animation: barbarian-idle-preview 1.25s steps(15, end) infinite;
-  /* The figure fills only the middle of its 128px frame; scale the paint
-     (layout box stays 128px) so the preview reads at menu size. */
-  transform: scale(2);
-  transform-origin: 50% 62%;
+  animation: barbarian-idle-preview 0.8s steps(4, end) infinite;
+  /* The figure fills the middle of its 96px frame; scale the paint
+     (layout box stays 96px) so the preview reads at menu size. */
+  transform: scale(2.8);
+  transform-origin: 50% 78%;
 }
 
 @keyframes barbarian-idle-preview {
@@ -2099,7 +2161,7 @@ a.account-home-return:hover {
   }
 
   to {
-    background-position-x: -1920px;
+    background-position-x: -384px;
   }
 }
 
@@ -2200,15 +2262,13 @@ a.account-home-return:hover {
   justify-items: center;
   width: min(24rem, 100%);
   padding: clamp(1.1rem, 3.5vh, 2rem) clamp(1.1rem, 4vw, 2.4rem);
-  border: 1px solid var(--ui-border);
-  border-radius: 0.6rem;
+  border: var(--ui-frame) solid var(--ui-border-strong);
+  border-radius: 1.4rem;
   background-color: var(--ui-panel-bg);
   background-image: var(--ui-panel-vignette);
   box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    inset 0 0 0 2px var(--ui-border-dim),
-    0 0 3.5rem rgb(226 91 82 / 22%),
-    0 1.2rem 3rem rgb(0 0 0 / 60%);
+    var(--ui-panel-shadow),
+    0 0 3.5rem rgb(226 91 82 / 22%);
   text-align: center;
 }
 
@@ -2217,7 +2277,9 @@ a.account-home-return:hover {
   color: var(--ui-danger-text);
   font-family: var(--ui-font-heading);
   font-size: 1.6rem;
+  font-weight: 800;
   letter-spacing: 0.08em;
+  text-shadow: 0 3px 0 #3a1010;
 }
 
 .death-overlay-note {
@@ -2228,20 +2290,18 @@ a.account-home-return:hover {
 }
 
 .death-respawn-button {
-  padding: 0.65rem 1.2rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 0.4rem;
-  background-color: var(--ui-panel-bg-raised);
-  background-image: var(--ui-panel-vignette);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    0 0.35rem 0.9rem rgb(0 0 0 / 40%);
-  color: var(--ui-heading);
+  padding: 0.7rem 1.4rem;
+  border: 3px solid #fff6b0;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-gold-face);
+  box-shadow: var(--ui-gold-shadow);
+  color: #12304a;
   font-family: var(--ui-font-heading);
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
   cursor: pointer;
   transition:
     border-color 120ms ease,
@@ -2251,12 +2311,12 @@ a.account-home-return:hover {
 
 .death-respawn-button:hover,
 .death-respawn-button:focus-visible {
-  border-color: var(--ui-accent);
+  border-color: var(--ui-focus);
   box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    0 0 1.1rem var(--ui-accent-glow),
-    0 0.35rem 0.9rem rgb(0 0 0 / 40%);
-  color: var(--ui-focus);
+    var(--ui-gold-shadow),
+    0 5px 0 #8a5a00,
+    0 0 1.1rem var(--ui-accent-glow);
+  color: #061018;
 }
 
 .death-respawn-button:focus-visible {
@@ -2280,10 +2340,10 @@ a.account-home-return:hover {
   background:
     radial-gradient(
       ellipse 120% 90% at 50% 50%,
-      rgb(224 169 53 / 8%),
+      rgb(80 230 255 / 14%),
       transparent 70%
     ),
-    rgb(8 5 2 / 66%);
+    rgb(4 16 40 / 70%);
 }
 
 .system-menu:focus {
@@ -2299,24 +2359,24 @@ a.account-home-return:hover {
   max-height: 100%;
   overflow-y: auto;
   padding: clamp(1.1rem, 3.5vh, 2rem) clamp(1.1rem, 4vw, 2.4rem);
-  border: 1px solid var(--ui-border);
-  border-radius: 0.6rem;
+  border: var(--ui-frame) solid var(--ui-border-strong);
+  border-radius: 1.4rem;
   background-color: var(--ui-panel-bg);
   background-image: var(--ui-panel-vignette);
   box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    inset 0 0 0 2px var(--ui-border-dim),
-    0 0 3.5rem var(--ui-accent-glow),
-    0 1.2rem 3rem rgb(0 0 0 / 60%);
+    var(--ui-panel-shadow),
+    0 0 3.5rem var(--ui-accent-glow);
   text-align: center;
 }
 
 .system-menu-heading {
   margin: 0;
-  color: var(--ui-heading);
+  color: #fff;
   font-family: var(--ui-font-heading);
   font-size: 1.5rem;
+  font-weight: 800;
   letter-spacing: 0.08em;
+  text-shadow: var(--ui-heading-stroke);
 }
 
 .system-menu-actions {
@@ -2364,11 +2424,11 @@ a.account-home-return:hover {
 
 .system-menu-keybind-button {
   min-width: 7.5rem;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border: 2px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
   background-color: var(--ui-panel-bg-raised);
-  box-shadow: inset 0 0 0 1px var(--ui-inlay);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 22%);
   color: var(--ui-text-bright);
   font-family: var(--ui-font-heading);
   font-size: 0.82rem;
