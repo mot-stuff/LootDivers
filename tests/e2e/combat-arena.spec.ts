@@ -653,9 +653,10 @@ for (const viewport of [
     expect(characterBox?.x ?? 0).toBeGreaterThan(
       (toggleBox?.x ?? 0) + (toggleBox?.width ?? 0) - 2,
     );
-    expect(
+    expectGutter(
       viewport.width - ((characterBox?.x ?? 0) + (characterBox?.width ?? 0)),
-    ).toBeGreaterThanOrEqual(viewport.width <= 700 ? 6 : 14);
+      gutter,
+    );
 
     const actionBar = page.getByTestId("combat-action-hud");
     await expect(actionBar).toBeVisible();
