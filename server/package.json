@@ -8,9 +8,12 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node24 --packages=external --sourcemap --outfile=dist/server.js",
+    "build": "esbuild src/server.ts src/audit.ts src/ban.ts src/unban.ts --bundle --platform=node --format=esm --target=node24 --packages=external --sourcemap --outdir=dist",
     "start": "node dist/server.js",
     "dev": "npm run build && node --enable-source-maps dist/server.js",
+    "audit": "node dist/audit.js",
+    "ban": "node dist/ban.js",
+    "unban": "node dist/unban.js",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"

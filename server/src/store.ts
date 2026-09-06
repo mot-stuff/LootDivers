@@ -13,6 +13,28 @@ export interface UserRecord {
   readonly id: string;
   readonly email: string;
   readonly passwordHash: string;
+  /** ISO-8601 when the account is banned (TASK-718/DEC-044); null otherwise. */
+  readonly bannedAt: string | null;
+  readonly banReason: string | null;
+}
+
+/** One account's total 4xx save-rejection count (DEC-044 audit signal). */
+export interface SaveRejectionCount {
+  readonly userId: string;
+  readonly email: string;
+  readonly count: number;
+}
+
+/** A stored character blob plus the identity the audit report prints. */
+export interface AuditableCharacter {
+  readonly userId: string;
+  readonly email: string;
+  readonly characterId: string;
+  readonly characterName: string;
+  /** The server-side list-metadata level column. */
+  readonly level: number;
+  /** The verbatim stored envelope; never null (audit skips unsaved rows). */
+  readonly envelope: unknown;
 }
 
 export interface SessionRecord {
@@ -92,6 +114,37 @@ export interface DataStore {
   ): Promise<SaveResult | "stale-revision" | null>;
   /** Returns false when the character does not exist or is not owned. */
   deleteCharacter(userId: string, characterId: string): Promise<boolean>;
+
+  // --- TASK-718 (DEC-044): audit trail and manual bans -------------------
+
+  /**
+   * Sets (or overwrites) the ban flag. Returns false when no such user.
+   * Enforcement happens in the API's auth paths, so existing sessions stop
+   * working on their next request without being deleted.
+   */
+  banUser(userId: string, reason: string): Promise<boolean>;
+  /** Clears the ban flag. Returns false when no such user. Idempotent. */
+  unbanUser(userId: string): Promise<boolean>;
+
+  /**
+   * Appends one row to the save-rejection audit trail. `characterId` is the
+   * id the request targeted — it may not exist or belong to the user
+   * (content validation runs before the ownership lookup); the log judges
+   * the ACCOUNT, so that is deliberate.
+   */
+  recordSaveRejection(
+    userId: string,
+    characterId: string,
+    code: string,
+  ): Promise<void>;
+  /** Per-account rejection totals for the audit report, ordered by email. */
+  listSaveRejectionCounts(): Promise<readonly SaveRejectionCount[]>;
+
+  /**
+   * Every character with a stored blob, across all accounts, for the
+   * DEC-044 retroactive audit sweep. Ordered by email then name.
+   */
+  listCharactersForAudit(): Promise<readonly AuditableCharacter[]>;
 
   /** Health probe: resolves when the backing storage answers. */
   ping(): Promise<void>;

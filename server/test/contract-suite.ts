@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp, SESSION_COOKIE } from "../src/app.js";
 import { loadConfig, type ServerConfig } from "../src/config.js";
+import { auditStoredSaves, renderAuditReport } from "../src/save-audit.js";
 import type { DataStore } from "../src/store.js";
 import {
   CombatArenaSimulation,
@@ -658,6 +659,220 @@ export function runContractSuite(
       });
       expect(newer.statusCode).toBe(200);
       expect(newer.json()).toEqual({ revision: 2 });
+    });
+
+    it("bans lock out login and live sessions; unban restores both (TASK-718)", async () => {
+      const session = await signup("banhammer@example.test", "ban test pw ok");
+
+      const beforeBan = await app.inject({
+        method: "GET",
+        url: "/characters",
+        headers: { cookie: session.cookie },
+      });
+      expect(beforeBan.statusCode).toBe(200);
+
+      // Banning is a store-level operation (the ban CLI, DEC-044): no HTTP
+      // admin surface exists on purpose.
+      expect(
+        await harness.store.banUser(session.userId, "contract-suite test ban"),
+      ).toBe(true);
+
+      // The live session is rejected on its very next request.
+      for (const request of [
+        { method: "GET" as const, url: "/characters" },
+        { method: "GET" as const, url: "/auth/session" },
+      ]) {
+        const blocked = await app.inject({
+          ...request,
+          headers: { cookie: session.cookie },
+        });
+        expect(blocked.statusCode, request.url).toBe(403);
+        expect(
+          blocked.json<{ error: { code: string; message: string } }>().error,
+          request.url,
+        ).toMatchObject({ code: "account-banned" });
+      }
+
+      // Login with the CORRECT password answers 403 account-banned (wrong
+      // passwords still get the usual 401, revealing nothing).
+      const bannedLogin = await app.inject({
+        method: "POST",
+        url: "/auth/login",
+        payload: {
+          email: "banhammer@example.test",
+          password: "ban test pw ok",
+        },
+      });
+      expect(bannedLogin.statusCode).toBe(403);
+      expect(
+        bannedLogin.json<{ error: { code: string; message: string } }>().error,
+      ).toMatchObject({ code: "account-banned" });
+      const wrongPassword = await app.inject({
+        method: "POST",
+        url: "/auth/login",
+        payload: { email: "banhammer@example.test", password: "not the pw!" },
+      });
+      expect(wrongPassword.statusCode).toBe(401);
+
+      // Unban restores login AND the untouched original session.
+      expect(await harness.store.unbanUser(session.userId)).toBe(true);
+      const loginAgain = await app.inject({
+        method: "POST",
+        url: "/auth/login",
+        payload: {
+          email: "banhammer@example.test",
+          password: "ban test pw ok",
+        },
+      });
+      expect(loginAgain.statusCode).toBe(200);
+      const sessionAgain = await app.inject({
+        method: "GET",
+        url: "/characters",
+        headers: { cookie: session.cookie },
+      });
+      expect(sessionAgain.statusCode).toBe(200);
+
+      // Unknown accounts are reported, not silently "banned".
+      expect(
+        await harness.store.banUser(
+          "00000000-0000-4000-8000-000000000000",
+          "nobody",
+        ),
+      ).toBe(false);
+    });
+
+    it("logs every save-content rejection to the audit trail (TASK-718)", async () => {
+      const session = await signup("rejections@example.test");
+      const id = await createCharacter(session, "Reject Target");
+      const countFor = async (): Promise<number> => {
+        const counts = await harness.store.listSaveRejectionCounts();
+        return counts.find((row) => row.userId === session.userId)?.count ?? 0;
+      };
+      expect(await countFor()).toBe(0);
+
+      const base = await signedEnvelope(
+        simulationAtLevel(1).captureCharacterSave(),
+        1,
+      );
+
+      // 422 invalid-save (forged gold, re-signed).
+      const forged = await app.inject({
+        method: "PUT",
+        url: `/characters/${id}/save`,
+        headers: { cookie: session.cookie },
+        payload: {
+          envelope: await tamperedResigned(base, (draft) => {
+            characterOf(draft).gold = GOLD_MAX_TOTAL + 1;
+          }),
+          level: 1,
+        },
+      });
+      expect(forged.statusCode).toBe(422);
+      expect(await countFor()).toBe(1);
+
+      // 409 stale-revision: land revision 2, then replay it.
+      const landed = await app.inject({
+        method: "PUT",
+        url: `/characters/${id}/save`,
+        headers: { cookie: session.cookie },
+        payload: {
+          envelope: await signedEnvelope(
+            simulationAtLevel(1).captureCharacterSave(),
+            2,
+          ),
+          level: 1,
+        },
+      });
+      expect(landed.statusCode).toBe(200);
+      const replay = await app.inject({
+        method: "PUT",
+        url: `/characters/${id}/save`,
+        headers: { cookie: session.cookie },
+        payload: { envelope: base, level: 1 },
+      });
+      expect(replay.statusCode).toBe(409);
+      expect(await countFor()).toBe(2);
+
+      // Accepted saves add nothing; the report row carries the email.
+      const counts = await harness.store.listSaveRejectionCounts();
+      expect(counts).toContainEqual({
+        userId: session.userId,
+        email: "rejections@example.test",
+        count: 2,
+      });
+    });
+
+    it("audit sweep passes valid data and flags a pre-validation blob (TASK-718)", async () => {
+      const session = await signup("audit@example.test");
+      const cleanId = await createCharacter(session, "Clean Diver");
+      const seeded = await app.inject({
+        method: "PUT",
+        url: `/characters/${cleanId}/save`,
+        headers: { cookie: session.cookie },
+        payload: {
+          envelope: await signedEnvelope(
+            simulationAtLevel(2).captureCharacterSave(),
+            1,
+          ),
+          level: 2,
+        },
+      });
+      expect(seeded.statusCode).toBe(200);
+
+      // Everything the suite has stored so far went through write-time
+      // validation, so the sweep over the whole store must be clean.
+      const baseline = await auditStoredSaves(harness.store);
+      expect(baseline.invalidFindings).toHaveLength(0);
+      expect(
+        baseline.findings.find((f) => f.characterId === cleanId),
+      ).toMatchObject({
+        email: "audit@example.test",
+        characterName: "Clean Diver",
+        verdict: "valid",
+        codes: [],
+      });
+
+      // Simulate a row stored BEFORE validation shipped: write an unsigned
+      // blob directly through the store, bypassing the route entirely.
+      const forgedId = await createCharacter(session, "Forged Blob");
+      const inserted = await harness.store.saveCharacter(
+        session.userId,
+        forgedId,
+        makeEnvelope(),
+        3,
+        1,
+        "ab".repeat(32),
+        3,
+      );
+      expect(inserted).toEqual({ revision: 1 });
+
+      const report = await auditStoredSaves(harness.store);
+      expect(report.invalidFindings).toHaveLength(1);
+      expect(report.invalidFindings[0]).toMatchObject({
+        userId: session.userId,
+        email: "audit@example.test",
+        characterId: forgedId,
+        characterName: "Forged Blob",
+        verdict: "invalid",
+        codes: ["checksum-mismatch"],
+      });
+      // The report carries the write-time rejection totals as the DEC-044
+      // human-decision signal.
+      expect(report.rejectionCounts).toEqual(
+        await harness.store.listSaveRejectionCounts(),
+      );
+      const rendered = renderAuditReport(report);
+      expect(rendered).toContain("1 invalid");
+      expect(rendered).toContain("Forged Blob");
+      expect(rendered).toContain("checksum-mismatch");
+
+      // Leave the store clean for any later sweep.
+      const removed = await app.inject({
+        method: "DELETE",
+        url: `/characters/${forgedId}`,
+        headers: { cookie: session.cookie },
+      });
+      expect(removed.statusCode).toBe(204);
     });
 
     it("rejects malformed and oversized envelopes with contract codes", async () => {
