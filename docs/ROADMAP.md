@@ -222,10 +222,19 @@ death screen with town respawn and zero penalty (TASK-710, DEC-037), flasks
 on keys 1–4 with the charge economy (TASK-711, DEC-038), and gold drops
 with walk-over collection and the inventory counter (TASK-712, DEC-039).
 
-In flight: required accounts for `/play/` plus a character-select logout
-button (TASK-714), and the in-game escape menu with keybind remapping,
-settings, and exit options (TASK-715). Still open from the wishlist:
-title-screen settings.
+Second wave complete (2026-09-05): required accounts for `/play/` with a
+character-select logout button (TASK-714, DEC-040) and the in-game escape
+menu with keybind remapping, settings, and save-then-exit options
+(TASK-715, DEC-041).
+
+In flight: account-aware homepage with server-only saves (TASK-716) and
+server-side save validation (TASK-717) — the server rejects forged saves
+(impossible gold, XP, attributes, item stats/affixes) instead of storing
+opaque blobs. Owner directive (2026-09-05): cheat protection must cover
+essentially everything a save can claim — stats, item mods, XP, gold — so
+characters cannot be handed impossible power. v1 validates plausibility
+(a state that could legally exist); full server authority over gameplay
+is deferred. Still open from the wishlist: title-screen settings.
 
 
 ## Phase 9 - Map builder
@@ -239,7 +248,17 @@ Amended by DEC-032 (2026-09-05): the website deploys to Cloudflare Pages
 and Postgres database (TASK-707). The code is on GitHub
 (mot-stuff/LootDivers); separate GitHub image hosting is unnecessary
 under Cloudflare's bandwidth terms.
-Auction house will be the multiplayer portion of the game so we will want to make sure we track each players gold and account etc. 
+Auction house will be the multiplayer portion of the game so we will want to make sure we track each players gold and account etc.
+
+Anti-cheat prerequisite (owner directive, 2026-09-05): before any trading
+or auction house ships, item and gold legitimacy must be server-enforced.
+TASK-717's save validation (schema, bounds, earnable-progression, legal
+item mods) is the first layer; the trading economy additionally requires
+server-authoritative item provenance (the server mints or verifiably
+re-derives item instances, so a client can never introduce a fabricated
+item into the shared economy) and server-side gold accounting for every
+trade. A locally-simulated character state must never be tradeable
+without that provenance layer.
 
 ## Deferred systems
 
