@@ -8,10 +8,16 @@
  *
  * The auth forms target the Phase 8 v1 API contract
  * (docs/tasks/PHASE8-KICKOFF.md §2): POST /auth/login and /auth/signup
- * with JSON bodies and cookie credentials. The API (TASK-707) is built in
- * parallel, so until it is live every real submission lands in the
- * graceful "server unavailable" state below; e2e specs mock the endpoints
+ * with JSON bodies and cookie credentials; e2e specs mock the endpoints
  * to prove the success and server-error paths.
+ *
+ * TASK-716 (DEC-042): an account is required to play, so the hero CTA is
+ * session-aware. On load the page probes GET /auth/session; signed-out
+ * visitors get account-first CTAs into the auth panel (no Play button that
+ * would dead-end on the /play/ account-required screen), signed-in
+ * visitors get Play plus a signed-in hint with logout, and a successful
+ * login/signup switches the CTA in place without a reload. An unreachable
+ * API degrades to the signed-out state — /play/ remains the backstop.
  */
 import newsEntries from "./news.json";
 
@@ -26,8 +32,8 @@ interface NewsEntry {
 type AuthMode = "login" | "signup";
 
 const SERVER_UNAVAILABLE_MESSAGE =
-  "The account server isn't available yet. You can still play — your " +
-  "progress saves locally in this browser.";
+  "The account server is unreachable right now. Try again in a moment — " +
+  "an account is needed to dive.";
 
 /**
  * Resolves the account API base URL (v1 contract: the API lives at
@@ -140,7 +146,96 @@ async function submitCredentials(
   return { ok: false, message: SERVER_UNAVAILABLE_MESSAGE };
 }
 
-function wireAuthForms(): void {
+// TASK-716 (DEC-042) session-aware hero CTA. ------------------------------
+
+interface HomeSession {
+  readonly email: string;
+}
+
+/**
+ * Probes the v1 session endpoint. Anything but a 200 with an email —
+ * signed out, static-host 404, network failure — resolves null, which
+ * leaves the page in its default signed-out state.
+ */
+async function probeSession(): Promise<HomeSession | null> {
+  try {
+    const response = await fetch(
+      `${apiBaseForHost(window.location.hostname)}/auth/session`,
+      { credentials: "include" },
+    );
+    if (!response.ok) return null;
+    const body = (await response.json()) as { email?: unknown };
+    return typeof body.email === "string" && body.email !== ""
+      ? { email: body.email }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Swaps the hero between the account-first and Play CTA states. */
+function applySessionUi(session: HomeSession | null): void {
+  requireElement<HTMLElement>(".home-cta-signed-out").hidden = session !== null;
+  requireElement<HTMLElement>(".home-cta-signed-in").hidden = session === null;
+  if (session !== null) {
+    requireElement<HTMLSpanElement>(".home-session-email").textContent =
+      session.email;
+  }
+}
+
+/**
+ * The signed-out CTAs select the matching auth tab and focus the email
+ * field, which scrolls the account panel into view. The fragment href
+ * stays as a no-JS fallback; with JS the default jump is suppressed so it
+ * cannot steal the focus back.
+ */
+function wireHeroCta(setAuthMode: (mode: AuthMode) => void): void {
+  const wire = (selector: string, mode: AuthMode): void => {
+    requireElement<HTMLAnchorElement>(selector).addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        setAuthMode(mode);
+      },
+    );
+  };
+  wire(".home-create-account", "signup");
+  wire(".home-login-link", "login");
+}
+
+/**
+ * Logout ends the session server-side (the cookie is HttpOnly), then
+ * returns the hero to the signed-out state. A network failure keeps the
+ * session and surfaces the unavailable message in the auth status line.
+ */
+function wireLogout(): void {
+  const button = requireElement<HTMLButtonElement>(".home-logout");
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `${apiBaseForHost(window.location.hostname)}/auth/logout`,
+          { method: "POST", credentials: "include" },
+        );
+        if (!response.ok) throw new Error(`status ${String(response.status)}`);
+        applySessionUi(null);
+      } catch {
+        setStatus(
+          requireElement<HTMLParagraphElement>(".home-auth-status"),
+          "error",
+          SERVER_UNAVAILABLE_MESSAGE,
+        );
+      } finally {
+        button.disabled = false;
+      }
+    })();
+  });
+}
+
+function wireAuthForms(
+  onAuthenticated: (email: string) => void,
+): (mode: AuthMode) => void {
   const form = requireElement<HTMLFormElement>(".home-auth-form");
   const email = requireElement<HTMLInputElement>("#home-auth-email");
   const password = requireElement<HTMLInputElement>("#home-auth-password");
@@ -180,19 +275,34 @@ function wireAuthForms(): void {
     }
     submit.disabled = true;
     setStatus(status, "info", "Contacting the account server…");
-    void submitCredentials(mode, email.value.trim(), password.value).then(
+    const submittedEmail = email.value.trim();
+    void submitCredentials(mode, submittedEmail, password.value).then(
       (result) => {
         submit.disabled = false;
         if (result.ok) {
-          setStatus(status, "success", "Welcome back — loading the game…");
-          window.location.assign("/play/");
+          // TASK-716: no auto-navigation — the hero CTA switches to Play
+          // in place and the visitor dives when ready.
+          setStatus(status, "success", "You're signed in — dive when ready.");
+          onAuthenticated(submittedEmail);
           return;
         }
         setStatus(status, "error", result.message);
       },
     );
   });
+
+  return (next) => {
+    applyMode(next);
+    email.focus();
+  };
 }
 
 renderNews(requireElement<HTMLOListElement>(".home-news-list"));
-wireAuthForms();
+const setAuthMode = wireAuthForms((email) => {
+  applySessionUi({ email });
+});
+wireHeroCta(setAuthMode);
+wireLogout();
+void probeSession().then((session) => {
+  if (session !== null) applySessionUi(session);
+});
