@@ -218,10 +218,7 @@ export class SimpleMeleeEnemy {
     };
   }
 
-  private returnToSpawn(
-    step: FixedStep,
-    moveSpeedMultiplier: number,
-  ): void {
+  private returnToSpawn(step: FixedStep, moveSpeedMultiplier: number): void {
     this.#windupTicksRemaining = 0;
     this.#cadenceTicksRemaining = 0;
     const deltaX = this.config.spawnX - this.#x;

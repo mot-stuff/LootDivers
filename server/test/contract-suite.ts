@@ -310,16 +310,15 @@ export function runContractSuite(
         headers: { cookie: session.cookie },
       });
       expect(list.statusCode).toBe(200);
-      const rows =
-        list.json<
-          readonly {
-            id: string;
-            name: string;
-            class: string;
-            level: number;
-            updatedAt: string;
-          }[]
-        >();
+      const rows = list.json<
+        readonly {
+          id: string;
+          name: string;
+          class: string;
+          level: number;
+          updatedAt: string;
+        }[]
+      >();
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
         id,

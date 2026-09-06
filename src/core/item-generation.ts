@@ -61,9 +61,7 @@ export interface MaterialStack {
 }
 
 export type ItemInstance =
-  | EquipmentItemInstance
-  | AbilityStoneStack
-  | MaterialStack;
+  EquipmentItemInstance | AbilityStoneStack | MaterialStack;
 
 export interface AffixCountRange {
   readonly minimum: number;
