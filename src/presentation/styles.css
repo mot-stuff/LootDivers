@@ -2191,3 +2191,173 @@ a:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
 }
+
+/* TASK-715 system menu (DEC-041): Escape-opened pause menu with keybind
+   settings and exit actions, additive on the DEC-029 tokens. The backdrop
+   deliberately covers the canvas so pointer input cannot refocus gameplay
+   while the menu is up; sits above the death overlay (z 8), below the main
+   menu (z 10). */
+.system-menu {
+  position: fixed;
+  z-index: 9;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 3vh, 2rem);
+  background:
+    radial-gradient(
+      ellipse 120% 90% at 50% 50%,
+      rgb(224 169 53 / 8%),
+      transparent 70%
+    ),
+    rgb(8 5 2 / 66%);
+}
+
+.system-menu:focus {
+  outline: none;
+}
+
+.system-menu-panel {
+  position: relative;
+  display: grid;
+  gap: 0.85rem;
+  justify-items: center;
+  width: min(26rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: clamp(1.1rem, 3.5vh, 2rem) clamp(1.1rem, 4vw, 2.4rem);
+  border: 1px solid var(--ui-border);
+  border-radius: 0.6rem;
+  background-color: var(--ui-panel-bg);
+  background-image: var(--ui-panel-vignette);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-inlay),
+    inset 0 0 0 2px var(--ui-border-dim),
+    0 0 3.5rem var(--ui-accent-glow),
+    0 1.2rem 3rem rgb(0 0 0 / 60%);
+  text-align: center;
+}
+
+.system-menu-heading {
+  margin: 0;
+  color: var(--ui-heading);
+  font-family: var(--ui-font-heading);
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+}
+
+.system-menu-actions {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: stretch;
+  width: min(15.5rem, 100%);
+}
+
+.system-menu-keybinds {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: center;
+  width: 100%;
+}
+
+.system-menu-keybinds-help {
+  margin: 0;
+  max-width: 22rem;
+}
+
+.system-menu-keybind-list {
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.system-menu-keybind-list li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.15rem 0.2rem;
+  border-bottom: 1px solid var(--ui-border-dim);
+}
+
+.system-menu-keybind-label {
+  color: var(--ui-text);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.system-menu-keybind-button {
+  min-width: 7.5rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0.35rem;
+  background-color: var(--ui-panel-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--ui-inlay);
+  color: var(--ui-text-bright);
+  font-family: var(--ui-font-heading);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.system-menu-keybind-button:hover:enabled,
+.system-menu-keybind-button:focus-visible {
+  border-color: var(--ui-accent);
+  color: var(--ui-focus);
+}
+
+.system-menu-keybind-button:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.system-menu-keybind-button:disabled {
+  border-color: var(--ui-border-dim);
+  color: var(--ui-muted-state);
+  cursor: not-allowed;
+}
+
+.system-menu-keybind-button.listening {
+  border-color: var(--ui-accent);
+  color: var(--ui-focus);
+  animation: system-menu-listening 1.1s ease-in-out infinite;
+}
+
+@keyframes system-menu-listening {
+  50% {
+    box-shadow:
+      inset 0 0 0 1px var(--ui-inlay),
+      0 0 0.9rem var(--ui-accent-glow);
+  }
+}
+
+.system-menu-feedback {
+  min-height: 1.1rem;
+  margin: 0;
+  color: var(--ui-text-dim);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+@media (max-height: 640px) {
+  .system-menu-panel {
+    gap: 0.55rem;
+    padding: 0.85rem 1.2rem;
+  }
+
+  .system-menu-keybind-list {
+    gap: 0.15rem;
+  }
+
+  .system-menu-keybind-button {
+    padding: 0.2rem 0.6rem;
+  }
+}

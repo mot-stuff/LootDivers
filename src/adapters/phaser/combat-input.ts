@@ -1,14 +1,18 @@
 import Phaser from "phaser";
 
 import type { FlaskSlot, LoadoutSlot } from "../../core";
+import {
+  isMovementKeybindAction,
+  sharedKeybinds,
+  type KeybindsStore,
+} from "../../presentation/keybinds";
 
-/** Digit keys 1–4 map onto the four flask slots (TASK-711, DEC-038). */
-const FLASK_KEY_CODES: Readonly<Record<string, FlaskSlot>> = {
-  Digit1: "flask-1",
-  Digit2: "flask-2",
-  Digit3: "flask-3",
-  Digit4: "flask-4",
-};
+/*
+ * TASK-715 (DEC-041): keyboard codes resolve through the shared keybinds
+ * store at event time, so rebinds from the system menu apply immediately.
+ * Ability keybind actions map onto the three keyboard loadout slots; flask
+ * keybind actions carry the flask slot ids directly.
+ */
 
 export interface CombatInputSnapshot {
   readonly movementX: number;
@@ -35,36 +39,46 @@ export class CombatInputAdapter {
     if (!this.isGameplayFocused(event)) {
       return;
     }
-    if (this.isMovementCode(event.code)) {
+    const action = this.keybinds.actionFor(event.code);
+    if (action === null) {
+      return;
+    }
+    if (isMovementKeybindAction(action)) {
       this.#held.add(event.code);
       event.preventDefault();
-    } else if (event.code === "Space") {
+    } else if (action === "dodge") {
       if (!event.repeat) {
         this.#dodgeRequested = true;
       }
       event.preventDefault();
-    } else if (event.code === "KeyF") {
+    } else if (action === "interact") {
       if (!event.repeat) {
         this.#lootPickupRequested = true;
       }
       event.preventDefault();
     } else if (
-      event.code === "KeyQ" ||
-      event.code === "KeyE" ||
-      event.code === "KeyR"
+      action === "ability-q" ||
+      action === "ability-e" ||
+      action === "ability-r"
     ) {
       if (!event.repeat) {
         this.#abilitySlotsRequested.push(
-          event.code === "KeyQ" ? "q" : event.code === "KeyE" ? "e" : "r",
+          action === "ability-q" ? "q" : action === "ability-e" ? "e" : "r",
         );
       }
       event.preventDefault();
-    } else if (FLASK_KEY_CODES[event.code] !== undefined) {
+    } else if (
+      action === "flask-1" ||
+      action === "flask-2" ||
+      action === "flask-3" ||
+      action === "flask-4"
+    ) {
       if (!event.repeat) {
-        this.#flaskSlotsRequested.push(FLASK_KEY_CODES[event.code]!);
+        this.#flaskSlotsRequested.push(action);
       }
       event.preventDefault();
     }
+    // "toggle-inventory" / "toggle-character" stay shell-owned (App.tsx).
   };
   readonly #keyUp = (event: KeyboardEvent): void => {
     this.#held.delete(event.code);
@@ -104,6 +118,7 @@ export class CombatInputAdapter {
   public constructor(
     readonly scene: Phaser.Scene,
     readonly canvas: HTMLCanvasElement,
+    readonly keybinds: KeybindsStore = sharedKeybinds(),
   ) {
     window.addEventListener("keydown", this.#keyDown, true);
     window.addEventListener("keyup", this.#keyUp, true);
@@ -121,9 +136,11 @@ export class CombatInputAdapter {
       this.clearHeldInput();
     }
     const movementX =
-      Number(this.#held.has("KeyD")) - Number(this.#held.has("KeyA"));
+      Number(this.#held.has(this.keybinds.codeFor("move-right"))) -
+      Number(this.#held.has(this.keybinds.codeFor("move-left")));
     const movementY =
-      Number(this.#held.has("KeyS")) - Number(this.#held.has("KeyW"));
+      Number(this.#held.has(this.keybinds.codeFor("move-down"))) -
+      Number(this.#held.has(this.keybinds.codeFor("move-up")));
     const snapshot = {
       movementX,
       movementY,
@@ -166,12 +183,6 @@ export class CombatInputAdapter {
       !event.altKey &&
       !event.ctrlKey &&
       !event.metaKey
-    );
-  }
-
-  private isMovementCode(code: string): boolean {
-    return (
-      code === "KeyW" || code === "KeyA" || code === "KeyS" || code === "KeyD"
     );
   }
 }
