@@ -260,6 +260,18 @@ item into the shared economy) and server-side gold accounting for every
 trade. A locally-simulated character state must never be tradeable
 without that provenance layer.
 
+Owner addition (2026-09-05): state validity is not enough, because a
+modified client (billions of damage, move-speed hacks) *earns*
+legal-looking loot unnaturally fast and dumps it on the market. The
+pre-trading requirement therefore also includes rate-of-progression
+enforcement: the server tracks elapsed play time per character (saves
+already carry monotonic revisions and server-side timestamps) and bounds
+XP, gold, kill counts, and item acquisition between saves against the
+maximum a legitimate client could achieve; outliers are rejected or
+flagged for review. The endgame answer remains server-authoritative
+simulation for any shared-economy play, and that decision must be made
+before multiplayer — not retrofitted after.
+
 ## Deferred systems
 
 Do not build without approval: multiplayer, guilds, shared trading economy,
