@@ -15,6 +15,17 @@ const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const IPV4_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 
 /**
+ * True for loopback/LAN development hostnames that no real player can
+ * reach. TASK-714 (DEC-040) keeps the local main menu only on these
+ * origins as the dev door; every player-reachable origin (custom domain,
+ * `*.pages.dev`, any public host) requires a signed-in account at /play/.
+ */
+export function isLocalDevHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return LOCAL_HOSTNAMES.has(host) || IPV4_PATTERN.test(host);
+}
+
+/**
  * Maps a page hostname to its API origin, or null when the origin has no
  * API (local development, IP addresses, Cloudflare Pages preview domain).
  * `www.` is stripped so both site hosts reach the same `api.` sibling.

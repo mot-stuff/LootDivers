@@ -110,7 +110,22 @@ export interface AccountMenuActions {
   select(id: string): Promise<"fresh" | "restored" | null>;
   create(name: string): Promise<"fresh" | null>;
   remove(id: string): Promise<boolean>;
+  /** TASK-714: refetches the character list after an "unavailable" state. */
+  retry(): Promise<void>;
+  /**
+   * TASK-714: ends the session via POST /auth/logout and navigates to the
+   * homepage on success; false surfaces the failure through the model.
+   */
+  logout(): Promise<boolean>;
 }
+
+/**
+ * TASK-714 (DEC-040) account gate: "checking" while the boot session
+ * resolves on a player-reachable origin, "signed-out" once it resolved
+ * without a session (the menu shows the account-required screen instead of
+ * any local play), null on ungated automation/dev origins.
+ */
+export type AccountGateState = "checking" | "signed-out" | null;
 
 export interface AppProps {
   readonly bindings: ShellBindings;
@@ -140,11 +155,8 @@ export interface AppProps {
   /** Account menu model; null/omitted keeps the local menu (TASK-709). */
   readonly account?: AccountMenuModel | null;
   readonly accountActions?: AccountMenuActions;
-  /**
-   * Homepage login pointer, shown only when signed out on an origin that
-   * has an accounts API (never on local/automation origins).
-   */
-  readonly accountLoginUrl?: string | null;
+  /** TASK-714 account gate; null/omitted keeps the ungated local menu. */
+  readonly accountGate?: AccountGateState;
   /**
    * Device keybind store for the system menu and shell key handlers
    * (TASK-715). Defaults to the shared localStorage-backed store; tests
@@ -1085,7 +1097,83 @@ interface MainMenuProps {
   readonly account: AccountMenuModel | null;
   readonly accountActions: AccountMenuActions | null;
   readonly onServerEntry: (outcome: "fresh" | "restored") => void;
-  readonly loginUrl: string | null;
+  readonly gate: AccountGateState;
+}
+
+/**
+ * TASK-714 (DEC-040) account gate screens: the menu body when no playable
+ * state is allowed — the boot session is still resolving, the visitor is
+ * signed out on a player-reachable origin, or the session is live but the
+ * character list is unreachable. Never rendered on ungated dev origins.
+ */
+function AccountGateSection({
+  state,
+  notice,
+  actions,
+}: {
+  readonly state: "checking" | "signed-out" | "unavailable";
+  readonly notice: string | null;
+  readonly actions: AccountMenuActions | null;
+}) {
+  if (state === "checking") {
+    return (
+      <section
+        class="account-menu account-gate"
+        data-testid="account-checking"
+        aria-label="Checking session"
+      >
+        <p class="main-menu-note">Checking your session…</p>
+      </section>
+    );
+  }
+  if (state === "unavailable") {
+    return (
+      <section
+        class="account-menu account-gate"
+        data-testid="account-gate-unavailable"
+        aria-label="Account service unreachable"
+      >
+        <h2 class="account-heading">Service Unreachable</h2>
+        <p class="account-gate-copy" data-testid="account-unavailable">
+          {notice ?? "The account service is unreachable right now."}
+        </p>
+        <button
+          type="button"
+          class="main-menu-button account-retry"
+          data-testid="account-retry"
+          onClick={() => {
+            void actions?.retry();
+          }}
+        >
+          Try Again
+        </button>
+        <a class="account-home-link" data-testid="account-gate-home" href="/">
+          Return to the homepage
+        </a>
+      </section>
+    );
+  }
+  return (
+    <section
+      class="account-menu account-gate"
+      data-testid="account-required"
+      aria-label="Account required"
+    >
+      <h2 class="account-heading">Account Required</h2>
+      <p class="account-gate-copy">
+        Loot Divers heroes live on your account, so your characters and stash
+        follow you anywhere. Log in or create a free account on the homepage to
+        start diving.
+      </p>
+      <a
+        class="main-menu-button account-home-link account-home-cta"
+        data-testid="account-required-home"
+        href="/"
+      >
+        Log In or Sign Up
+      </a>
+    </section>
+  );
 }
 
 /**
@@ -1241,6 +1329,18 @@ function AccountMenuSection({
       <h2 class="account-heading">Choose Your Diver</h2>
       <p class="account-email" data-testid="account-email">
         Signed in as {account.email}
+        {" · "}
+        <button
+          type="button"
+          class="account-back account-logout"
+          data-testid="account-logout"
+          disabled={busy}
+          onClick={() => {
+            void actions?.logout();
+          }}
+        >
+          Log out
+        </button>
       </p>
       {account.phase === "loading" && (
         <p class="main-menu-note" data-testid="account-loading">
@@ -1372,11 +1472,12 @@ function AccountMenuSection({
 
 /**
  * TASK-703 boot-time main menu: a full-screen overlay above the paused
- * simulation. "New Game" travels to the tutorial zone; "Continue" (TASK-705)
- * restores the local character save and enables once a valid save exists.
- * With a live session (TASK-709) the local actions are replaced by the
- * account character select/create screens; an unreachable character list
- * falls back to local play with a notice.
+ * simulation. With a live session (TASK-709) the body is the account
+ * character select/create screens. On player-reachable origins without a
+ * session, TASK-714 (DEC-040) renders the account-required gate instead of
+ * any local play; an unreachable character list renders the gate's
+ * service-unreachable screen. The local "New Game"/"Continue" actions
+ * remain only on ungated loopback dev origins (the automation/dev door).
  */
 function MainMenu({
   phase,
@@ -1386,11 +1487,13 @@ function MainMenu({
   account,
   accountActions,
   onServerEntry,
-  loginUrl,
+  gate,
 }: MainMenuProps) {
   const ready = phase.kind === "ready";
   const build = buildLabel();
   const accountActive = account !== null && account.phase !== "unavailable";
+  const gateScreen: "checking" | "signed-out" | "unavailable" | null =
+    accountActive ? null : account !== null ? "unavailable" : gate;
   const continueNote = characterSave.available
     ? characterSave.recovered
       ? "Recovered from backup save"
@@ -1418,6 +1521,12 @@ function MainMenu({
             account={account}
             actions={accountActions}
             onEnter={onServerEntry}
+          />
+        ) : gateScreen !== null ? (
+          <AccountGateSection
+            state={gateScreen}
+            notice={account?.notice ?? null}
+            actions={accountActions}
           />
         ) : (
           <nav class="main-menu-actions" aria-label="Main menu actions">
@@ -1447,23 +1556,6 @@ function MainMenu({
             >
               {continueNote}
             </p>
-            {account !== null && account.phase === "unavailable" && (
-              <p
-                class="main-menu-note account-unavailable"
-                data-testid="account-unavailable"
-              >
-                {account.notice ?? "The account service is unreachable."}
-              </p>
-            )}
-            {loginUrl !== null && (
-              <a
-                class="main-menu-login"
-                data-testid="main-menu-login"
-                href={loginUrl}
-              >
-                Log in on the homepage to play with server heroes
-              </a>
-            )}
           </nav>
         )}
         <p class="main-menu-build" data-testid="main-menu-build">
@@ -2220,7 +2312,7 @@ export function App({
   onGameplayStarted,
   account,
   accountActions,
-  accountLoginUrl,
+  accountGate,
   keybinds,
   onExitGame,
 }: AppProps) {
@@ -2821,7 +2913,7 @@ export function App({
           account={account ?? null}
           accountActions={accountActions ?? null}
           onServerEntry={enterServerGame}
-          loginUrl={accountLoginUrl ?? null}
+          gate={accountGate ?? null}
         />
       )}
 
