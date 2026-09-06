@@ -196,6 +196,11 @@ test("Exit to Main Menu saves and navigates to the homepage without logging out"
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
+  // The homepage probes the session on load (TASK-716/DEC-042); answer
+  // signed-out cleanly so the landing keeps the console quiet.
+  await page.route("**/api/auth/session", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "{}" }),
+  );
   await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
 
@@ -204,7 +209,8 @@ test("Exit to Main Menu saves and navigates to the homepage without logging out"
   await page.getByTestId("system-menu-exit-main-menu").click();
   await page.waitForURL((url) => url.pathname === "/");
   await expect(page).toHaveTitle("Loot Divers");
-  await expect(page.getByTestId("home-play")).toBeVisible();
+  // Signed out, the homepage offers the account-first CTA (TASK-716).
+  await expect(page.getByTestId("home-create-account")).toBeVisible();
 
   expect(failures, failures.join("\n")).toEqual([]);
 });

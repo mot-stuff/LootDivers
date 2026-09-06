@@ -22,10 +22,52 @@
         <p class="home-tagline">
           Dive into the depths. Fight your way back out. Haul home the hoard.
         </p>
-        <a class="home-play" href="/play/" data-testid="home-play">Play now</a>
-        <p class="home-play-note">
-          Free in your browser. No download, no account required.
-        </p>
+        <!-- TASK-716 (DEC-042): the hero CTA is session-aware. The markup
+             defaults to the signed-out state so an unreachable account API
+             degrades to account-first copy; src/home/main.ts probes the
+             session and swaps in the Play state for signed-in visitors. -->
+        <div class="home-cta" data-testid="home-cta">
+          <div class="home-cta-signed-out" data-testid="home-cta-signed-out">
+            <a
+              class="home-play home-create-account"
+              href="#home-account-heading"
+              data-testid="home-create-account"
+            >
+              Create account
+            </a>
+            <a
+              class="home-login-link"
+              href="#home-account-heading"
+              data-testid="home-log-in"
+            >
+              Already a diver? Log in
+            </a>
+          </div>
+          <div
+            class="home-cta-signed-in"
+            data-testid="home-cta-signed-in"
+            hidden
+          >
+            <a class="home-play" href="/play/" data-testid="home-play">
+              Play now
+            </a>
+            <p class="home-session" data-testid="home-session">
+              Signed in as
+              <span
+                class="home-session-email"
+                data-testid="home-session-email"
+              ></span>
+              <button
+                type="button"
+                class="home-logout"
+                data-testid="home-logout"
+              >
+                Log out
+              </button>
+            </p>
+          </div>
+        </div>
+        <p class="home-play-note">Free in your browser. No download.</p>
       </header>
 
       <div class="home-columns">
@@ -106,9 +148,8 @@
             ></p>
           </form>
           <p class="home-account-note">
-            Accounts keep your heroes on the server so you can continue from any
-            device. You can always play without one — local saves stay in your
-            browser.
+            Your heroes live on your account, safe on the server — continue from
+            any device. An account is required to play.
           </p>
         </section>
       </div>

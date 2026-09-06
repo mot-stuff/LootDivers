@@ -3069,6 +3069,22 @@ the local path with no API server.
   `/`, and plain loopback loads plus `?autostart` stay byte-identical
   with zero API traffic.
 
+## Amendment (TASK-716): the door covers local persistence itself
+
+Date: 2026-09-05 (TASK-716, DEC-042)
+
+The automation/dev door now bounds local *saves*, not just local play:
+on gated origins the boot never reads (or lazily creates) the character
+IndexedDB store, so a player browser cannot accumulate or resume local
+progress at all. The boot-time `loadForBoot` that arms Continue runs
+only when the gate does not apply — `?autostart`, the fixture flags,
+and plain loopback loads — which is acceptable for the same reasons as
+the door itself: those paths sit behind explicit query flags or on
+origins no player can reach, they grant nothing server-side, and server
+saves still require a real session. Stale local blobs from earlier
+builds are simply ignored on gated origins (no migration or upload;
+TASK-717 server-side validation would reject unvetted blobs anyway).
+
 ---
 
 # DEC-041
@@ -3172,3 +3188,90 @@ with DEC-035/036/037.)
   proves rebind-applies-immediately, localStorage persistence across
   reload, reset-to-defaults, pause/resume via `pausedForUi`, and both
   exit flows, with no DEC-033 CI skip.
+
+---
+
+# DEC-042
+
+## Session-aware homepage; the server is the only player save store
+
+Date: 2026-09-05 (TASK-716, owner request)
+
+## Context
+
+DEC-040 made an account mandatory at /play/, but the homepage still led
+with an unconditional "Play now" button and the tagline "Free in your
+browser. No download, no account required" — a dead end onto the
+account-required screen and a false promise. Meanwhile the client still
+carried the pre-714 assumption that local IndexedDB saves were a peer
+save store: every menu boot read the local character database to arm
+Continue, even on origins where no local play exists.
+
+## Decision
+
+1. **The homepage hero is session-aware.** `src/home/main.ts` probes
+   GET /auth/session on load (same `api.<domain>` base the auth forms
+   use; same-origin `/api` on local hosts, which is also the Playwright
+   mock seam). Signed out — or whenever the probe fails, so an
+   unreachable API degrades to the same state — the hero offers a
+   primary "Create account" and secondary "Log in", both anchoring to
+   the auth panel and pre-selecting the matching tab; there is no Play
+   button that would dead-end on the account gate. Signed in, the hero
+   shows "Play now" into /play/, a "Signed in as" hint, and a logout
+   button (POST /auth/logout, hero reverts in place; failures surface
+   the unavailable message and keep the session). A successful
+   login/signup no longer auto-navigates: the status line confirms and
+   the hero switches to the Play state without a reload. The default
+   markup is the signed-out state, so the page needs no JavaScript
+   round trip to be honest. Tagline copy drops the account-free
+   promise ("Free in your browser. No download.") and the account
+   panel states that an account is required to play.
+2. **Players read and write saves only through the server.** The boot
+   no longer touches the local character IndexedDB store on gated
+   origins (see the DEC-040 amendment recorded with this task): the
+   `loadForBoot` that arms the local Continue button runs only where
+   the automation/dev door applies. Signed-in play already bound every
+   DEC-034 trigger to `HttpSaveRepository` on character selection
+   (TASK-709); with the local boot read gone, there is no local
+   fallback, mirroring, or resume path for a real session, and a
+   signed-out browser on a player-reachable origin can neither
+   accumulate nor resume progress. Stale local blobs from earlier
+   builds are ignored, never migrated or uploaded.
+3. **The IndexedDB machinery stays for the door.** The repository
+   class, the character save service, and the Phase 0 persistence
+   fixture remain — `?autostart`, the fixture modes, and loopback dev
+   loads run on them with no API server, which is what CI executes.
+   Construction is lazy (no database is opened until first use), so
+   player browsers never create the store.
+
+## Alternatives Considered
+
+- Keeping "Play now" for everyone and letting /play/ gate: rejected —
+  the owner called out the dead end; the homepage owns auth, so it
+  should route visitors to auth.
+- Auto-navigating to /play/ after login/signup (the TASK-708
+  behavior): dropped in favor of switching the CTA in place; the
+  visitor confirms their session state before committing to the game
+  chunk download.
+- Uploading a leftover local save into the account on first login:
+  rejected — unvetted client blobs; TASK-717 is adding server-side
+  validation that would reject them, and the pre-launch player base is
+  zero.
+- Deleting the IndexedDB repository entirely: rejected — the entire
+  e2e suite and local development run through it with no API server
+  (DEC-040 door).
+
+## Consequences
+
+- The homepage session probe is one extra same-origin-credentialed GET
+  per load; on static hosts without an API it 404s and the page stays
+  in the signed-out state (e2e mock the endpoint to keep consoles
+  clean where specs assert zero runtime errors).
+- `tests/e2e/homepage.spec.ts` now pins both hero states, the CTA
+  tab-preselection, the in-place switch after mocked signup, homepage
+  logout, and the unchanged no-game-chunk budget; system-menu and
+  character-create specs assert the signed-out landing instead of an
+  unconditional Play button.
+- Copy that promised local play ("account server isn't available yet —
+  you can still play") is gone; the unavailable message now says an
+  account is needed.

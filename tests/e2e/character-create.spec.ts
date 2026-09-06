@@ -431,11 +431,12 @@ test("a signed-out visitor is gated behind the account-required screen", async (
   await expect(page.getByTestId("main-menu-continue")).toHaveCount(0);
   await expect(page.getByTestId("account-select")).toHaveCount(0);
 
-  // The homepage CTA lands on the real homepage where auth lives.
+  // The homepage CTA lands on the real homepage where auth lives; still
+  // signed out, it offers the account-first CTA (TASK-716).
   const home = page.getByTestId("account-required-home");
   await expect(home).toHaveAttribute("href", "/");
   await home.click();
-  await expect(page.getByTestId("home-play")).toBeVisible();
+  await expect(page.getByTestId("home-create-account")).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/");
 
   expect(failures, failures.join("\n")).toEqual([]);

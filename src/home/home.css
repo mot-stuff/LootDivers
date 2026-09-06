@@ -132,6 +132,61 @@ body.home {
   color: var(--ui-text-dim);
 }
 
+/* TASK-716 (DEC-042): session-aware hero CTA states. */
+.home-cta-signed-out,
+.home-cta-signed-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.home-cta-signed-out[hidden],
+.home-cta-signed-in[hidden] {
+  display: none;
+}
+
+.home-login-link {
+  color: var(--ui-accent-soft);
+  font-size: 0.9rem;
+}
+
+.home-login-link:hover,
+.home-login-link:focus-visible {
+  color: var(--ui-focus);
+}
+
+.home-session {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ui-text-dim);
+}
+
+.home-session-email {
+  color: var(--ui-text-bright);
+}
+
+.home-logout {
+  margin-left: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ui-accent-soft);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.home-logout:hover:not(:disabled),
+.home-logout:focus-visible {
+  color: var(--ui-focus);
+}
+
+.home-logout:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .home-columns {
   display: grid;
   grid-template-columns: 1fr;

@@ -294,9 +294,11 @@ const characterRepository = new IndexedDbSaveRepository<
 const characterSaves = new CharacterSaveService(characterRepository);
 /**
  * TASK-709: the save service behind the DEC-034 triggers. Local IndexedDB
- * by default; selecting a server character swaps in an `HttpSaveRepository`
- * bound to that character row, and every existing trigger (zone travel,
- * death, respawn, page hide) then persists to the server unchanged.
+ * on the automation/dev door only (TASK-716, DEC-042 — gated origins never
+ * read or write it); selecting a server character swaps in an
+ * `HttpSaveRepository` bound to that character row, and every existing
+ * trigger (zone travel, death, respawn, page hide) then persists to the
+ * server unchanged.
  */
 let activeCharacterSaves: CharacterSaveService = characterSaves;
 let characterSaveMenu: MainMenuCharacterSaveModel = {
@@ -885,28 +887,39 @@ if (!support.supported) {
         // Boot-time load resolves the Continue button (DEC-031 deferral):
         // corrupted or missing saves leave the button disabled, recovered
         // backups surface a notice in the menu.
-        void characterSaves.loadForBoot().then((boot) => {
-          if (boot.failure !== null) {
-            console.warn(`Character save unavailable: ${boot.failure}`);
-          }
-          const save = boot.save;
-          if (save === null) return;
-          characterSaveMenu = { available: true, recovered: boot.recovered };
-          continueSavedCharacter = () => {
-            try {
-              renderer.combat.restoreCharacterSave(save);
-              return true;
-            } catch (error) {
-              const detail =
-                error instanceof Error ? error.message : String(error);
-              console.warn(`Saved character could not be restored: ${detail}`);
-              characterSaveMenu = { available: false, recovered: false };
-              renderApp();
-              return false;
+        //
+        // TASK-716 (DEC-042): local character saves are automation/dev-door
+        // only. On gated origins the local IndexedDB store is never read —
+        // the server is the only save store for players, and any stale
+        // local blob from an earlier build is simply ignored (no
+        // migration/upload; TASK-717 server-side validation would reject
+        // unvetted blobs anyway).
+        if (!accountGateApplies) {
+          void characterSaves.loadForBoot().then((boot) => {
+            if (boot.failure !== null) {
+              console.warn(`Character save unavailable: ${boot.failure}`);
             }
-          };
-          renderApp();
-        });
+            const save = boot.save;
+            if (save === null) return;
+            characterSaveMenu = { available: true, recovered: boot.recovered };
+            continueSavedCharacter = () => {
+              try {
+                renderer.combat.restoreCharacterSave(save);
+                return true;
+              } catch (error) {
+                const detail =
+                  error instanceof Error ? error.message : String(error);
+                console.warn(
+                  `Saved character could not be restored: ${detail}`,
+                );
+                characterSaveMenu = { available: false, recovered: false };
+                renderApp();
+                return false;
+              }
+            };
+            renderApp();
+          });
+        }
 
         // TASK-709: restores a decoded server envelope into the simulation
         // (same semantics as the local Continue closure above).
