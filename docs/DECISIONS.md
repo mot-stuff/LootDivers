@@ -1948,6 +1948,21 @@ Fulfills the character-art import reserved in the Phase 7 roadmap note.
 Presentation-only per DEC-005; DEC-012 (Tiled zones) and enemy visuals
 remain future work.
 
+### Amendment (2026-09-06)
+
+The player still uses `BarbarianSpritePresentation` and the
+`barbarian:<anim>:<row>` animation keys (class id stays `"barbarian"`),
+but the art is now the original isometric sphere-barbarian at
+`public/assets/characters/diver/`: 96x96 frames, eight facings in the
+same row order, with idle (4), run (6), attack (6), roll (6), and die
+(6). The figure is empty-handed so a later weapon sprite can overlay
+the attack. Sheets are RGBA with a real alpha channel (no green
+screen). A small contact shadow is stamped under the feet at pack time.
+Rolling is a dedicated tumble cycle, not a copy of Run. The
+owner-authored 128x128 barbarian sheets were removed; the class id
+and animation keys stay `"barbarian"`. The character-create idle
+preview uses the same diver Idle sheet via CSS.
+
 ---
 
 # DEC-029
@@ -2030,6 +2045,17 @@ Presentation-only; the DEC-005 core/presentation boundary is unchanged.
 Rarity colors from the DEC-020 loot UI and the simulation-fed minimap
 zone colors from DEC-027 are preserved exactly. First accepted packet of
 the Phase 7 kickoff (TASK-701).
+
+### Amendment (2026-09-06)
+
+The DEC-029 token set follows the Loot Divers logo and sphere-diver
+instead of the earlier umber/brass/parchment fantasy palette. Surfaces
+are navy plastic cards, frames are thick candy-cyan over a dark rim,
+accents are treasure gold, and chrome uses casual-mobile 3D extrusion
+(top highlight, 8px bottom edge, gold header bars). Headings use a
+rounded system sans stack. Class names, test ids, rarity colors, and
+bar fills stay the same. `src/home/home.css` stays a token mirror so
+the homepage matches the in-game shell.
 
 ---
 

@@ -102,7 +102,9 @@ export interface ZoneDefinition {
    * Hearthmere; towns respawn in place (unreachable in practice).
    */
   readonly respawnZoneId: ZoneId;
+  /** Walkable diamond + minimap fill. Casual-mobile saturated zone identity. */
   readonly floorColor: number;
+  /** Walkable diamond + minimap stroke. */
   readonly edgeColor: number;
   readonly playerSpawnX: number;
   readonly playerSpawnY: number;
@@ -326,8 +328,8 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     summary: "Open ground with ore, a field forge, and the Hollowdeep descent",
     safe: false,
     respawnZoneId: HEARTHMERE_ID,
-    floorColor: 0x10263a,
-    edgeColor: 0x64d8cb,
+    floorColor: 0x1a4a52,
+    edgeColor: 0x5ab0a8,
     playerSpawnX: 600,
     playerSpawnY: 400,
     enemies: [...ASHTRAIL_PACK, ASHTRAIL_BRUTE],
@@ -365,7 +367,7 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     summary: "A safe halt with provisions, a forge, and the Roadwarden",
     safe: true,
     respawnZoneId: HEARTHMERE_ID,
-    floorColor: 0x2a2118,
+    floorColor: 0x8a6a32,
     edgeColor: 0xe8b86d,
     playerSpawnX: 780,
     playerSpawnY: 400,
@@ -395,7 +397,7 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     summary: "A cut stone hollow watched by the Bruiser and Embercleft",
     safe: false,
     respawnZoneId: HEARTHMERE_ID,
-    floorColor: 0x1a1424,
+    floorColor: 0x352060,
     edgeColor: 0x9f7aea,
     playerSpawnX: 160,
     playerSpawnY: 400,
@@ -423,8 +425,8 @@ export const ZONE_CATALOG: readonly ZoneDefinition[] = [
     summary: "A quiet shoreline where new arrivals learn the core skills",
     safe: false,
     respawnZoneId: WAKESHORE_LANDING_ID,
-    floorColor: 0x203228,
-    edgeColor: 0x8fd6b0,
+    floorColor: 0x1e5a4a,
+    edgeColor: 0x6fc4a0,
     playerSpawnX: 220,
     playerSpawnY: 400,
     enemies: [WAKESHORE_SCUTTLER],

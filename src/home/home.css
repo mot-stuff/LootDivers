@@ -1,51 +1,72 @@
 /*
  * Loot Divers homepage theme (TASK-708 / DEC-035).
  *
- * The :root token block below is MIRRORED from the DEC-029 fantasy UI
- * theme in src/presentation/styles.css so the homepage reads as the same
- * game without shipping the game stylesheet on "/". Keep the token values
- * in sync with that file when the theme changes.
+ * The :root token block below is MIRRORED from DEC-029 in
+ * src/presentation/styles.css so "/" and "/play/" share the logo/character
+ * palette. Keep the token values in sync with that file when the theme
+ * changes.
  */
 :root {
-  /* Surfaces: deep charcoal/umber. */
-  --ui-page-bg: #0e0a07;
-  --ui-panel-bg: rgb(24 18 12 / 92%);
-  --ui-panel-bg-solid: #17110b;
-  --ui-panel-bg-raised: #241b11;
+  /* Surfaces: casual-mobile plastic cards on a navy cavern. */
+  --ui-page-bg: #04101c;
+  --ui-panel-bg: rgb(16 78 132 / 94%);
+  --ui-panel-bg-solid: #0e4a82;
+  --ui-panel-bg-raised: #1a90c4;
   --ui-panel-vignette: linear-gradient(
     180deg,
-    rgb(94 64 30 / 22%),
-    rgb(0 0 0 / 0%) 38%,
-    rgb(0 0 0 / 24%)
+    rgb(255 255 255 / 36%) 0%,
+    rgb(120 230 255 / 12%) 34%,
+    rgb(0 30 70 / 20%) 100%
   );
+  --ui-radius: 1.55rem;
+  --ui-radius-card: 1.05rem;
+  --ui-radius-pill: 999px;
+  --ui-frame: 5px;
+  --ui-rim: #140c38;
+  --ui-panel-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 44%),
+    inset 0 -6px 0 rgb(0 24 56 / 32%),
+    0 0 0 5px #1a1048,
+    0 8px 0 #0a0618,
+    0 18px 28px rgb(0 0 0 / 42%);
+  --ui-button-face: linear-gradient(180deg, #4ae0ff, #1288bc);
+  --ui-button-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 48%),
+    inset 0 -4px 0 rgb(0 30 50 / 25%),
+    0 6px 0 #0a2040;
+  --ui-gold-face: linear-gradient(180deg, #fff08a, #ffc01a 58%, #f0a400);
+  --ui-gold-shadow:
+    inset 0 3px 0 rgb(255 255 255 / 62%),
+    inset 0 -4px 0 rgb(180 110 0 / 32%),
+    0 6px 0 #8a5a00;
+  --ui-heading-stroke: 0 3px 0 #140c38;
 
-  /* Frames: aged brass with a dark inlay line. */
-  --ui-border: #6d5731;
-  --ui-border-strong: #98783d;
-  --ui-border-dim: #46381f;
-  --ui-inlay: #0a0703;
+  /* Frames: thick candy cyan over a dark rim. */
+  --ui-border: #4ae4ff;
+  --ui-border-strong: #9cffff;
+  --ui-border-dim: #1c6e8c;
+  --ui-inlay: #041320;
 
-  /* Ember-gold accent. */
-  --ui-accent: #e0a935;
-  --ui-accent-soft: #cfa75c;
-  --ui-accent-glow: rgb(224 169 53 / 30%);
-  --ui-focus: #ffdf9e;
+  /* Treasure gold, with cyan focus like the character highlight. */
+  --ui-accent: #ffe14d;
+  --ui-accent-soft: #fff08a;
+  --ui-accent-glow: rgb(255 225 77 / 45%);
+  --ui-focus: #9cffff;
 
-  /* Parchment text. */
-  --ui-text: #ecdfc3;
-  --ui-text-bright: #f9f0da;
-  --ui-text-dim: #b3a17f;
-  --ui-heading: #e9c87f;
+  /* Bright cool text. */
+  --ui-text: #e8f8ff;
+  --ui-text-bright: #ffffff;
+  --ui-text-dim: #9fd4e8;
+  --ui-heading: #fff3a0;
 
   /* Functional states. */
   --ui-ready: #7fbf72;
   --ui-danger: #e25b52;
   --ui-danger-text: #ffc9c2;
 
-  /* Typography. */
+  /* Typography: rounded system stack to match the bubbly logo. */
   --ui-font-heading:
-    "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman",
-    serif;
+    "Trebuchet MS", "Segoe UI", "Avenir Next", ui-rounded, system-ui, sans-serif;
 
   color: var(--ui-text);
   background: var(--ui-page-bg);
@@ -69,6 +90,20 @@ body.home {
   min-height: 100vh;
   margin: 0;
   padding: clamp(1rem, 3vw, 2.5rem);
+  background-color: #0a3a8c;
+  background-image:
+    radial-gradient(circle, rgb(255 255 255 / 16%) 1.3px, transparent 1.7px),
+    radial-gradient(
+      ellipse 80% 50% at 50% -10%,
+      rgb(80 230 255 / 38%),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 80% 110%,
+      rgb(255 225 77 / 22%),
+      transparent 60%
+    );
+  background-size: 26px 26px, auto, auto;
 }
 
 .home-shell {
@@ -91,38 +126,50 @@ body.home {
 .home-logo {
   width: min(100%, 480px);
   height: auto;
-  image-rendering: pixelated;
+  image-rendering: auto;
+  filter:
+    drop-shadow(0 0.35rem 0.2rem rgb(0 0 0 / 40%))
+    drop-shadow(0 0.7rem 1.6rem rgb(80 230 255 / 42%))
+    drop-shadow(0 0 1.8rem rgb(255 225 77 / 28%));
 }
 
 .home-tagline {
   margin: 0;
   font-family: var(--ui-font-heading);
-  font-size: clamp(1.05rem, 2.5vw, 1.35rem);
+  font-size: clamp(1.1rem, 2.6vw, 1.45rem);
+  font-weight: 800;
   color: var(--ui-heading);
+  text-shadow:
+    0 3px 0 #140c38,
+    0 0 14px rgb(255 225 77 / 35%);
 }
 
 .home-play {
   display: inline-block;
-  padding: 0.85rem 3.25rem;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 4px;
-  background-color: var(--ui-panel-bg-raised);
-  background-image: var(--ui-panel-vignette);
+  padding: 0.95rem 3.4rem;
+  border: 4px solid #fff6b0;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-gold-face);
   box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    0 0 18px var(--ui-accent-glow);
-  color: var(--ui-accent);
+    var(--ui-gold-shadow),
+    0 12px 22px rgb(0 0 0 / 38%),
+    0 0 26px var(--ui-accent-glow);
+  color: #12304a;
   font-family: var(--ui-font-heading);
-  font-size: clamp(1.2rem, 3vw, 1.6rem);
-  letter-spacing: 0.08em;
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-decoration: none;
   text-transform: uppercase;
 }
 
 .home-play:hover,
 .home-play:focus-visible {
-  color: var(--ui-focus);
-  border-color: var(--ui-accent);
+  color: #061018;
+  border-color: var(--ui-focus);
+  box-shadow:
+    var(--ui-gold-shadow),
+    0 0 32px rgb(156 255 255 / 50%);
   outline: none;
 }
 
@@ -204,23 +251,31 @@ body.home {
 /* Framed panel treatment, matching the in-game DEC-029 panels. */
 .home-panel {
   position: relative;
-  border: 1px solid var(--ui-border);
+  border: var(--ui-frame) solid var(--ui-border-strong);
   background-color: var(--ui-panel-bg);
   background-image: var(--ui-panel-vignette);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-inlay),
-    inset 0 0 0 2px var(--ui-border-dim);
-  border-radius: 3px;
-  padding: 1.1rem 1.25rem 1.25rem;
+  box-shadow: var(--ui-panel-shadow);
+  border-radius: var(--ui-radius);
+  padding: 0 1.25rem 1.25rem;
 }
 
 .home-panel h2 {
-  margin: 0 0 0.75rem;
+  margin: 0 -1.25rem 1rem;
+  padding: 0.75rem 1.15rem 0.8rem;
+  border-radius: calc(var(--ui-radius) - 5px) calc(var(--ui-radius) - 5px) 0.85rem
+    0.85rem;
   font-family: var(--ui-font-heading);
   font-size: 1.2rem;
+  font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ui-heading);
+  text-align: center;
+  color: #12304a;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 55%);
+  background: var(--ui-gold-face);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 50%),
+    0 4px 0 #8a5a00;
 }
 
 .visually-hidden {
@@ -243,18 +298,22 @@ body.home {
 
 .home-feed-tab {
   flex: 1;
-  padding: 0.45rem 0;
-  border: 1px solid var(--ui-border-dim);
-  border-radius: 3px;
+  padding: 0.5rem 0;
+  border: 2px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
   background: var(--ui-panel-bg-solid);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 12%);
   color: var(--ui-text-dim);
   font: inherit;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .home-feed-tab[aria-selected="true"] {
-  border-color: var(--ui-border-strong);
-  color: var(--ui-accent);
+  border-color: #fff6b0;
+  background: var(--ui-gold-face);
+  box-shadow: var(--ui-gold-shadow);
+  color: #12304a;
 }
 
 .home-news-list,
@@ -350,18 +409,22 @@ body.home {
 
 .home-auth-tab {
   flex: 1;
-  padding: 0.45rem 0;
-  border: 1px solid var(--ui-border-dim);
-  border-radius: 3px;
+  padding: 0.5rem 0;
+  border: 2px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
   background: var(--ui-panel-bg-solid);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 12%);
   color: var(--ui-text-dim);
   font: inherit;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .home-auth-tab[aria-selected="true"] {
-  border-color: var(--ui-border-strong);
-  color: var(--ui-accent);
+  border-color: #fff6b0;
+  background: var(--ui-gold-face);
+  box-shadow: var(--ui-gold-shadow);
+  color: #12304a;
 }
 
 .home-auth-form {
@@ -376,10 +439,11 @@ body.home {
 }
 
 .home-auth-form input {
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--ui-border-dim);
-  border-radius: 3px;
+  padding: 0.6rem 0.75rem;
+  border: 2px solid var(--ui-border);
+  border-radius: 1rem;
   background: var(--ui-panel-bg-solid);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 10%);
   color: var(--ui-text-bright);
   font: inherit;
 }
@@ -391,21 +455,23 @@ body.home {
 
 .home-auth-submit {
   margin-top: 0.6rem;
-  padding: 0.6rem 0;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 3px;
-  background: var(--ui-panel-bg-raised);
-  color: var(--ui-accent);
+  padding: 0.7rem 0;
+  border: 3px solid #fff6b0;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-gold-face);
+  box-shadow: var(--ui-gold-shadow);
+  color: #12304a;
   font-family: var(--ui-font-heading);
   font-size: 1rem;
+  font-weight: 800;
   letter-spacing: 0.05em;
   cursor: pointer;
 }
 
 .home-auth-submit:hover:not(:disabled),
 .home-auth-submit:focus-visible {
-  color: var(--ui-focus);
-  border-color: var(--ui-accent);
+  color: #061018;
+  border-color: var(--ui-focus);
   outline: none;
 }
 

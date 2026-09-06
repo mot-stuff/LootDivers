@@ -1,12 +1,12 @@
 import Phaser from "phaser";
 
 /**
- * Owner-authored barbarian spritesheets. Every sheet is a 15-column,
- * 8-row grid of 128x128 frames. Rows are screen-space facings ordered
- * clockwise (screen y down) from east: E, SE, S, SW, W, NW, N, NE.
+ * Original isometric loot-diver sheets. Each sheet is an 8-row grid of
+ * 96x96 frames. Rows are screen-space facings ordered clockwise
+ * (screen y down) from east: E, SE, S, SW, W, NW, N, NE. Column counts
+ * differ per animation. Dodge reuses a dedicated tumble sheet.
  */
-export const BARBARIAN_FRAME_SIZE = 128;
-export const BARBARIAN_COLUMNS = 15;
+export const BARBARIAN_FRAME_SIZE = 96;
 export const BARBARIAN_DIRECTION_ROWS = 8;
 
 export type BarbarianAnimationId = "idle" | "run" | "attack" | "roll" | "die";
@@ -14,45 +14,26 @@ export type BarbarianAnimationId = "idle" | "run" | "attack" | "roll" | "die";
 interface BarbarianSheetDefinition {
   readonly id: BarbarianAnimationId;
   readonly file: string;
+  readonly columns: number;
   readonly frameRate: number;
   readonly repeat: number;
-  /** The sheet has a frame-aligned overlay in effects/. */
-  readonly hasEffect?: boolean;
 }
 
-// Roll and attack play once at a readable speed (15 frames each: the
-// roll runs 0.47s, the swing 0.5s) and may finish visually after the
-// much shorter simulation windows (0.18s dodge dash, 0.25s cleave).
-// Every sheet has a frame-aligned cast-shadow companion in shadow/.
 const SHEETS: readonly BarbarianSheetDefinition[] = [
-  { id: "idle", file: "Idle.png", frameRate: 12, repeat: -1 },
-  { id: "run", file: "Run.png", frameRate: 24, repeat: -1 },
-  {
-    id: "attack",
-    file: "Attack1.png",
-    frameRate: 30,
-    repeat: 0,
-    hasEffect: true,
-  },
-  { id: "roll", file: "Rolling.png", frameRate: 32, repeat: 0 },
-  { id: "die", file: "Die.png", frameRate: 20, repeat: 0 },
+  { id: "idle", file: "Idle.png", columns: 4, frameRate: 6, repeat: -1 },
+  { id: "run", file: "Run.png", columns: 6, frameRate: 12, repeat: -1 },
+  { id: "attack", file: "Attack.png", columns: 6, frameRate: 14, repeat: 0 },
+  { id: "roll", file: "Rolling.png", columns: 6, frameRate: 16, repeat: 0 },
+  { id: "die", file: "Die.png", columns: 6, frameRate: 10, repeat: 0 },
 ];
 
 // Root-absolute so the sheets resolve identically from "/" and from the
 // "/play/" page the game shell moved to in TASK-708 (DEC-035).
-const ASSET_ROOT = "/assets/characters/barbarian";
-const SHADOW_ALPHA = 0.5;
+const ASSET_ROOT = "/assets/characters/diver";
+const IDLE_COLUMNS = 4;
 
 function textureKey(id: BarbarianAnimationId): string {
   return `barbarian:${id}`;
-}
-
-function shadowTextureKey(id: BarbarianAnimationId): string {
-  return `barbarian-shadow:${id}`;
-}
-
-function effectTextureKey(id: BarbarianAnimationId): string {
-  return `barbarian-fx:${id}`;
 }
 
 function animationKey(id: BarbarianAnimationId, row: number): string {
@@ -96,14 +77,12 @@ export interface BarbarianSpriteDiagnostics {
 }
 
 /**
- * Loads the barbarian sheets on demand and drives one player sprite from
+ * Loads the diver sheets on demand and drives one player sprite from
  * combat diagnostics. Until textures finish loading, callers should keep
  * their geometric fallback.
  */
 export class BarbarianSpritePresentation {
   #sprite: Phaser.GameObjects.Sprite | null = null;
-  #shadow: Phaser.GameObjects.Sprite | null = null;
-  #effect: Phaser.GameObjects.Sprite | null = null;
   #ready = false;
   #disposed = false;
   #currentKey: string | null = null;
@@ -125,47 +104,18 @@ export class BarbarianSpritePresentation {
         `${ASSET_ROOT}/${sheet.file}`,
         frameConfig,
       );
-      scene.load.spritesheet(
-        shadowTextureKey(sheet.id),
-        `${ASSET_ROOT}/shadow/${sheet.file}`,
-        frameConfig,
-      );
-      if (sheet.hasEffect === true) {
-        scene.load.spritesheet(
-          effectTextureKey(sheet.id),
-          `${ASSET_ROOT}/effects/${sheet.file}`,
-          frameConfig,
-        );
-      }
     }
     scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
       if (this.#disposed) return;
       this.createAnimations();
-      // Origin sits on the feet (opaque art ends at y=90 of 128) so the
-      // sprite plants on the ground shadow at any scale. The shadow and
-      // effect layers share the grid, origin, and scale, and mirror the
-      // body's current frame each update, so they never drift. Creation
-      // order gives the paint order: shadow, body, effect.
-      const origin = 90 / BARBARIAN_FRAME_SIZE;
-      this.#shadow = scene.add
-        .sprite(0, 0, shadowTextureKey("idle"), 2 * BARBARIAN_COLUMNS)
-        .setOrigin(0.5, origin)
-        .setScale(1.3)
-        .setDepth(depth)
-        .setAlpha(SHADOW_ALPHA)
-        .setVisible(false);
+      // Origin sits on the baked contact-shadow / feet (y=88 of 96).
+      const origin = 88 / BARBARIAN_FRAME_SIZE;
+      const southIdle = 2 * IDLE_COLUMNS;
       this.#sprite = scene.add
-        .sprite(0, 0, textureKey("idle"), 2 * BARBARIAN_COLUMNS)
+        .sprite(0, 0, textureKey("idle"), southIdle)
         .setOrigin(0.5, origin)
-        .setScale(1.3)
+        .setScale(1.05)
         .setDepth(depth)
-        .setVisible(false);
-      this.#effect = scene.add
-        .sprite(0, 0, effectTextureKey("attack"), 0)
-        .setOrigin(0.5, origin)
-        .setScale(1.3)
-        .setDepth(depth)
-        .setBlendMode(Phaser.BlendModes.ADD)
         .setVisible(false);
       this.#ready = true;
     });
@@ -192,9 +142,6 @@ export class BarbarianSpritePresentation {
     const attackStarted =
       state.attackPhase === "startup" && this.#lastAttackPhase !== "startup";
     this.#lastAttackPhase = state.attackPhase;
-    // Started rolls and swings play to completion past their shorter
-    // simulation windows. Death always cuts in, an attack cuts a roll,
-    // and moving cuts a finished swing's follow-through.
     const current = this.#currentKey;
     const currentPlaying = sprite.anims.isPlaying || sprite.anims.isPaused;
     const holdCurrent =
@@ -209,7 +156,6 @@ export class BarbarianSpritePresentation {
           selection.id === "idle"));
     let row = selection.row;
     if (holdCurrent) {
-      // #lastRow still holds the held animation's direction row.
       key = current;
       row = this.#lastRow;
     } else {
@@ -222,7 +168,6 @@ export class BarbarianSpritePresentation {
       (dodgeStarted && selection.id === "roll") ||
       (attackStarted && selection.id === "attack")
     ) {
-      // Re-trigger repeated dodges and swings in the same direction.
       sprite.play(key);
     }
     if (state.paused) {
@@ -235,43 +180,13 @@ export class BarbarianSpritePresentation {
     } else {
       sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
-    this.syncCompanionLayers(sprite, key);
     return { ready: true, animationKey: key, directionRow: row };
-  }
-
-  /**
-   * The shadow and slash-effect sheets are frame-aligned with the body
-   * sheets, so both layers copy the body's texture id and frame index.
-   */
-  private syncCompanionLayers(
-    sprite: Phaser.GameObjects.Sprite,
-    key: string,
-  ): void {
-    const animId = key.split(":")[1] as BarbarianAnimationId;
-    const frame = sprite.frame.name;
-    this.#shadow
-      ?.setVisible(true)
-      .setPosition(sprite.x, sprite.y)
-      .setTexture(shadowTextureKey(animId), frame);
-    if (this.#effect === null) return;
-    if (animId === "attack") {
-      this.#effect
-        .setVisible(true)
-        .setPosition(sprite.x, sprite.y)
-        .setTexture(effectTextureKey("attack"), frame);
-    } else {
-      this.#effect.setVisible(false);
-    }
   }
 
   public dispose(): void {
     this.#disposed = true;
     this.#sprite?.destroy();
     this.#sprite = null;
-    this.#shadow?.destroy();
-    this.#shadow = null;
-    this.#effect?.destroy();
-    this.#effect = null;
   }
 
   private selectAnimation(
@@ -298,8 +213,6 @@ export class BarbarianSpritePresentation {
         ),
       };
     }
-    // The character faces where they are running, not the cursor; the
-    // cursor only orients attacks. Standing still keeps the last facing.
     if (state.moving) {
       return {
         id: "run",
@@ -320,8 +233,8 @@ export class BarbarianSpritePresentation {
         this.scene.anims.create({
           key,
           frames: this.scene.anims.generateFrameNumbers(textureKey(sheet.id), {
-            start: row * BARBARIAN_COLUMNS,
-            end: row * BARBARIAN_COLUMNS + BARBARIAN_COLUMNS - 1,
+            start: row * sheet.columns,
+            end: row * sheet.columns + sheet.columns - 1,
           }),
           frameRate: sheet.frameRate,
           repeat: sheet.repeat,

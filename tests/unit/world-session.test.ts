@@ -292,7 +292,7 @@ describe("Phase 6 world session", () => {
     expect(town.markers.some((marker) => marker.kind === "vendor")).toBe(true);
     expect(town.markers.some((marker) => marker.kind === "quest")).toBe(true);
     expect(town.markers.some((marker) => marker.kind === "enemy")).toBe(false);
-    expect(town.floorColor).toBe(0x2a2118);
+    expect(town.floorColor).toBe(0x8a6a32);
     expect(town.edgeColor).toBe(0xe8b86d);
     expect(town.walkable).toEqual({
       x: 18,
@@ -303,8 +303,8 @@ describe("Phase 6 world session", () => {
 
     simulation.travelTo(ASHTRAIL_EXPANSE_ID);
     const wild = simulation.diagnostics().minimap;
-    expect(wild.floorColor).toBe(0x10263a);
-    expect(wild.edgeColor).toBe(0x64d8cb);
+    expect(wild.floorColor).toBe(0x1a4a52);
+    expect(wild.edgeColor).toBe(0x5ab0a8);
     expect(
       wild.markers.filter((marker) => marker.kind === "enemy"),
     ).toHaveLength(4);
@@ -314,7 +314,7 @@ describe("Phase 6 world session", () => {
 
     simulation.travelTo(HOLLOWDEEP_ID);
     const dungeon = simulation.diagnostics().minimap;
-    expect(dungeon.floorColor).toBe(0x1a1424);
+    expect(dungeon.floorColor).toBe(0x352060);
     expect(dungeon.edgeColor).toBe(0x9f7aea);
     expect(dungeon.markers.some((marker) => marker.rank === "boss")).toBe(true);
   });
