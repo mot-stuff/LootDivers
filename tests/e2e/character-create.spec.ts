@@ -71,6 +71,10 @@ async function installAccountMock(
   await page.route("**/api/auth/session", (route) =>
     route.fulfill(json(200, SESSION)),
   );
+  // TASK-721: the homepage now fetches GET /news on load; answer an empty
+  // feed so tests that land on "/" keep a quiet console (empty falls back
+  // to the static news.json).
+  await page.route("**/api/news", (route) => route.fulfill(json(200, [])));
   await page.route("**/api/characters", async (route) => {
     const method = route.request().method();
     if (method === "GET") {
@@ -422,6 +426,8 @@ test("a signed-out visitor is gated behind the account-required screen", async (
       json(401, { error: { code: "unauthorized", message: "Not signed in." } }),
     ),
   );
+  // The homepage landing fetches GET /news (TASK-721); keep it quiet.
+  await page.route("**/api/news", (route) => route.fulfill(json(200, [])));
   await page.goto("/play/?accountTest", { waitUntil: "networkidle" });
   await menuReady(page);
 
@@ -464,6 +470,46 @@ test("logout ends the session and returns to the homepage", async ({
   expect(new URL(page.url()).pathname).toBe("/");
   expect(logoutRequests).toBe(1);
 
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
+test("Back to Home returns from character select and creation without logging out", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  const state = freshMockState([
+    mockCharacter("char-1", "Rega the Bold", { level: 7 }),
+  ]);
+  await installAccountMock(page, state);
+  let logoutRequests = 0;
+  await page.route("**/api/auth/logout", async (route) => {
+    logoutRequests += 1;
+    await route.fulfill({ status: 204 });
+  });
+
+  // Character select: the home link is plain navigation — the session
+  // survives, so the homepage greets the signed-in state (TASK-721).
+  await page.goto("/play/?accountTest", { waitUntil: "networkidle" });
+  await menuReady(page);
+  const selectHome = page.getByTestId("account-select-home");
+  await expect(selectHome).toHaveAttribute("href", "/");
+  await selectHome.click();
+  await expect(page.getByTestId("home-play")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/");
+
+  // Character creation: same control, same behavior.
+  await page.goto("/play/?accountTest", { waitUntil: "networkidle" });
+  await menuReady(page);
+  await page.getByTestId("account-create-open").click();
+  await expect(page.getByTestId("account-create")).toBeVisible();
+  const createHome = page.getByTestId("account-create-home");
+  await expect(createHome).toHaveAttribute("href", "/");
+  await createHome.click();
+  await expect(page.getByTestId("home-play")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/");
+
+  // No logout ever fired — going home is not signing out.
+  expect(logoutRequests).toBe(0);
   expect(failures, failures.join("\n")).toEqual([]);
 });
 

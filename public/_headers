@@ -36,3 +36,13 @@
 
 /play/index.html
   Cache-Control: no-cache
+
+# "/admin/" is the owner admin panel (TASK-721, DEC-047) — same rule.
+/admin
+  Cache-Control: no-cache
+
+/admin/
+  Cache-Control: no-cache
+
+/admin/index.html
+  Cache-Control: no-cache

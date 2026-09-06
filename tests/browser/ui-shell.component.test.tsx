@@ -2385,4 +2385,38 @@ describe("technical UI shell component", () => {
       render(null, container);
     }
   });
+
+  // TASK-721: both account screens carry a plain Back to Home anchor — it
+  // navigates to "/" without touching the logout action.
+  it("offers Back to Home on character select and creation without logging out", async () => {
+    const logout = vi.fn<AccountMenuActions["logout"]>(() =>
+      Promise.resolve(true),
+    );
+    const container = mountAccountMenu(
+      accountModel({ characters: accountCharacters }),
+      stubActions({ logout }),
+    );
+    try {
+      expect(
+        container
+          .querySelector('[data-testid="account-select-home"]')
+          ?.getAttribute("href"),
+      ).toBe("/");
+      await act(() => {
+        container
+          .querySelector<HTMLButtonElement>(
+            '[data-testid="account-create-open"]',
+          )
+          ?.click();
+      });
+      expect(
+        container
+          .querySelector('[data-testid="account-create-home"]')
+          ?.getAttribute("href"),
+      ).toBe("/");
+      expect(logout).not.toHaveBeenCalled();
+    } finally {
+      render(null, container);
+    }
+  });
 });

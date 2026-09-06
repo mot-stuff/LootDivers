@@ -25,12 +25,14 @@ export default defineConfig({
   build: {
     sourcemap: true,
     // Multi-page build (TASK-708 / DEC-035): "/" is the light homepage
-    // (no Phaser), "/play/" is the game shell. Both share /assets/ and
-    // the "/" base path.
+    // (no Phaser), "/play/" is the game shell, and "/admin/" is the owner
+    // admin panel (TASK-721 / DEC-047). All share /assets/ and the "/"
+    // base path.
     rollupOptions: {
       input: {
         home: fileURLToPath(new URL("index.html", import.meta.url)),
         play: fileURLToPath(new URL("play/index.html", import.meta.url)),
+        admin: fileURLToPath(new URL("admin/index.html", import.meta.url)),
       },
     },
   },

@@ -18,6 +18,40 @@ import newsEntries from "../../src/home/news.json" with { type: "json" };
 
 const SESSION = { userId: "user-1", email: "diver@example.com" };
 
+/** API news entries for the TASK-721 live-feed tests. */
+const API_NEWS = [
+  {
+    id: "00000000-0000-4000-8000-00000000n001",
+    date: "2026-09-06",
+    title: "Live from the server",
+    body: "This entry came from GET /news, not the static file.",
+    author: "Loot Divers Team",
+    publishedAt: "2026-09-06T10:00:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-00000000n002",
+    date: "2026-09-05",
+    title: "An older live entry",
+    body: "Published through the admin panel.",
+    author: "Loot Divers Team",
+    publishedAt: "2026-09-05T10:00:00.000Z",
+  },
+];
+
+/**
+ * Mocks GET /news (TASK-721): an empty feed keeps the console clean and
+ * exercises the static-file fallback the older assertions rely on.
+ */
+async function mockNews(page: Page, entries: unknown[]): Promise<void> {
+  await page.route("**/api/news", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(entries),
+    }),
+  );
+}
+
 function collectRuntimeFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("console", (message) => {
@@ -49,10 +83,14 @@ test("the homepage loads light with branding, news, and account-first CTAs", asy
   const requestedUrls: string[] = [];
   page.on("request", (request) => requestedUrls.push(request.url()));
   await mockSession(page, null);
+  await mockNews(page, []);
 
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page).toHaveTitle("Loot Divers");
   await expect(page.getByAltText("Loot Divers")).toBeVisible();
+
+  // TASK-721: the admin entry never shows for signed-out visitors.
+  await expect(page.getByTestId("home-admin-link")).toBeHidden();
 
   // TASK-716: signed out there is no Play button — the primary CTA is
   // account creation, the secondary is login, both into the auth panel.
@@ -117,10 +155,13 @@ test("a live session shows Play now and it navigates into the game shell", async
 }) => {
   const failures = collectRuntimeFailures(page);
   await mockSession(page, SESSION);
+  await mockNews(page, []);
   await page.goto("/", { waitUntil: "networkidle" });
 
   await expect(page.getByTestId("home-create-account")).not.toBeVisible();
   await expect(page.getByTestId("home-session")).toContainText(SESSION.email);
+  // TASK-721: a plain (non-admin) session never reveals the admin entry.
+  await expect(page.getByTestId("home-admin-link")).toBeHidden();
   const play = page.getByTestId("home-play");
   await expect(play).toBeVisible();
   await expect(play).toHaveAttribute("href", "/play/");
@@ -137,6 +178,7 @@ test("logout on the homepage returns the hero to the account-first state", async
 }) => {
   const failures = collectRuntimeFailures(page);
   await mockSession(page, SESSION);
+  await mockNews(page, []);
   let logoutRequests = 0;
   await page.route("**/api/auth/logout", (route) => {
     logoutRequests += 1;
@@ -252,4 +294,70 @@ test("auth forms complete against the mocked v1 API contract", async ({
     "diver@example.com",
   );
   await expect(page.getByTestId("home-create-account")).not.toBeVisible();
+});
+
+// --- TASK-721 (DEC-047): news comes from the live feed with a static
+// fallback, so admin panel edits go live without a deploy. -----------------
+
+test("news renders from GET /news when the API answers", async ({ page }) => {
+  const failures = collectRuntimeFailures(page);
+  await mockSession(page, null);
+  await mockNews(page, API_NEWS);
+  await page.goto("/", { waitUntil: "networkidle" });
+
+  const entries = page.getByTestId("home-news-list").locator("li");
+  await expect(entries).toHaveCount(API_NEWS.length);
+  await expect(entries.nth(0).locator("h3")).toHaveText("Live from the server");
+  await expect(entries.nth(0)).toContainText(
+    "This entry came from GET /news, not the static file.",
+  );
+  await expect(entries.nth(1).locator("h3")).toHaveText("An older live entry");
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
+test("news falls back to the static file when the API is unreachable", async ({
+  page,
+}) => {
+  await mockSession(page, null);
+  await page.route("**/api/news", (route) => route.abort("connectionfailed"));
+  await page.goto("/", { waitUntil: "networkidle" });
+
+  // Every static news.json entry renders, newest first, exactly as before
+  // the live feed existed.
+  const entries = page.getByTestId("home-news-list").locator("li");
+  await expect(entries).toHaveCount(newsEntries.length);
+  const sortedTitles = [...newsEntries]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((entry) => entry.title);
+  for (const [index, title] of sortedTitles.entries()) {
+    await expect(entries.nth(index).locator("h3")).toHaveText(title);
+  }
+});
+
+test("news titles and bodies render as text, never as markup", async ({
+  page,
+}) => {
+  await mockSession(page, null);
+  await mockNews(page, [
+    {
+      id: "00000000-0000-4000-8000-00000000x001",
+      date: "2026-09-06",
+      title: '<img src=x onerror="window.__xss=1">',
+      body: "<script>window.__xss=2</script> stays inert text",
+      author: "Loot Divers Team",
+      publishedAt: "2026-09-06T10:00:00.000Z",
+    },
+  ]);
+  await page.goto("/", { waitUntil: "networkidle" });
+
+  const entry = page.getByTestId("home-news-list").locator("li").first();
+  await expect(entry.locator("h3")).toHaveText(
+    '<img src=x onerror="window.__xss=1">',
+  );
+  await expect(entry).toContainText("stays inert text");
+  // The markup rendered as text nodes: no injected elements, no execution.
+  await expect(entry.locator("img, script")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => (window as { __xss?: number }).__xss ?? null),
+  ).toBeNull();
 });

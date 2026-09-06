@@ -2034,6 +2034,17 @@ a:focus-visible {
   color: var(--ui-focus);
 }
 
+/* TASK-721: the Back to Home controls are anchors (plain navigation, no
+   logout) restyled to match the quiet .account-back buttons. */
+a.account-home-return {
+  display: inline-block;
+  margin-top: 0.4rem;
+}
+
+a.account-home-return:hover {
+  color: var(--ui-focus);
+}
+
 .account-class-card {
   display: grid;
   grid-template-columns: auto 1fr;

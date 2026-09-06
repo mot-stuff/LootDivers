@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/assets/branding/favicon.png" type="image/png" />
+    <title>Loot Divers — Admin</title>
+    <script type="module" src="/src/admin/main.ts"></script>
+  </head>
+  <body class="home admin">
+    <main class="home-shell">
+      <header class="admin-header">
+        <h1 class="admin-title">Loot Divers — Admin Tools</h1>
+        <p class="admin-session-line">
+          <span
+            class="admin-session-email"
+            data-testid="admin-session-email"
+          ></span>
+          <a class="admin-home-link" href="/" data-testid="admin-home-link">
+            Back to home
+          </a>
+        </p>
+      </header>
+
+      <!-- Default state: access checking/denied. src/admin/main.ts probes
+           the session and reveals the panel only for admin sessions; the
+           API 401/403s every admin route regardless (DEC-046/047). -->
+      <section
+        class="home-panel admin-gate"
+        data-testid="admin-gate"
+        aria-labelledby="admin-gate-heading"
+      >
+        <h2 id="admin-gate-heading">Checking access…</h2>
+        <p class="admin-gate-copy" data-testid="admin-gate-copy"></p>
+      </section>
+
+      <div class="admin-panel" data-testid="admin-panel" hidden>
+        <section
+          class="home-panel admin-section"
+          aria-labelledby="admin-accounts-heading"
+        >
+          <h2 id="admin-accounts-heading">Account Lookup</h2>
+          <form class="admin-lookup-form" data-testid="admin-lookup-form">
+            <label class="admin-field-label" for="admin-lookup-email">
+              Account email
+            </label>
+            <div class="admin-inline-row">
+              <input
+                id="admin-lookup-email"
+                data-testid="admin-lookup-email"
+                type="email"
+                autocomplete="off"
+                required
+              />
+              <button
+                type="submit"
+                class="admin-button"
+                data-testid="admin-lookup-submit"
+              >
+                Look up
+              </button>
+            </div>
+          </form>
+          <p
+            class="admin-status admin-lookup-status"
+            data-testid="admin-lookup-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <div
+            class="admin-account-card"
+            data-testid="admin-account"
+            hidden
+          ></div>
+        </section>
+
+        <section
+          class="home-panel admin-section"
+          aria-labelledby="admin-rejections-heading"
+        >
+          <h2 id="admin-rejections-heading">Save Rejections</h2>
+          <p class="admin-section-note">
+            Rejected save uploads are the cheat signal (DEC-044): repeated
+            rejections from one account merit a closer look.
+          </p>
+          <button
+            type="button"
+            class="admin-button admin-rejections-refresh"
+            data-testid="admin-rejections-refresh"
+          >
+            Refresh
+          </button>
+          <div class="admin-rejections" data-testid="admin-rejections"></div>
+        </section>
+
+        <section
+          class="home-panel admin-section"
+          aria-labelledby="admin-news-heading"
+        >
+          <h2 id="admin-news-heading">News Manager</h2>
+          <form class="admin-news-form" data-testid="admin-news-form">
+            <input
+              type="hidden"
+              class="admin-news-id"
+              data-testid="admin-news-id"
+            />
+            <label class="admin-field-label" for="admin-news-title">
+              Title
+            </label>
+            <input
+              id="admin-news-title"
+              data-testid="admin-news-title"
+              type="text"
+              maxlength="200"
+              autocomplete="off"
+              required
+            />
+            <label class="admin-field-label" for="admin-news-body">
+              Body (plain text)
+            </label>
+            <textarea
+              id="admin-news-body"
+              data-testid="admin-news-body"
+              rows="5"
+              required
+            ></textarea>
+            <label class="admin-field-label" for="admin-news-author">
+              Author (optional)
+            </label>
+            <input
+              id="admin-news-author"
+              data-testid="admin-news-author"
+              type="text"
+              maxlength="100"
+              autocomplete="off"
+            />
+            <div class="admin-inline-row">
+              <button
+                type="submit"
+                class="admin-button"
+                data-testid="admin-news-submit"
+              >
+                Publish entry
+              </button>
+              <button
+                type="button"
+                class="admin-button admin-button-quiet admin-news-cancel"
+                data-testid="admin-news-cancel"
+                hidden
+              >
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <p
+            class="admin-status admin-news-status"
+            data-testid="admin-news-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <ol class="admin-news-list" data-testid="admin-news-list"></ol>
+        </section>
+      </div>
+
+      <footer class="home-footer">
+        <p>Admin tools are for the Loot Divers team only.</p>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -196,10 +196,14 @@ test("Exit to Main Menu saves and navigates to the homepage without logging out"
   page,
 }) => {
   const failures = collectRuntimeFailures(page);
-  // The homepage probes the session on load (TASK-716/DEC-042); answer
-  // signed-out cleanly so the landing keeps the console quiet.
+  // The homepage probes the session on load (TASK-716/DEC-042) and fetches
+  // the news feed (TASK-721); answer both cleanly so the landing keeps the
+  // console quiet.
   await page.route("**/api/auth/session", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "{}" }),
+  );
+  await page.route("**/api/news", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
   );
   await page.goto("/play/?autostart", { waitUntil: "networkidle" });
   await combatReady(page);
