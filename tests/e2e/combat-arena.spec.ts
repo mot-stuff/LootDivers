@@ -5,6 +5,15 @@ import { expect, test, type Page } from "@playwright/test";
 // CI and remain covered by the local four-browser gate (DEC-033).
 const RUNNING_IN_CI = process.env["CI"] !== undefined;
 
+/** Outer `0 0 0 5px` candy rim is ink overflow. Linux Chromium's
+ *  boundingBox includes it; Windows does not. */
+const CHROME_RIM_PX = 5;
+
+function expectGutter(actual: number, expected: number): void {
+  expect(actual).toBeGreaterThanOrEqual(expected - CHROME_RIM_PX - 1);
+  expect(actual).toBeLessThanOrEqual(expected + 1);
+}
+
 function collectRuntimeFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("console", (message) => {
@@ -614,12 +623,15 @@ for (const viewport of [
     const hudBox = await hud.boundingBox();
     expect(hudBox).not.toBeNull();
     expect(hudBox?.width).toBeLessThanOrEqual(240);
-    expect(
+    const gutter = viewport.width <= 700 ? 8 : 16;
+    expectGutter(
       viewport.width - ((hudBox?.x ?? 0) + (hudBox?.width ?? 0)),
-    ).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
-    expect(
+      gutter,
+    );
+    expectGutter(
       viewport.height - ((hudBox?.y ?? 0) + (hudBox?.height ?? 0)),
-    ).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
+      gutter,
+    );
     expect(hudBox?.x).toBeGreaterThanOrEqual(0);
     expect(hudBox?.y).toBeGreaterThanOrEqual(0);
     expect((hudBox?.x ?? 0) + (hudBox?.width ?? 0)).toBeLessThanOrEqual(
@@ -649,12 +661,13 @@ for (const viewport of [
     await expect(actionBar).toBeVisible();
     const actionBarBox = await actionBar.boundingBox();
     expect(actionBarBox).not.toBeNull();
-    expect(actionBarBox?.x).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
+    expectGutter(actionBarBox?.x ?? -1, gutter);
     expect(actionBarBox?.y ?? -1).toBeGreaterThanOrEqual(0);
     expect(actionBarBox?.width ?? Infinity).toBeLessThanOrEqual(288);
-    expect(
+    expectGutter(
       viewport.height - ((actionBarBox?.y ?? 0) + (actionBarBox?.height ?? 0)),
-    ).toBeCloseTo(viewport.width <= 700 ? 8 : 16, 0);
+      gutter,
+    );
     expect(
       (actionBarBox?.x ?? 0) + (actionBarBox?.width ?? 0),
     ).toBeLessThanOrEqual(viewport.width);
@@ -685,7 +698,7 @@ for (const viewport of [
     expect(pauseBox).not.toBeNull();
     expect(titleBox).not.toBeNull();
     expect(pauseBox?.y ?? 0).toBeGreaterThanOrEqual(
-      (titleBox?.y ?? 0) + (titleBox?.height ?? 0),
+      (titleBox?.y ?? 0) + (titleBox?.height ?? 0) - CHROME_RIM_PX - 1,
     );
     await expect(
       pause.locator('[data-testid="combat-vitals-hud"]'),
