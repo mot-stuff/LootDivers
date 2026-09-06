@@ -3782,3 +3782,49 @@ back to the homepage from the character select and creation screens.
 - The panel is intentionally minimal (one owner, pre-alpha); pagination,
   audit trails of admin actions, and richer account tooling can extend
   the same page when needed.
+
+---
+
+# DEC-048
+
+## Homepage highscores: public top-100, ranked by level then Cleave damage
+
+Date: 2026-09-05
+
+## Decision
+
+The homepage news panel becomes a two-tab dispatch: **News** (default)
+and **Highscores**. Highscores are a public, unauthenticated
+`GET /highscores` feed of the top 100 characters, ranked by:
+
+1. highest level
+2. highest displayed Basic Cleave damage
+3. name (stable tie-break)
+
+Damage is **not** a client-supplied number. The server recomputes it
+from the stored save with the same core formula the combat sim uses
+(equipment outgoing-damage + Strength/passives + Cleave-specific
+mastery, applied to Cleave's catalog 25). Forged values still have to
+pass DEC-043 before they can appear, and banned accounts are excluded
+from the board.
+
+Never-saved characters still appear at their stored level (1) with the
+empty-gear Cleave damage of 25, so a freshly created hero is on the
+board immediately.
+
+## Alternatives considered
+
+- **Client-posted damage / a dedicated damage column on `characters`:**
+  rejected — that is exactly the cheat surface the owner asked to close.
+- **Rank by XP instead of displayed damage:** rejected — the owner asked
+  for highest level and most damage; XP is already what produces level.
+- **A third MPA page:** rejected — this is companion content to news,
+  not a destination of its own.
+
+## Consequences
+
+- Homepage markup: `#home-news-panel` / `#home-highscores-panel` behind
+  feed tabs. All names render as `textContent`.
+- The feed is public; no session is required to read it.
+- Full server-authoritative combat (the MMO target) will replace this
+  derived damage with the live sim's number; the ranking keys stay.

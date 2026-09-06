@@ -332,9 +332,122 @@ function wireAuthForms(
   };
 }
 
+interface HighscoreRow {
+  readonly rank: number;
+  readonly name: string;
+  readonly class: string;
+  readonly level: number;
+  readonly damage: number;
+}
+
+function isHighscoreRow(value: unknown): value is HighscoreRow {
+  if (typeof value !== "object" || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row["rank"] === "number" &&
+    typeof row["name"] === "string" &&
+    typeof row["class"] === "string" &&
+    typeof row["level"] === "number" &&
+    typeof row["damage"] === "number"
+  );
+}
+
+async function loadHighscores(): Promise<readonly HighscoreRow[] | null> {
+  try {
+    const response = await fetch(
+      `${apiBaseForHost(window.location.hostname)}/highscores`,
+    );
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (!Array.isArray(body)) return null;
+    return body.filter((row) => isHighscoreRow(row));
+  } catch {
+    return null;
+  }
+}
+
+function classLabel(characterClass: string): string {
+  if (characterClass.length === 0) return characterClass;
+  return characterClass[0]!.toUpperCase() + characterClass.slice(1);
+}
+
+function renderHighscores(
+  list: HTMLOListElement,
+  status: HTMLParagraphElement,
+  rows: readonly HighscoreRow[] | null,
+): void {
+  list.replaceChildren();
+  if (rows === null) {
+    status.textContent = "Highscores are unavailable right now.";
+    return;
+  }
+  if (rows.length === 0) {
+    status.textContent = "No divers on the board yet. Be the first.";
+    return;
+  }
+  status.textContent = "Top 100 — ranked by level, then Cleave damage.";
+  for (const row of rows) {
+    const item = document.createElement("li");
+    item.className = "home-highscore-row";
+
+    const rank = document.createElement("span");
+    rank.className = "home-highscore-rank";
+    rank.textContent = String(row.rank);
+
+    const name = document.createElement("span");
+    name.className = "home-highscore-name";
+    name.textContent = `${row.name} · ${classLabel(row.class)}`;
+
+    const level = document.createElement("span");
+    level.className = "home-highscore-level";
+    level.textContent = `Lv ${String(row.level)}`;
+
+    const damage = document.createElement("span");
+    damage.className = "home-highscore-damage";
+    damage.textContent = `${row.damage.toLocaleString("en-US")} dmg`;
+
+    item.append(rank, name, level, damage);
+    list.append(item);
+  }
+}
+
+function wireFeedTabs(): void {
+  const tabs = [
+    ...document.querySelectorAll<HTMLButtonElement>(".home-feed-tab"),
+  ];
+  const newsPanel = requireElement<HTMLElement>("#home-news-panel");
+  const scoresPanel = requireElement<HTMLElement>("#home-highscores-panel");
+  const apply = (tab: "news" | "highscores"): void => {
+    for (const button of tabs) {
+      button.setAttribute(
+        "aria-selected",
+        String(button.dataset["tab"] === tab),
+      );
+    }
+    newsPanel.hidden = tab !== "news";
+    scoresPanel.hidden = tab !== "highscores";
+  };
+  for (const button of tabs) {
+    button.addEventListener("click", () => {
+      const requested = button.dataset["tab"];
+      if (requested === "news" || requested === "highscores") {
+        apply(requested);
+      }
+    });
+  }
+}
+
 void loadNewsEntries().then((entries) => {
   renderNews(requireElement<HTMLOListElement>(".home-news-list"), entries);
 });
+void loadHighscores().then((rows) => {
+  renderHighscores(
+    requireElement<HTMLOListElement>(".home-highscores-list"),
+    requireElement<HTMLParagraphElement>(".home-highscores-status"),
+    rows,
+  );
+});
+wireFeedTabs();
 const setAuthMode = wireAuthForms((email) => {
   // Switch the hero immediately, then re-probe so an admin session also
   // reveals the admin entry without a reload.

@@ -6,6 +6,7 @@ import type {
   CharacterListRow,
   CharacterRecord,
   DataStore,
+  HighscoreCandidate,
   NewsDraft,
   NewsEntryRecord,
   NewsPatch,
@@ -320,8 +321,7 @@ export class MemoryStore implements DataStore {
       .slice(0, limit)
       .map((rejection) => ({
         userId: rejection.userId,
-        email:
-          this.#users.get(rejection.userId)?.email ?? "(deleted account)",
+        email: this.#users.get(rejection.userId)?.email ?? "(deleted account)",
         characterId: rejection.characterId,
         code: rejection.code,
         createdAt: rejection.createdAt,
@@ -361,8 +361,7 @@ export class MemoryStore implements DataStore {
     const rows = [...this.#news.values()]
       .sort(
         (a, b) =>
-          b.publishedAt.localeCompare(a.publishedAt) ||
-          b.sequence - a.sequence,
+          b.publishedAt.localeCompare(a.publishedAt) || b.sequence - a.sequence,
       )
       .map((entry) => this.#toNewsRecord(entry));
     return Promise.resolve(rows);
@@ -403,6 +402,21 @@ export class MemoryStore implements DataStore {
 
   public deleteNews(id: string): Promise<boolean> {
     return Promise.resolve(this.#news.delete(id));
+  }
+
+  public listHighscoreCandidates(): Promise<readonly HighscoreCandidate[]> {
+    const rows = [...this.#characters.values()]
+      .filter((character) => {
+        const owner = this.#users.get(character.userId);
+        return owner !== undefined && owner.bannedAt === null;
+      })
+      .map((character) => ({
+        name: character.name,
+        class: character.class,
+        level: character.level,
+        envelope: character.envelope,
+      }));
+    return Promise.resolve(rows);
   }
 
   public listCharactersForAudit(): Promise<readonly AuditableCharacter[]> {

@@ -88,6 +88,15 @@ export interface NewsPatch {
   readonly publishedAt: string | null;
 }
 
+/** One character eligible for the public highscores board (DEC-048). */
+export interface HighscoreCandidate {
+  readonly name: string;
+  readonly class: string;
+  readonly level: number;
+  /** Verbatim envelope blob; null until the first save. */
+  readonly envelope: unknown;
+}
+
 /** A stored character blob plus the identity the audit report prints. */
 export interface AuditableCharacter {
   readonly userId: string;
@@ -213,9 +222,7 @@ export interface DataStore {
   setAdmin(userId: string, isAdmin: boolean): Promise<boolean>;
 
   /** Newest-first save-rejection rows for the admin panel, capped at limit. */
-  listRecentSaveRejections(
-    limit: number,
-  ): Promise<readonly SaveRejectionRow[]>;
+  listRecentSaveRejections(limit: number): Promise<readonly SaveRejectionRow[]>;
 
   /**
    * The admin panel's account lookup: account flags plus its characters
@@ -237,6 +244,13 @@ export interface DataStore {
    * DEC-044 retroactive audit sweep. Ordered by email then name.
    */
   listCharactersForAudit(): Promise<readonly AuditableCharacter[]>;
+
+  /**
+   * Every non-banned account's characters for the public highscores
+   * board (DEC-048). Includes never-saved rows (envelope null) so a
+   * freshly created hero still appears at level 1 / base damage.
+   */
+  listHighscoreCandidates(): Promise<readonly HighscoreCandidate[]>;
 
   /** Health probe: resolves when the backing storage answers. */
   ping(): Promise<void>;

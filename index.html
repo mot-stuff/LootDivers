@@ -82,12 +82,67 @@
 
       <div class="home-columns">
         <section
-          class="home-panel home-news"
+          class="home-panel home-feed"
           data-testid="home-news"
-          aria-labelledby="home-news-heading"
+          aria-labelledby="home-feed-heading"
         >
-          <h2 id="home-news-heading">News</h2>
-          <ol class="home-news-list" data-testid="home-news-list"></ol>
+          <h2 id="home-feed-heading" class="visually-hidden">Dispatch</h2>
+          <div
+            class="home-feed-tabs"
+            role="tablist"
+            aria-label="News and highscores"
+          >
+            <button
+              type="button"
+              class="home-feed-tab"
+              data-tab="news"
+              data-testid="home-feed-tab-news"
+              role="tab"
+              aria-selected="true"
+              aria-controls="home-news-panel"
+              id="home-feed-tab-news"
+            >
+              News
+            </button>
+            <button
+              type="button"
+              class="home-feed-tab"
+              data-tab="highscores"
+              data-testid="home-feed-tab-highscores"
+              role="tab"
+              aria-selected="false"
+              aria-controls="home-highscores-panel"
+              id="home-feed-tab-highscores"
+            >
+              Highscores
+            </button>
+          </div>
+          <div
+            id="home-news-panel"
+            class="home-feed-panel"
+            role="tabpanel"
+            aria-labelledby="home-feed-tab-news"
+            data-testid="home-news-panel"
+          >
+            <ol class="home-news-list" data-testid="home-news-list"></ol>
+          </div>
+          <div
+            id="home-highscores-panel"
+            class="home-feed-panel"
+            role="tabpanel"
+            aria-labelledby="home-feed-tab-highscores"
+            data-testid="home-highscores-panel"
+            hidden
+          >
+            <p
+              class="home-highscores-status"
+              data-testid="home-highscores-status"
+            ></p>
+            <ol
+              class="home-highscores-list"
+              data-testid="home-highscores-list"
+            ></ol>
+          </div>
         </section>
 
         <section

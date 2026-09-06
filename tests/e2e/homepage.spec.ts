@@ -52,6 +52,16 @@ async function mockNews(page: Page, entries: unknown[]): Promise<void> {
   );
 }
 
+async function mockHighscores(page: Page, rows: unknown[]): Promise<void> {
+  await page.route("**/api/highscores", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(rows),
+    }),
+  );
+}
+
 function collectRuntimeFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("console", (message) => {
@@ -360,4 +370,54 @@ test("news titles and bodies render as text, never as markup", async ({
   expect(
     await page.evaluate(() => (window as { __xss?: number }).__xss ?? null),
   ).toBeNull();
+});
+
+test("the dispatch panel tabs between news and highscores", async ({
+  page,
+}) => {
+  const failures = collectRuntimeFailures(page);
+  await mockSession(page, null);
+  await mockNews(page, []);
+  await mockHighscores(page, [
+    {
+      rank: 1,
+      name: "High Tide",
+      class: "barbarian",
+      level: 12,
+      damage: 48,
+    },
+    {
+      rank: 2,
+      name: '<img src=x onerror="window.__hs=1">',
+      class: "barbarian",
+      level: 8,
+      damage: 30,
+    },
+  ]);
+  await page.goto("/", { waitUntil: "networkidle" });
+
+  await expect(page.getByTestId("home-news-panel")).toBeVisible();
+  await expect(page.getByTestId("home-highscores-panel")).toBeHidden();
+
+  await page.getByTestId("home-feed-tab-highscores").click();
+  await expect(page.getByTestId("home-feed-tab-highscores")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByTestId("home-news-panel")).toBeHidden();
+  const board = page.getByTestId("home-highscores-list").locator("li");
+  await expect(board).toHaveCount(2);
+  await expect(board.first()).toContainText("High Tide");
+  await expect(board.first()).toContainText("Lv 12");
+  await expect(board.first()).toContainText("48 dmg");
+  await expect(board.nth(1)).toHaveText(/<img src=x onerror="window\.__hs=1">/);
+  await expect(board.nth(1).locator("img")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => (window as { __hs?: number }).__hs ?? null),
+  ).toBeNull();
+
+  await page.getByTestId("home-feed-tab-news").click();
+  await expect(page.getByTestId("home-news-panel")).toBeVisible();
+  await expect(page.getByTestId("home-highscores-panel")).toBeHidden();
+  expect(failures, failures.join("\n")).toEqual([]);
 });

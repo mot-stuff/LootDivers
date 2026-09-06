@@ -5,6 +5,7 @@ import type {
   CharacterListRow,
   CharacterRecord,
   DataStore,
+  HighscoreCandidate,
   NewsDraft,
   NewsEntryRecord,
   NewsPatch,
@@ -478,6 +479,28 @@ export class PgStore implements DataStore {
       id,
     ]);
     return (result.rowCount ?? 0) > 0;
+  }
+
+  public async listHighscoreCandidates(): Promise<
+    readonly HighscoreCandidate[]
+  > {
+    const result = await this.#pool.query<{
+      name: string;
+      class: string;
+      level: number;
+      blob: unknown;
+    }>(
+      `select c.name, c.class, c.level, c.blob
+       from characters c
+       join users u on u.id = c.user_id
+       where u.banned_at is null`,
+    );
+    return result.rows.map((row) => ({
+      name: row.name,
+      class: row.class,
+      level: row.level,
+      envelope: row.blob,
+    }));
   }
 
   public async listCharactersForAudit(): Promise<
