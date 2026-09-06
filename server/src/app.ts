@@ -25,6 +25,7 @@ import {
   normalizeEmail,
   validateCharacterName,
 } from "./validation.js";
+import { validateSaveEnvelope } from "./save-validation.js";
 
 export const SESSION_COOKIE = "sid";
 
@@ -430,7 +431,7 @@ export async function buildApp(
           reply,
           422,
           "invalid-envelope",
-          "envelope is not a recognizable save envelope (shape check only; contents are never parsed).",
+          "envelope is not a recognizable save envelope.",
         );
       }
       if (shape.serializedBytes > ENVELOPE_MAX_BYTES) {
@@ -441,6 +442,22 @@ export async function buildApp(
           `Serialized envelope exceeds ${String(ENVELOPE_MAX_BYTES)} bytes.`,
         );
       }
+      // TASK-717/DEC-043: decode and validate the save exactly as the client
+      // codec would (checksum, version, parseCharacterSave bounds/catalogs)
+      // plus the server plausibility invariant, before anything is stored.
+      // The blob is still STORED verbatim; the load path never parses.
+      const validated = await validateSaveEnvelope(body.envelope);
+      if (!validated.ok) {
+        return sendError(reply, 422, validated.code, validated.message);
+      }
+      if (validated.save.progression.level !== body.level) {
+        return sendError(
+          reply,
+          422,
+          "level-mismatch",
+          "level must equal the save's progression level.",
+        );
+      }
       const saved = await store.saveCharacter(
         session.userId,
         characterId,
@@ -448,9 +465,18 @@ export async function buildApp(
         body.level,
         shape.formatVersion,
         shape.checksum,
+        validated.envelopeRevision,
       );
       if (saved === null) {
         return sendError(reply, 404, "not-found", "No such character.");
+      }
+      if (saved === "stale-revision") {
+        return sendError(
+          reply,
+          409,
+          "stale-revision",
+          "The submitted save's revision is not newer than the stored save.",
+        );
       }
       return reply.status(200).send({ revision: saved.revision });
     },

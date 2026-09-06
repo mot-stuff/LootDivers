@@ -201,7 +201,12 @@ export class PgStore implements DataStore {
     level: number,
     formatVersion: number,
     checksum: string,
-  ): Promise<SaveResult | null> {
+    envelopeRevision: number,
+  ): Promise<SaveResult | "stale-revision" | null> {
+    // DEC-043 monotonicity guard: the stored blob's own envelope `revision`
+    // must be strictly below the incoming one. Enforced inside the UPDATE
+    // predicate so concurrent writers race atomically; every stored blob
+    // passed route validation, so `blob->>'revision'` is always an integer.
     const result = await this.#pool.query<{ revision: number }>(
       `update characters set
          previous_blob     = blob,
@@ -213,6 +218,7 @@ export class PgStore implements DataStore {
          checksum          = $6,
          updated_at        = now()
        where id = $1 and user_id = $2
+         and (blob is null or (blob->>'revision')::integer < $7)
        returning revision`,
       [
         characterId,
@@ -221,10 +227,19 @@ export class PgStore implements DataStore {
         level,
         formatVersion,
         checksum,
+        envelopeRevision,
       ],
     );
     const row = result.rows[0];
-    return row === undefined ? null : { revision: row.revision };
+    if (row !== undefined) {
+      return { revision: row.revision };
+    }
+    // Distinguish "not yours / missing" (404) from "yours but stale" (409).
+    const owned = await this.#pool.query(
+      `select 1 from characters where id = $1 and user_id = $2`,
+      [characterId, userId],
+    );
+    return (owned.rowCount ?? 0) > 0 ? "stale-revision" : null;
   }
 
   public async deleteCharacter(

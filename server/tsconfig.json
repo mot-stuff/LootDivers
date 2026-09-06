@@ -1,9 +1,16 @@
 {
+  // moduleResolution switched from NodeNext to Bundler in TASK-717: the
+  // save-validation module imports the client's `src/core`/`src/persistence`
+  // sources (DEC-043 shared validation seam), which use extensionless
+  // relative imports that NodeNext rejects. The runtime artifact is an
+  // esbuild bundle (`npm run build`), so Node-style resolution of the
+  // emitted files is no longer a constraint.
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

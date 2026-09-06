@@ -1,9 +1,10 @@
 /**
  * Request validation for the v1 contract (Phase 8 kickoff §2, DEC-036 draft).
  *
- * The envelope check is deliberately shape-and-size only: the server never
- * parses payload contents (DEC-032 — the blob is client-owned and stored
- * verbatim; migrations run client-side).
+ * The envelope check here is shape-and-size only; since TASK-717 (DEC-043)
+ * the save route additionally decodes and validates envelope CONTENTS via
+ * `save-validation.ts` before storage. Stored blobs are still returned
+ * verbatim on load, and migrations still run client-side (DEC-032).
  */
 
 /** DEC-036 draft naming rule, shared client/server. */

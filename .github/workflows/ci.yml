@@ -157,7 +157,10 @@ jobs:
         run: npm test
 
       - name: Server Docker image builds
-        run: docker build -t lootdivers-api:ci .
+        # Repo-root context since TASK-717 (DEC-043): the image bundles the
+        # client's src/core + src/persistence validation sources.
+        working-directory: ${{ github.workspace }}
+        run: docker build -t lootdivers-api:ci -f server/Dockerfile .
 
   deploy:
     name: Deploy to Cloudflare Pages
