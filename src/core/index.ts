@@ -72,6 +72,16 @@ export {
   type CharacterSaveGenerators,
 } from "./character-save";
 export {
+  DISPLAYED_CLEAVE_BASE_DAMAGE,
+  displayedCleaveDamage,
+} from "./combat-power";
+export {
+  HIGHSCORE_LIMIT,
+  rankHighscores,
+  type HighscoreCandidate,
+  type HighscoreRow,
+} from "./highscores";
+export {
   FLASK_BASE_CHARGES_GAINED_ON_KILL,
   FLASK_DRINK_SHARED_COOLDOWN_TICKS,
   FLASK_MINIMUM_CHARGES_USED,

@@ -193,6 +193,110 @@ export function runContractSuite(
       expect(response.json()).toEqual({ status: "ok" });
     });
 
+    it("GET /highscores ranks by level then damage and hides banned accounts", async () => {
+      const empty = await app.inject({ method: "GET", url: "/highscores" });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json()).toEqual([]);
+
+      const low = await signup("board-low@example.test");
+      const mid = await signup("board-mid@example.test");
+      const high = await signup("board-high@example.test");
+      const banned = await signup("board-banned@example.test");
+      const lowId = await createCharacter(low, "Low Tide");
+      const midId = await createCharacter(mid, "Mid Tide");
+      const highId = await createCharacter(high, "High Tide");
+      const bannedId = await createCharacter(banned, "Banned Boss");
+
+      const midSim = simulationAtLevel(3);
+      const highSim = simulationAtLevel(5);
+      for (let i = 0; i < 10; i += 1) {
+        expect(highSim.allocateAttribute("strength").accepted).toBe(true);
+      }
+      expect(
+        (
+          await app.inject({
+            method: "PUT",
+            url: `/characters/${lowId}/save`,
+            headers: { cookie: low.cookie },
+            payload: {
+              envelope: await signedEnvelope(
+                simulationAtLevel(2).captureCharacterSave(),
+                1,
+              ),
+              level: 2,
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: "PUT",
+            url: `/characters/${midId}/save`,
+            headers: { cookie: mid.cookie },
+            payload: {
+              envelope: await signedEnvelope(midSim.captureCharacterSave(), 1),
+              level: 3,
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: "PUT",
+            url: `/characters/${highId}/save`,
+            headers: { cookie: high.cookie },
+            payload: {
+              envelope: await signedEnvelope(highSim.captureCharacterSave(), 1),
+              level: 5,
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: "PUT",
+            url: `/characters/${bannedId}/save`,
+            headers: { cookie: banned.cookie },
+            payload: {
+              envelope: await signedEnvelope(
+                simulationAtLevel(20).captureCharacterSave(),
+                1,
+              ),
+              level: 20,
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(await harness.store.banUser(banned.userId, "test")).toBe(true);
+
+      const board = await app.inject({ method: "GET", url: "/highscores" });
+      expect(board.statusCode).toBe(200);
+      const rows = board.json<
+        readonly {
+          rank: number;
+          name: string;
+          class: string;
+          level: number;
+          damage: number;
+        }[]
+      >();
+      expect(rows.map((row) => row.name)).toEqual([
+        "High Tide",
+        "Mid Tide",
+        "Low Tide",
+      ]);
+      expect(rows[0]).toMatchObject({
+        rank: 1,
+        class: "barbarian",
+        level: 5,
+      });
+      expect(rows[0]?.damage).toBeGreaterThan(rows[1]?.damage ?? 0);
+      expect(rows.some((row) => row.name === "Banned Boss")).toBe(false);
+    });
+
     it("CORS preflights allow PUT and DELETE from the site origin", async () => {
       // Regression (2026-09-05, live): the default preflight allow-list is
       // GET,HEAD,POST, so browsers silently blocked every cross-origin

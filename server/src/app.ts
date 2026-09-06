@@ -28,6 +28,7 @@ import {
 import { validateSaveEnvelope } from "./save-validation.js";
 import { sendError, UUID_PATTERN } from "./http.js";
 import { registerAdminRoutes, registerNewsRoutes } from "./admin-routes.js";
+import { registerHighscoreRoutes } from "./highscore-routes.js";
 
 export const SESSION_COOKIE = "sid";
 
@@ -568,6 +569,7 @@ export async function buildApp(
   // TASK-720 (DEC-046): public news feed + the admin panel API, kept in
   // their own module so app.ts churn stays low for parallel tasks.
   registerNewsRoutes(app, store);
+  registerHighscoreRoutes(app, store);
   registerAdminRoutes(app, { store, requireAdmin });
 
   return app;
