@@ -1,33 +1,29 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BASIC_CLEAVE_ID,
   CombatArenaSimulation,
   DEFAULT_COMBAT_ARENA_CONFIG,
-  DISPLAYED_CLEAVE_BASE_DAMAGE,
-  displayedCleaveDamage,
+  displayedTotalDps,
   HIGHSCORE_LIMIT,
   rankHighscores,
 } from "../../src/core";
 
-describe("displayedCleaveDamage", () => {
-  it("matches the Basic Cleave catalog base for an unsaved character", () => {
-    expect(DISPLAYED_CLEAVE_BASE_DAMAGE).toBe(25);
-    expect(displayedCleaveDamage(null)).toBe(25);
+describe("displayedTotalDps", () => {
+  it("sums every damaging ability on the starter bar", () => {
+    // Cleave 25 / 0.25s = 100, Dart 30 / 0.5s = 60, Pulse 20 / 2.5s = 8.
+    expect(displayedTotalDps(null)).toBe(168);
     expect(
-      displayedCleaveDamage(
+      displayedTotalDps(
         new CombatArenaSimulation(
           DEFAULT_COMBAT_ARENA_CONFIG,
         ).captureCharacterSave(),
       ),
-    ).toBe(25);
+    ).toBe(168);
   });
 
-  it("rises when Strength is allocated, matching the arena multiplier", () => {
+  it("scales the whole kit when Strength is allocated", () => {
     const simulation = new CombatArenaSimulation(DEFAULT_COMBAT_ARENA_CONFIG);
-    const starting = displayedCleaveDamage(simulation.captureCharacterSave());
-    // Starting characters have 2 unspent attribute points; 10 Strength is
-    // +20% outgoing damage → 25 * 1.20 = 30.
+    const starting = displayedTotalDps(simulation.captureCharacterSave());
     simulation.grantExperience(40);
     simulation.grantExperience(
       simulation.characterProgression().experienceToNextLevel,
@@ -43,19 +39,19 @@ describe("displayedCleaveDamage", () => {
     }
     const boosted = simulation.captureCharacterSave();
     expect(boosted.progression.attributes.strength).toBe(10);
-    expect(displayedCleaveDamage(boosted)).toBe(30);
-    expect(displayedCleaveDamage(boosted)).toBeGreaterThan(starting);
-    expect(BASIC_CLEAVE_ID.length).toBeGreaterThan(0);
+    // +20% outgoing: Cleave 30*4=120, Dart 36*2=72, Pulse 24*0.4=9.6 → 201.
+    expect(displayedTotalDps(boosted)).toBe(201);
+    expect(displayedTotalDps(boosted)).toBeGreaterThan(starting);
   });
 });
 
 describe("rankHighscores", () => {
-  it("orders by level, then damage, then name, and caps at 100", () => {
+  it("orders by level, then DPS, then name, and caps at 100", () => {
     const rows = rankHighscores([
-      { name: "Zed", class: "barbarian", level: 3, damage: 30 },
-      { name: "Ann", class: "barbarian", level: 5, damage: 25 },
-      { name: "Bo", class: "barbarian", level: 3, damage: 40 },
-      { name: "Cy", class: "barbarian", level: 3, damage: 40 },
+      { name: "Zed", class: "barbarian", level: 3, dps: 30 },
+      { name: "Ann", class: "barbarian", level: 5, dps: 25 },
+      { name: "Bo", class: "barbarian", level: 3, dps: 40 },
+      { name: "Cy", class: "barbarian", level: 3, dps: 40 },
     ]);
     expect(rows.map((row) => row.name)).toEqual(["Ann", "Bo", "Cy", "Zed"]);
     expect(rows[0]?.rank).toBe(1);
@@ -65,7 +61,7 @@ describe("rankHighscores", () => {
       name: `Diver ${String(index)}`,
       class: "barbarian",
       level: 1,
-      damage: 25,
+      dps: 168,
     }));
     expect(rankHighscores(crowd)).toHaveLength(HIGHSCORE_LIMIT);
   });

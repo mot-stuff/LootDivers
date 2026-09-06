@@ -384,14 +384,14 @@ test("the dispatch panel tabs between news and highscores", async ({
       name: "High Tide",
       class: "barbarian",
       level: 12,
-      damage: 48,
+      dps: 240,
     },
     {
       rank: 2,
       name: '<img src=x onerror="window.__hs=1">',
       class: "barbarian",
       level: 8,
-      damage: 30,
+      dps: 180,
     },
   ]);
   await page.goto("/", { waitUntil: "networkidle" });
@@ -409,7 +409,7 @@ test("the dispatch panel tabs between news and highscores", async ({
   await expect(board).toHaveCount(2);
   await expect(board.first()).toContainText("High Tide");
   await expect(board.first()).toContainText("Lv 12");
-  await expect(board.first()).toContainText("48 dmg");
+  await expect(board.first()).toContainText("240 DPS");
   await expect(board.nth(1)).toHaveText(/<img src=x onerror="window\.__hs=1">/);
   await expect(board.nth(1).locator("img")).toHaveCount(0);
   expect(

@@ -3798,26 +3798,40 @@ and **Highscores**. Highscores are a public, unauthenticated
 `GET /highscores` feed of the top 100 characters, ranked by:
 
 1. highest level
-2. highest displayed Basic Cleave damage
+2. highest sheet DPS
 3. name (stable tie-break)
 
-Damage is **not** a client-supplied number. The server recomputes it
-from the stored save with the same core formula the combat sim uses
-(equipment outgoing-damage + Strength/passives + Cleave-specific
-mastery, applied to Cleave's catalog 25). Forged values still have to
-pass DEC-043 before they can appear, and banned accounts are excluded
-from the board.
+DPS is **not** a client-supplied number. The server recomputes it from
+the stored save as the sum of theoretical single-target DPS of every
+damaging ability on the character's kit (owned + assigned loadout),
+using the same outgoing-damage and per-ability mastery multipliers the
+combat sim uses. Cycle time is the longer of cast and cooldown, so a
+0-cooldown melee and a long-CD nuke both contribute fairly. Buff-only
+abilities add 0; mana sustain is ignored (sheet number, not a simulated
+rotation). This stays class-agnostic as new kits ship — a mage bar is
+scored the same way as a barbarian bar.
+
+Forged values still have to pass DEC-043 before they can appear, and
+banned accounts are excluded from the board.
 
 Never-saved characters still appear at their stored level (1) with the
-empty-gear Cleave damage of 25, so a freshly created hero is on the
-board immediately.
+starter-kit sheet DPS, so a freshly created hero is on the board
+immediately.
+
+## Amendment (2026-09-05, owner): kit DPS, not Cleave hit
+
+The first cut ranked on Basic Cleave's displayed hit. The owner rejected
+that — future classes will not have Cleave, and "most damage" means
+total DPS across the kit. The `damage` field was renamed `dps`.
 
 ## Alternatives considered
 
 - **Client-posted damage / a dedicated damage column on `characters`:**
   rejected — that is exactly the cheat surface the owner asked to close.
-- **Rank by XP instead of displayed damage:** rejected — the owner asked
-  for highest level and most damage; XP is already what produces level.
+- **Rank by XP instead of DPS:** rejected — the owner asked for highest
+  level and most damage; XP is already what produces level.
+- **Cleave hit only:** rejected by the owner — other classes will not
+  have Cleave; the board must score the whole kit.
 - **A third MPA page:** rejected — this is companion content to news,
   not a destination of its own.
 

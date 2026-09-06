@@ -2,13 +2,13 @@
  * Public highscores feed (DEC-048).
  *
  * Rank is computed from stored character metadata and the client's own
- * combat-power formula (Basic Cleave vs the saved gear/progression). The
- * client never supplies a damage number — forged saves still have to pass
- * DEC-043 before they can appear here.
+ * combat-power formula (sheet DPS of every damaging ability on the
+ * loadout/owned kit). The client never supplies a DPS number — forged
+ * saves still have to pass DEC-043 before they can appear here.
  */
 import type { FastifyInstance } from "fastify";
 import {
-  displayedCleaveDamage,
+  displayedTotalDps,
   parseCharacterSave,
   rankHighscores,
   type CharacterSave,
@@ -42,7 +42,7 @@ export function registerHighscoreRoutes(
         name: candidate.name,
         class: candidate.class,
         level: candidate.level,
-        damage: displayedCleaveDamage(saveFromEnvelope(candidate.envelope)),
+        dps: displayedTotalDps(saveFromEnvelope(candidate.envelope)),
       })),
     );
     return reply.status(200).send(rows);
