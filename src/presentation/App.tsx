@@ -45,6 +45,14 @@ import {
   PROGRESSION_COMMAND_EVENT,
   WORLD_COMMAND_EVENT,
 } from "./shell-contracts";
+import {
+  KEYBIND_ACTIONS,
+  KEYBIND_ACTION_LABELS,
+  keyCodeLabel,
+  sharedKeybinds,
+  type KeybindAction,
+  type KeybindsStore,
+} from "./keybinds";
 
 export interface PersistenceFixtureActions {
   save(state: FixtureSaveState): Promise<void>;
@@ -137,7 +145,24 @@ export interface AppProps {
    * has an accounts API (never on local/automation origins).
    */
   readonly accountLoginUrl?: string | null;
+  /**
+   * Device keybind store for the system menu and shell key handlers
+   * (TASK-715). Defaults to the shared localStorage-backed store; tests
+   * inject an in-memory instance.
+   */
+  readonly keybinds?: KeybindsStore;
+  /**
+   * System-menu exit flow (TASK-715, DEC-041): the shell flushes the
+   * character save, then navigates ("character-select" reloads /play/ so
+   * the main menu — character select when signed in — gates re-entry;
+   * "main-menu" goes to the homepage). No logout is performed.
+   */
+  readonly onExitGame?: (
+    destination: SystemMenuExitDestination,
+  ) => void | Promise<void>;
 }
+
+export type SystemMenuExitDestination = "character-select" | "main-menu";
 
 interface CombatVitalsProps {
   readonly model: CombatHudReadModel;
@@ -1490,6 +1515,258 @@ function DeathOverlay({
   );
 }
 
+interface SystemMenuProps {
+  readonly keybinds: KeybindsStore;
+  readonly onResume: () => void;
+  readonly onExit: (
+    destination: SystemMenuExitDestination,
+  ) => void | Promise<void>;
+}
+
+/**
+ * TASK-715 (DEC-041) in-game system menu: a full-screen overlay opened by
+ * Escape while nothing else consumes it. The overlay takes focus away from
+ * the canvas, so the existing focus-gated runner pauses the simulation —
+ * no second pause mechanism exists. The backdrop covers the canvas, so
+ * pointer input cannot refocus gameplay while the menu is up. Escape
+ * closes in LIFO order: an in-progress key capture, then the keybinds
+ * screen, then the menu itself.
+ */
+function SystemMenu({ keybinds, onResume, onExit }: SystemMenuProps) {
+  const [screen, setScreen] = useState<"root" | "keybinds">("root");
+  const [bindings, setBindings] = useState(() => keybinds.bindings());
+  const [listening, setListening] = useState<KeybindAction | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [exiting, setExiting] = useState<SystemMenuExitDestination | null>(
+    null,
+  );
+
+  useEffect(
+    () =>
+      keybinds.subscribe(() => {
+        setBindings(keybinds.bindings());
+      }),
+    [keybinds],
+  );
+
+  // The window key handler reads menu state through a ref updated every
+  // render, mirroring the shell's menu key handler: a keypress landing
+  // between a state change and the effect re-registration must never see
+  // stale values.
+  const keyStateRef = useRef({ screen, listening });
+  keyStateRef.current = { screen, listening };
+
+  // Layout effect, not effect: the listener must be armed synchronously
+  // with the DOM commit that shows the menu, so an Escape arriving in the
+  // same frame the menu opened can never fall between paint and
+  // registration.
+  useLayoutEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      const current = keyStateRef.current;
+      if (current.listening !== null) {
+        // Key capture swallows everything: the next key becomes the
+        // binding, Escape cancels (LIFO close order).
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        if (event.code === "Escape") {
+          setListening(null);
+          setFeedback("Rebind cancelled.");
+          return;
+        }
+        const result = keybinds.rebind(current.listening, event.code);
+        if (!result.accepted) {
+          setFeedback(
+            `${keyCodeLabel(event.code)} cannot be bound — pick another key.`,
+          );
+          return;
+        }
+        setListening(null);
+        setFeedback(
+          result.swappedAction === null
+            ? `${KEYBIND_ACTION_LABELS[result.action]} is now ${keyCodeLabel(result.code)}.`
+            : `${KEYBIND_ACTION_LABELS[result.action]} is now ${keyCodeLabel(result.code)}; ` +
+                `${KEYBIND_ACTION_LABELS[result.swappedAction]} took ${keyCodeLabel(result.swappedCode ?? "")}.`,
+        );
+        return;
+      }
+      if (event.code !== "Escape") return;
+      event.preventDefault();
+      if (current.screen === "keybinds") {
+        setScreen("root");
+        return;
+      }
+      onResume();
+    };
+    // Capture phase so the handler runs while focus sits anywhere inside
+    // the dialog; the shell's menu key handler defers to the system menu
+    // while it is open.
+    window.addEventListener("keydown", handleKey, true);
+    return () => window.removeEventListener("keydown", handleKey, true);
+  }, [keybinds, onResume]);
+
+  function beginExit(destination: SystemMenuExitDestination): void {
+    setExiting(destination);
+    void Promise.resolve(onExit(destination)).catch(() => {
+      setExiting(null);
+    });
+  }
+
+  const busy = exiting !== null;
+
+  return (
+    <section
+      id="system-menu"
+      class="system-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-label="System menu"
+      data-testid="system-menu"
+      tabIndex={-1}
+    >
+      <div class="system-menu-panel">
+        <p class="eyebrow">Paused</p>
+        <h2 class="system-menu-heading">
+          {screen === "root" ? "System" : "Keybinds"}
+        </h2>
+        {screen === "root" ? (
+          <nav class="system-menu-actions" aria-label="System menu actions">
+            <button
+              type="button"
+              class="main-menu-button"
+              data-testid="system-menu-resume"
+              disabled={busy}
+              onClick={onResume}
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              class="main-menu-button"
+              data-testid="system-menu-keybinds"
+              disabled={busy}
+              onClick={() => {
+                setScreen("keybinds");
+                setFeedback(null);
+              }}
+            >
+              Settings · Keybinds
+            </button>
+            <button
+              type="button"
+              class="main-menu-button"
+              data-testid="system-menu-exit-character-select"
+              disabled={busy}
+              onClick={() => {
+                beginExit("character-select");
+              }}
+            >
+              Exit to Character Select
+            </button>
+            <button
+              type="button"
+              class="main-menu-button"
+              data-testid="system-menu-exit-main-menu"
+              disabled={busy}
+              onClick={() => {
+                beginExit("main-menu");
+              }}
+            >
+              Exit to Main Menu
+            </button>
+            <p class="main-menu-note" data-testid="system-menu-note">
+              {busy
+                ? "Saving your hero…"
+                : "Exiting saves your hero first. Esc resumes."}
+            </p>
+          </nav>
+        ) : (
+          <div class="system-menu-keybinds">
+            <p class="main-menu-note system-menu-keybinds-help">
+              Click a binding, then press the new key. If the key is already
+              taken, the two actions swap keys. Attack aiming stays on the
+              mouse.
+            </p>
+            <ul
+              class="system-menu-keybind-list"
+              data-testid="system-menu-keybind-list"
+              aria-label="Keyboard bindings"
+            >
+              {KEYBIND_ACTIONS.map((action) => (
+                <li key={action}>
+                  <span class="system-menu-keybind-label">
+                    {KEYBIND_ACTION_LABELS[action]}
+                  </span>
+                  <button
+                    type="button"
+                    class={
+                      listening === action
+                        ? "system-menu-keybind-button listening"
+                        : "system-menu-keybind-button"
+                    }
+                    data-testid={`keybind-${action}`}
+                    aria-label={
+                      listening === action
+                        ? `Press a key for ${KEYBIND_ACTION_LABELS[action]}`
+                        : `Change ${KEYBIND_ACTION_LABELS[action]}, currently ${keyCodeLabel(bindings[action])}`
+                    }
+                    disabled={
+                      busy || (listening !== null && listening !== action)
+                    }
+                    onClick={() => {
+                      setListening(action);
+                      setFeedback(null);
+                    }}
+                  >
+                    {listening === action
+                      ? "Press a key…"
+                      : keyCodeLabel(bindings[action])}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p
+              class="system-menu-feedback"
+              data-testid="keybind-feedback"
+              role="status"
+              aria-live="polite"
+            >
+              {feedback ?? ""}
+            </p>
+            <div class="system-menu-actions">
+              <button
+                type="button"
+                class="main-menu-button"
+                data-testid="system-menu-reset-keybinds"
+                disabled={busy}
+                onClick={() => {
+                  setListening(null);
+                  keybinds.resetToDefaults();
+                  setFeedback("Keybinds restored to defaults.");
+                }}
+              >
+                Reset to Defaults
+              </button>
+              <button
+                type="button"
+                class="main-menu-button"
+                data-testid="system-menu-back"
+                disabled={busy}
+                onClick={() => {
+                  setListening(null);
+                  setScreen("root");
+                }}
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function CombatVitals({ model }: CombatVitalsProps) {
   const healthPercent =
     model.playerMaxHealth > 0
@@ -1944,7 +2221,11 @@ export function App({
   account,
   accountActions,
   accountLoginUrl,
+  keybinds,
+  onExitGame,
 }: AppProps) {
+  // The shared store is a stable singleton; tests inject their own.
+  const keybindsStore = keybinds ?? sharedKeybinds();
   const [model, setModel] = useState<ShellReadModel>(() =>
     bindings.models.getSnapshot(),
   );
@@ -1956,6 +2237,7 @@ export function App({
     useState<CharacterHudReadModel>(EMPTY_CHARACTER_HUD);
   const [itemMenuOpen, setItemMenuOpen] = useState(false);
   const [characterMenuOpen, setCharacterMenuOpen] = useState(false);
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [combatHud, setCombatHud] = useState<CombatHudReadModel>({
     paused: true,
     playerHealth: 100,
@@ -2063,6 +2345,8 @@ export function App({
     forgeOpen: characterHud.forgeOpen,
     vendorOpen: characterHud.vendorOpen,
     mainMenuOpen,
+    systemMenuOpen,
+    playerDead: combatHud.playerDead,
   });
   menuKeyStateRef.current = {
     itemMenuOpen,
@@ -2070,6 +2354,8 @@ export function App({
     forgeOpen: characterHud.forgeOpen,
     vendorOpen: characterHud.vendorOpen,
     mainMenuOpen,
+    systemMenuOpen,
+    playerDead: combatHud.playerDead,
   };
   useEffect(() => {
     if (!showCombatPrototype) return;
@@ -2083,7 +2369,13 @@ export function App({
       const menus = menuKeyStateRef.current;
       // Gameplay menu shortcuts are inert while the main menu gates entry.
       if (menus.mainMenuOpen) return;
+      // The system menu owns keyboard input while open (TASK-715): its own
+      // handler processes Escape's LIFO close order and key capture.
+      if (menus.systemMenuOpen) return;
       if (event.code === "Escape") {
+        // Escape priority is unchanged: open overlays close first (LIFO);
+        // the system menu opens only when nothing else consumed Escape and
+        // no overlay like the death screen sits on top.
         if (menus.itemMenuOpen || menus.characterMenuOpen) {
           event.preventDefault();
           closeMenus();
@@ -2093,11 +2385,18 @@ export function App({
         } else if (menus.vendorOpen) {
           event.preventDefault();
           emitWorldCommand({ type: "world.close-vendor" });
+        } else if (!menus.playerDead) {
+          event.preventDefault();
+          setSystemMenuOpen(true);
         }
         return;
       }
+      // Menu toggles resolve through the device keybinds (TASK-715), so
+      // rebinding Inventory/Character applies immediately.
+      const menuAction = keybindsStore.actionFor(event.code);
       if (
-        (event.code !== "KeyI" && event.code !== "KeyC") ||
+        (menuAction !== "toggle-inventory" &&
+          menuAction !== "toggle-character") ||
         event.repeat ||
         event.isComposing
       ) {
@@ -2108,7 +2407,7 @@ export function App({
       }
       if (isTextEntryTarget(event.target)) return;
       event.preventDefault();
-      if (event.code === "KeyI") {
+      if (menuAction === "toggle-inventory") {
         if (menuKeyStateRef.current.itemMenuOpen) closeMenus();
         else openInventoryMenu();
         return;
@@ -2120,9 +2419,13 @@ export function App({
     // canvas-focused keydowns before the bubble phase reaches window.
     window.addEventListener("keydown", handleMenuKey, true);
     return () => window.removeEventListener("keydown", handleMenuKey, true);
-  }, [showCombatPrototype]);
+  }, [showCombatPrototype, keybindsStore]);
   useLayoutEffect(() => {
-    if (itemMenuOpen) {
+    // The system menu takes focus first: pulling focus off the canvas is
+    // what pauses the focus-gated simulation runner (TASK-715).
+    if (systemMenuOpen) {
+      document.querySelector<HTMLElement>("#system-menu")?.focus();
+    } else if (itemMenuOpen) {
       document.querySelector<HTMLElement>("#inventory-menu")?.focus();
     } else if (characterMenuOpen) {
       document.querySelector<HTMLElement>("#character-menu")?.focus();
@@ -2136,6 +2439,7 @@ export function App({
     characterHud.vendorOpen,
     characterMenuOpen,
     itemMenuOpen,
+    systemMenuOpen,
   ]);
   useLayoutEffect(() => {
     if (mainMenuOpen && model.phase.kind === "ready") {
@@ -2187,6 +2491,15 @@ export function App({
   function closeMenus(): void {
     setItemMenuOpen(false);
     setCharacterMenuOpen(false);
+    document
+      .querySelector<HTMLCanvasElement>("#game-canvas")
+      ?.focus({ preventScroll: true });
+  }
+
+  function closeSystemMenu(): void {
+    // Resume (TASK-715): refocusing the canvas is what unpauses the
+    // focus-gated runner.
+    setSystemMenuOpen(false);
     document
       .querySelector<HTMLCanvasElement>("#game-canvas")
       ?.focus({ preventScroll: true });
@@ -2478,9 +2791,18 @@ export function App({
         <DeathOverlay model={combatHud} onRespawn={respawn} />
       )}
 
+      {showCombatPrototype && systemMenuOpen && !mainMenuOpen && (
+        <SystemMenu
+          keybinds={keybindsStore}
+          onResume={closeSystemMenu}
+          onExit={(destination) => onExitGame?.(destination)}
+        />
+      )}
+
       {showCombatPrototype &&
         combatHud.paused &&
         !mainMenuOpen &&
+        !systemMenuOpen &&
         !combatHud.playerDead && (
           <section class="combat-paused-hud" role="status">
             <strong>PAUSED</strong>
@@ -2506,7 +2828,7 @@ export function App({
       <section id="shell-controls" class="shell-controls" tabIndex={-1}>
         <p id="canvas-instructions">
           {showCombatPrototype
-            ? "Click the arena to play. Use left-click, Q, E, and R for assigned abilities. Press F to pick up loot, gather, open the forge or vendor, talk to the Roadwarden, or take a gate. Gates connect Hearthmere, Ashtrail Expanse, and Hollowdeep. Press I to toggle Inventory and C to toggle Character; Escape closes the open menu."
+            ? "Click the arena to play. Use left-click, Q, E, and R for assigned abilities. Press F to pick up loot, gather, open the forge or vendor, talk to the Roadwarden, or take a gate. Gates connect Hearthmere, Ashtrail Expanse, and Hollowdeep. Press I to toggle Inventory and C to toggle Character; Escape closes the open menu or opens the System menu (settings, keybinds, exit). Keys shown are defaults and can be rebound there."
             : "Focus the canvas before using keyboard input. Tab away to keep keyboard input in the interface."}
         </p>
         <button

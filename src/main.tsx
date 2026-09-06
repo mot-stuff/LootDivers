@@ -53,7 +53,9 @@ import {
   type AccountMenuModel,
   type MainMenuCharacterSaveModel,
   type PersistenceFixtureActions,
+  type SystemMenuExitDestination,
 } from "./presentation/App";
+import { sharedKeybinds } from "./presentation/keybinds";
 import { CHARACTER_RESPAWN_EVENT } from "./presentation/shell-contracts";
 import type {
   CanvasViewportReadModel,
@@ -299,6 +301,24 @@ let restoreServerCharacter: ((save: CharacterSave) => boolean) | null = null;
  * never overwrite an existing save on tab close.
  */
 let gameplayStarted = false;
+/** Device keybinds (TASK-715): one store for input, HUD, and the menu. */
+const keybinds = sharedKeybinds();
+/**
+ * TASK-715 system-menu exit flow (DEC-041): flush the character save, then
+ * leave via a clean navigation — character select lives on the /play/ main
+ * menu, Exit to Main Menu is the homepage. Rebound once the renderer boots
+ * so the flush uses the live simulation; the menu is unreachable before
+ * that.
+ */
+function exitDestinationUrl(destination: SystemMenuExitDestination): string {
+  return destination === "main-menu" ? "/" : "/play/";
+}
+let exitGame: (destination: SystemMenuExitDestination) => Promise<void> = (
+  destination,
+) => {
+  window.location.assign(exitDestinationUrl(destination));
+  return Promise.resolve();
+};
 const service = new PersistenceFixtureService(repository, {
   publish(status) {
     persistenceStatus = status;
@@ -361,6 +381,8 @@ function renderApp(): void {
       account={accountMenu}
       accountActions={accountActions}
       accountLoginUrl={accountLoginUrl}
+      keybinds={keybinds}
+      onExitGame={(destination) => exitGame(destination)}
     />,
     mount,
   );
@@ -737,6 +759,20 @@ if (!support.supported) {
               error instanceof Error ? error.message : String(error);
             console.warn(`Character save failed: ${detail}`);
           });
+        };
+        // TASK-715 (DEC-041): the system menu's exit flow flushes through
+        // the same FIFO save queue as every other trigger, then navigates.
+        // A failed save never strands the player in-game — local saves are
+        // best-effort (DEC-014) and the failure is logged.
+        exitGame = async (destination) => {
+          try {
+            await persistCharacter();
+          } catch (error) {
+            const detail =
+              error instanceof Error ? error.message : String(error);
+            console.warn(`Exit save failed: ${detail}`);
+          }
+          window.location.assign(exitDestinationUrl(destination));
         };
         // The simulation always boots into Hearthmere, so that is the
         // baseline; the first hud snapshot with a different zone marks a

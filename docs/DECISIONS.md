@@ -2990,3 +2990,107 @@ can differ from merge order, as with DEC-035/036/037.)
 - The gold e2e spec carries no DEC-033 CI skip: all combat is
   paused-stepped through the automation hooks and save settlement is
   polled, so it runs on every CI browser.
+
+---
+
+# DEC-041
+
+## System menu: Escape-opened pause menu, device-local keybinds with swap semantics, save-then-navigate exits
+
+Date: 2026-09-05 (TASK-715. DEC-040 lands with TASK-714, which merges
+first — entry numbers are planning-time IDs kept in numeric order, as
+with DEC-035/036/037.)
+
+## Decision
+
+1. **Escape opens a system menu only when nothing else consumes Escape.**
+   The existing shell Escape priority is unchanged and strictly LIFO:
+   inventory/character menus close first, then the forge, then the
+   vendor; only an otherwise-unconsumed Escape opens the system menu, and
+   never while the death screen is up (`playerDead`). Inside the menu,
+   Escape keeps unwinding LIFO: an in-progress key capture cancels, the
+   keybinds screen backs out to the root, and the root closes the menu.
+   While the system menu is open, the shell's gameplay menu shortcuts
+   (Inventory/Character toggles) are inert.
+2. **Pausing reuses the focus-gated runner — no second pause exists.**
+   The menu is a full-screen modal (DEC-029 tokens, styled like the main
+   menu family) that takes DOM focus; the `CombatArenaPresentation`
+   update loop already pauses the `FixedStepRunner` whenever the canvas
+   is unfocused, so opening the menu pauses and Resume (or Escape)
+   refocuses the canvas to unpause. The full-screen backdrop deliberately
+   covers the canvas so pointer clicks cannot refocus gameplay while the
+   menu is up (unlike the inventory panel, which leaves the arena
+   clickable). The paused-HUD banner is suppressed while the menu shows.
+3. **Keybinds are a device setting in localStorage, not save data.** A
+   new `src/presentation/keybinds.ts` module owns the mapping: fifteen
+   rebindable actions (movement ×4, dodge, interact/pick up, the three
+   keyboard ability slots, flasks ×4, and the Inventory/Character
+   toggles) stored as `KeyboardEvent.code` values under
+   `rarpg:keybinds:v1` (`{version: 1, bindings}`). The DEC-034
+   `CharacterSave` schema is untouched. The module lives in
+   `src/presentation/` because both consumers already import that layer
+   (the Phaser adapters depend on `shell-contracts`), and it stays
+   framework-free with an injected storage seam. A corrupt, reserved,
+   or duplicate-carrying stored payload rejects wholesale and falls back
+   to defaults; storage writes are best-effort (DEC-014 stance).
+4. **Lookups happen at event time, so rebinds apply instantly.**
+   `CombatInputAdapter` resolves every keydown through
+   `KeybindsStore.actionFor` and samples movement through `codeFor`
+   (no reload, no re-registration), and the shell's Inventory/Character
+   toggle handler resolves the same way. The combat HUD's ability and
+   flask key labels are built from the store at publish time, so the HUD
+   shows the live keys after a rebind. Mouse attack aiming and the LMB
+   primary slot are not rebindable in v1; Escape and pure modifier keys
+   (Shift/Ctrl/Alt/Meta) are reserved and refused.
+5. **Duplicate assignments swap (not reject).** Binding a key already
+   held by another action gives that action the rebound action's old key,
+   so every action always holds exactly one key and no action can be
+   stranded unbound. The settings screen reports the swap, and Reset to
+   Defaults restores the shipped mapping and clears the storage entry.
+6. **Exits save first, then navigate; no logout.** Both exits flush the
+   character through the existing `CharacterSaveService` FIFO queue
+   (`persistCharacter`, DEC-034/037 machinery) and await the commit
+   before leaving. "Exit to Character Select" navigates to `/play/`
+   (a clean reload whose main menu composes character select when a
+   session exists, DEC-036) and "Exit to Main Menu" navigates to the
+   homepage `/`. The session cookie is untouched — exiting is not a
+   logout. A failed exit save logs a warning and still navigates
+   (best-effort local saves, DEC-014).
+
+## Alternatives Considered
+
+- Returning to character select in-place (reopening the menu overlay
+  without navigation): rejected for v1 — the shell's New Game/Continue
+  flows assume a fresh page-load simulation (`startNewGame` documents
+  this), `gameplayStarted` arming and the boot-time session probe are
+  page-load-scoped, and unwinding all of that for an in-place return is
+  exactly the churn TASK-714's parallel `main.tsx` work punishes. The
+  clean `/play/` reload is the packet-sanctioned cheap path.
+- Rejecting duplicate key assignments instead of swapping: rejected —
+  rejection dead-ends the common "swap WASD to ESDF" style of remap
+  behind a temp-key shuffle; swapping keeps the invariant "every action
+  has exactly one key" without error states.
+- A dedicated pause flag on the simulation for the menu: rejected; the
+  focus-gated runner already expresses "UI holds input, sim frozen" and
+  the automation hooks' `setAutomationPaused` remains test-only.
+- Keybinds inside `CharacterSave` (per-character, server-synced):
+  rejected — bindings are device ergonomics, not character state; the
+  packet mandates localStorage and an untouched save schema.
+- Rebindable mouse buttons / LMB: deferred; the pointer path (aim +
+  primary attack + menu interactions) needs its own design pass.
+
+## Consequences
+
+- The HUD's `keyLabel` fields are now device-dependent presentation
+  state rather than constants; anything asserting default labels must
+  run with default bindings (all existing specs do).
+- `CombatInputAdapter` gained an injected `KeybindsStore` (defaulting to
+  the shared instance), keeping the combat engineer's file mechanical:
+  hardcoded codes became lookups, nothing else moved.
+- The system menu is the second consumer of the `main-menu-button`
+  visual family; a future audio/video settings screen slots into the
+  menu's root without new architecture.
+- E2e can rebind deterministically through the real UI; the new spec
+  proves rebind-applies-immediately, localStorage persistence across
+  reload, reset-to-defaults, pause/resume via `pausedForUi`, and both
+  exit flows, with no DEC-033 CI skip.

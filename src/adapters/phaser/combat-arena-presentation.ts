@@ -57,6 +57,10 @@ import {
   type WorldUiCommand,
 } from "../../presentation/shell-contracts";
 import {
+  sharedKeybinds,
+  type KeybindAction,
+} from "../../presentation/keybinds";
+import {
   BarbarianSpritePresentation,
   type BarbarianSpriteDiagnostics,
 } from "./barbarian-sprite";
@@ -73,30 +77,40 @@ const LOOT_LABEL_BASE_LIFT = 18;
 /** Vertical spacing between stacked labels of overlapping drops. */
 const LOOT_LABEL_STACK_GAP = 2;
 
+/**
+ * Loadout slots on the HUD. LMB is mouse-owned and not rebindable
+ * (TASK-715); the keyboard slots resolve their key labels through the
+ * shared keybinds store at publish time, so rebinds refresh the HUD.
+ */
 const HUD_SLOTS: readonly {
   readonly slot: LoadoutSlot;
   readonly keyLabel: string;
   readonly accessibleKeyLabel: string;
+  readonly keybindAction: KeybindAction | null;
 }[] = [
   {
     slot: "lmb",
     keyLabel: "LMB",
     accessibleKeyLabel: "Left click",
+    keybindAction: null,
   },
   {
     slot: "q",
     keyLabel: "Q",
     accessibleKeyLabel: "Q",
+    keybindAction: "ability-q",
   },
   {
     slot: "e",
     keyLabel: "E",
     accessibleKeyLabel: "E",
+    keybindAction: "ability-e",
   },
   {
     slot: "r",
     keyLabel: "R",
     accessibleKeyLabel: "R",
+    keybindAction: "ability-r",
   },
 ];
 
@@ -190,6 +204,8 @@ export interface CombatPresentationDiagnostics extends CombatArenaDiagnostics {
 
 export class CombatArenaPresentation {
   readonly #simulation = new CombatArenaSimulation();
+  /** Shared device keybinds (TASK-715): input lookup plus HUD key labels. */
+  readonly #keybinds = sharedKeybinds();
   readonly #input: CombatInputAdapter;
   readonly #runner: FixedStepRunner;
   readonly #arenaGraphics: Phaser.GameObjects.Graphics;
@@ -248,7 +264,7 @@ export class CombatArenaPresentation {
     readonly scene: Phaser.Scene,
     readonly canvas: HTMLCanvasElement,
   ) {
-    this.#input = new CombatInputAdapter(scene, canvas);
+    this.#input = new CombatInputAdapter(scene, canvas, this.#keybinds);
     this.#runner = new FixedStepRunner(
       { nowMilliseconds: () => performance.now() },
       (step) => this.#simulation.step(step),
@@ -1246,8 +1262,14 @@ export class CombatArenaPresentation {
               : (activation?.kind ?? "ready");
         return {
           id: abilityId ?? `empty:${slot.slot}`,
-          keyLabel: slot.keyLabel,
-          accessibleKeyLabel: slot.accessibleKeyLabel,
+          keyLabel:
+            slot.keybindAction === null
+              ? slot.keyLabel
+              : this.#keybinds.label(slot.keybindAction),
+          accessibleKeyLabel:
+            slot.keybindAction === null
+              ? slot.accessibleKeyLabel
+              : this.#keybinds.label(slot.keybindAction),
           name: abilityId === null ? "Empty" : this.abilityName(abilityId),
           manaCost,
           cooldownRemainingSeconds,
@@ -1263,9 +1285,9 @@ export class CombatArenaPresentation {
       zoneId: state.zoneId,
       zoneName: state.zoneName,
       respawnZoneName: state.respawnZoneName,
-      flasks: state.flasks.map((flask, index) => ({
+      flasks: state.flasks.map((flask) => ({
         slot: flask.slot,
-        keyLabel: `${index + 1}`,
+        keyLabel: this.#keybinds.label(flask.slot),
         displayName: flask.displayName,
         rarity: flask.rarity,
         resource: flask.resource,
@@ -1406,8 +1428,14 @@ export class CombatArenaPresentation {
         const abilityId = loadout.assignments[slot.slot];
         return {
           slot: slot.slot,
-          keyLabel: slot.keyLabel,
-          accessibleKeyLabel: slot.accessibleKeyLabel,
+          keyLabel:
+            slot.keybindAction === null
+              ? slot.keyLabel
+              : this.#keybinds.label(slot.keybindAction),
+          accessibleKeyLabel:
+            slot.keybindAction === null
+              ? slot.accessibleKeyLabel
+              : this.#keybinds.label(slot.keybindAction),
           abilityId,
           displayName:
             abilityId === null ? "Empty" : this.abilityName(abilityId),
