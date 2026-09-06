@@ -306,6 +306,11 @@ let characterSaveMenu: MainMenuCharacterSaveModel = {
   recovered: false,
 };
 let continueSavedCharacter: (() => boolean) | null = null;
+/**
+ * TASK-719: true while the most recent save trigger failed; the HUD shows a
+ * persistent "progress is not being saved" warning until a save lands.
+ */
+let saveWarning = false;
 /** TASK-709 account menu state (null on local origins / signed out). */
 let accountMenu: AccountMenuModel | null = null;
 /**
@@ -408,6 +413,7 @@ function renderApp(): void {
       accountGate={accountGate}
       keybinds={keybinds}
       onExitGame={(destination) => exitGame(destination)}
+      saveWarning={saveWarning}
     />,
     mount,
   );
@@ -798,30 +804,47 @@ if (!support.supported) {
           gameplayStarted = true;
         }
 
-        // TASK-705 save triggers (DEC-034): persist on zone travel and on
-        // page hide. Failures degrade to console warnings — local saves are
-        // best-effort by design (DEC-014). Trigger-based saves chain onto a
-        // FIFO queue so rapid triggers (e.g. two quick zone changes) can
-        // never land out of order and leave a stale save as the active
-        // generation; the snapshot is captured when its turn arrives, so a
-        // queued save always writes the freshest state.
+        // TASK-705 save triggers (DEC-034, amended by TASK-719): persist on
+        // zone travel, death, respawn, banked tutorial step, level-up, a
+        // 30-second autosave cadence, and page hide. Trigger-based saves
+        // chain onto a FIFO queue so rapid triggers (e.g. two quick zone
+        // changes) can never land out of order and leave a stale save as
+        // the active generation; the snapshot is captured when its turn
+        // arrives, so a queued save always writes the freshest state.
+        // Unchanged states are skipped (fingerprint check) so the autosave
+        // cadence never uploads redundant blobs.
         let pendingCharacterSave: Promise<void> = Promise.resolve();
+        let lastPersistedFingerprint: string | null = null;
         const persistCharacter = (): Promise<void> => {
           // `activeCharacterSaves` is read at flush time so a TASK-709
           // server-character selection swaps every trigger to the HTTP
           // repository atomically.
           pendingCharacterSave = pendingCharacterSave
             .catch(() => undefined)
-            .then(() =>
-              activeCharacterSaves.save(renderer.combat.captureCharacterSave()),
-            );
+            .then(async () => {
+              const save = renderer.combat.captureCharacterSave();
+              const fingerprint = JSON.stringify(save);
+              if (fingerprint === lastPersistedFingerprint) return;
+              await activeCharacterSaves.save(save);
+              lastPersistedFingerprint = fingerprint;
+              if (saveWarning) {
+                saveWarning = false;
+                renderApp();
+              }
+            });
           return pendingCharacterSave;
         };
         const persistCharacterQuietly = (): void => {
           persistCharacter().catch((error: unknown) => {
             const detail =
               error instanceof Error ? error.message : String(error);
-            console.warn(`Character save failed: ${detail}`);
+            // TASK-719: a failing save must never be silent — log loudly
+            // and surface a persistent HUD warning until a save lands.
+            console.error(`Character save failed: ${detail}`);
+            if (!saveWarning) {
+              saveWarning = true;
+              renderApp();
+            }
           });
         };
         // TASK-715 (DEC-041): the system menu's exit flow flushes through
@@ -850,10 +873,26 @@ if (!support.supported) {
           renderer.combat.diagnostics()?.zoneId ?? null;
         let lastObservedPlayerDead =
           renderer.combat.diagnostics()?.playerDead ?? false;
+        // TASK-719 triggers: banked tutorial steps and level-ups persist the
+        // moment they happen. Before this, a tutorial-only session's
+        // progress rode entirely on the page-hide save, whose HTTP PUT the
+        // browser aborts at tab close — the owner's "resets to tutorial"
+        // defect (see DEC-042 amendment).
+        let lastObservedTutorialSteps =
+          renderer.combat.diagnostics()?.tutorial?.stepsCompleted ?? 0;
+        let lastObservedLevel = renderer.combat.diagnostics()?.level ?? 1;
         window.addEventListener("rarpg:combat-hud", (event) => {
           const hud = (event as CustomEvent<CombatHudReadModel>).detail;
           const died = !lastObservedPlayerDead && hud.playerDead;
           lastObservedPlayerDead = hud.playerDead;
+          const banked =
+            hud.tutorial !== null &&
+            hud.tutorial.stepsCompleted > lastObservedTutorialSteps;
+          if (hud.tutorial !== null) {
+            lastObservedTutorialSteps = hud.tutorial.stepsCompleted;
+          }
+          const leveled = hud.level > lastObservedLevel;
+          lastObservedLevel = hud.level;
           if (lastObservedZoneId === null) {
             lastObservedZoneId = hud.zoneId;
             return;
@@ -861,7 +900,7 @@ if (!support.supported) {
           const traveled = hud.zoneId !== lastObservedZoneId;
           lastObservedZoneId = hud.zoneId;
           if (!gameplayStarted) return;
-          if (traveled || died) persistCharacterQuietly();
+          if (traveled || died || banked || leveled) persistCharacterQuietly();
         });
         // TASK-710 save-at-respawn trigger (DEC-037): the presentation
         // adapter announces every accepted respawn. Same-zone respawns
@@ -883,6 +922,15 @@ if (!support.supported) {
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "hidden") persistOnHide();
         });
+        // TASK-719 autosave cadence: bounds progress loss to 30 seconds even
+        // when the page-hide save cannot land (the browser may destroy the
+        // document before an HTTP PUT dispatches). The fingerprint check in
+        // `persistCharacter` makes idle ticks free.
+        window.setInterval(() => {
+          if (!gameplayStarted) return;
+          if (renderer.combat.diagnostics()?.playerDead !== false) return;
+          persistCharacterQuietly();
+        }, 30_000);
 
         // Boot-time load resolves the Continue button (DEC-031 deferral):
         // corrupted or missing saves leave the button disabled, recovered

@@ -450,6 +450,38 @@ export function zoneById(id: ZoneId | ContentId): ZoneDefinition | undefined {
   return ZONE_CATALOG.find((zone) => zone.id === id);
 }
 
+/**
+ * Where a loaded character spawns (TASK-719, DEC-045): a character whose
+ * tutorial is complete NEVER spawns into the tutorial zone — a save that
+ * says "tutorial zone" (e.g. progress lost to an unlanded final save, or a
+ * post-completion revisit) resolves to the nearest town instead. The town is
+ * derived from zone data: the zone's DEC-037 respawn destination when that
+ * is a town, else the first portal that leads to a town (the tutorial exit
+ * road), else the first town in the catalog. Tutorial-incomplete characters
+ * and non-tutorial zones load exactly where they saved.
+ */
+export function loginSpawnZoneId(
+  savedZoneId: ZoneId,
+  tutorialComplete: boolean,
+): ZoneId {
+  if (!tutorialComplete || savedZoneId !== WAKESHORE_LANDING_ID) {
+    return savedZoneId;
+  }
+  const zone = zoneById(savedZoneId);
+  if (zone === undefined) return savedZoneId;
+  const respawn = zoneById(zone.respawnZoneId);
+  if (respawn !== undefined && respawn.kind === "town") {
+    return respawn.id;
+  }
+  for (const portal of zone.portals) {
+    const destination = zoneById(portal.destinationZoneId);
+    if (destination !== undefined && destination.kind === "town") {
+      return destination.id;
+    }
+  }
+  return ZONE_CATALOG.find((entry) => entry.kind === "town")?.id ?? savedZoneId;
+}
+
 export function vendorOfferById(
   id: ContentId,
 ): VendorOfferDefinition | undefined {
