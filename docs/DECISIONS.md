@@ -3541,6 +3541,17 @@ Hero Siege pattern of sweeping stored data and banning cheaters.
   reversibility); slot-limit and name-uniqueness semantics are untouched.
 - Rate limiting on `/auth/login` already throttles ban-status probing.
 
+## Amendment (2026-09-05, TASK-720)
+
+The owner mandated a web admin surface (homepage admin panel for bans,
+news, and other tooling), which supersedes decision point 4's "scripts
+only, no admin HTTP endpoints" stance. Ban/unban now ALSO exist as
+admin-gated HTTP endpoints; the CLIs remain and keep working. Granting
+the admin role itself stays CLI-only — no HTTP path may ever set
+`users.is_admin`. The admin model, its guard, and the security boundary
+are recorded in DEC-046. Everything else in this DEC (rejection logging,
+audit sweep, no auto-ban, manual deletion) stands unchanged.
+
 ---
 
 # DEC-045
@@ -3593,3 +3604,97 @@ origins) — it is a load rule, not an HTTP-flow rule.
   one portal hop away and this is the owner-preferred trade.
 - Unit coverage in `tests/unit/character-save.test.ts` pins the pure
   rule for every zone and both restore paths through the simulation.
+
+---
+
+# DEC-046
+
+## Admin accounts and the admin API surface: CLI-granted role, server-side guard, panel endpoints, news in the database
+
+Date: 2026-09-05 (TASK-720)
+
+## Context
+
+The owner wants their account to be an admin and wants a homepage admin
+page for banning, news updates, and other tools (TASK-721 builds the
+panel UI). DEC-044 deliberately had no admin HTTP surface; the owner's
+directive supersedes that (see the DEC-044 amendment). The news feed was
+a static repo file (`src/home/news.json`, DEC-035) that only a deploy
+could change — useless for a web admin panel.
+
+## Decision
+
+1. **Admin role on the user row** (`users.is_admin`, migration `0003`),
+   granted and revoked ONLY by CLI (`npm run promote-admin -- <emailOrId>`,
+   `npm run demote-admin -- <emailOrId>`, mirroring the ban/unban
+   scripts). There is deliberately no HTTP path that can set the role, so
+   a compromised admin session can never mint more admins. The scripts
+   run over SSH on the droplet inside the api container.
+2. **`requireAdmin` guard on top of the session hook.** The TASK-718 hook
+   already loads the user row on every authenticated request; the guard
+   just checks `isAdmin` there and answers 403 `admin-required`. The role
+   is never read from anything the client sends. Demotion takes effect on
+   the target's next request, same as bans. `GET /auth/session` now
+   returns an `isAdmin` flag so the UI can show/hide the admin entry
+   point — a display hint only; the server-side guard is the gate.
+3. **Admin endpoints** (all behind `requireAdmin`, in their own module
+   `server/src/admin-routes.ts` to keep app.ts churn low):
+   - `POST /admin/accounts/:id/ban` (body `{ reason }`) and
+     `POST /admin/accounts/:id/unban` — the DEC-044 semantics: live
+     sessions die on their next request, login answers 403, reversible.
+     Admin accounts are immune to the HTTP ban (409 `target-is-admin`;
+     demote via CLI first) so a stolen admin session cannot lock the
+     owner out of their own panel.
+   - `GET /admin/accounts?email=` — minimal account lookup for the panel:
+     id, createdAt, ban state, admin flag, characters (name/level/zone,
+     zone read from the stored blob). Never the password hash.
+   - `GET /admin/save-rejections?limit=` — the DEC-044 audit signal as
+     JSON: newest-first rejection rows plus per-account totals.
+   - News CRUD: `POST /admin/news`, `PUT /admin/news/:id`,
+     `DELETE /admin/news/:id`.
+4. **News moves from the static repo file to a `news` table** (id, title,
+   body, author, published_at; migration seeds the current news.json
+   entries so nothing disappears). Public `GET /news` (no auth) returns
+   entries newest-first with the same date/title/body fields the static
+   file had, plus id/author/publishedAt. Bodies are stored as plain
+   text/markdown; the server never renders them — every consumer (the
+   TASK-721 homepage and panel included) MUST escape on display, never
+   inject as HTML.
+
+## Alternatives Considered
+
+- **Role inside the session record or a signed client token:** rejected —
+  re-reading `users.is_admin` per request (already loaded for the ban
+  check) makes demotion immediate and keeps exactly one source of truth.
+- **HTTP endpoint to grant/revoke admin:** rejected permanently — role
+  grants are the one privilege escalation path, and SSH-gated CLI keeps
+  it off the network entirely.
+- **Admins bannable via the API:** rejected — the demote-then-ban
+  two-step (CLI + API) is deliberate friction against self-lockout and
+  stolen-session takeovers.
+- **A separate admin service/port:** rejected as overkill for one owner;
+  the guard plus CLI-only grants bound the added surface acceptably.
+- **Keeping news in the repo and editing via git:** rejected — the owner
+  wants to post news from the panel; the image's filesystem is immutable
+  at runtime.
+
+## Consequences
+
+- The DEC-044 "no admin HTTP surface" boundary is consciously traded for
+  the owner's operability: the new surface is bounded by CLI-only role
+  grants, the admin-immunity rule, and every state change sitting behind
+  `requireAdmin`.
+- TASK-721 must escape news titles/bodies when rendering (text nodes or
+  equivalent, never innerHTML) and swap the homepage from the news.json
+  import to `GET /news`; the static file stays in the repo until that
+  swap lands.
+- While wiring the surface, a production CORS bug was found and fixed
+  here: `@fastify/cors` v8+ defaults `Access-Control-Allow-Methods` to
+  GET/HEAD/POST, so browser preflights for the save `PUT` and character
+  `DELETE` failed cross-origin (client showed "account service
+  unavailable") while server-side tests, which skip preflights, stayed
+  green. The CORS registration now lists every served method and a
+  contract test pins the preflight response.
+- The contract suite covers the guard (401/403 per route), ban/unban via
+  API, the rejection log, the account lookup, news CRUD and ordering,
+  and the preflight — against MemoryStore and Postgres.
