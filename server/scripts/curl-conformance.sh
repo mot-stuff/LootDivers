@@ -41,6 +41,11 @@ status() {
   fi
 }
 
+# A shape-valid envelope with a bogus checksum. Since TASK-717 (DEC-043) the
+# server validates envelope CONTENTS on save, so this probe is rejected with
+# 422 checksum-mismatch — curl cannot sign a real save. The accepted-save
+# path (200) and the tamper matrix are covered by the contract test suite
+# (server/test/contract-suite.ts), which builds real signed envelopes.
 ENVELOPE='{"format":"rarpg-character-save","formatVersion":1,"saveId":"character:slot-1","revision":1,"createdAt":"2026-09-05T00:00:00.000Z","updatedAt":"2026-09-05T00:00:00.000Z","compatibility":{"build":"curl","contentSchemaVersion":1},"migrationProvenance":[],"payload":{"probe":true},"checksum":{"algorithm":"SHA-256","value":"abab"}}'
 
 check "GET /healthz" 200 "$(status "${JAR_A}" GET /healthz)"
@@ -60,13 +65,15 @@ check "create invalid class" 422 "$(status "${JAR_A}" POST /characters '{"name":
 check "list characters" 200 "$(status "${JAR_A}" GET /characters)"
 check "get character (envelope null)" 200 "$(status "${JAR_A}" GET "/characters/${CHARACTER_ID}")"
 
-check "save envelope" 200 "$(status "${JAR_A}" PUT "/characters/${CHARACTER_ID}/save" "{\"envelope\":${ENVELOPE},\"level\":3}")"
+check "save forged checksum rejected (DEC-043)" 422 "$(status "${JAR_A}" PUT "/characters/${CHARACTER_ID}/save" "{\"envelope\":${ENVELOPE},\"level\":3}")"
 check "save malformed envelope" 422 "$(status "${JAR_A}" PUT "/characters/${CHARACTER_ID}/save" '{"envelope":{"nope":true},"level":3}')"
 BIG_BLOB="$(head -c 1100000 /dev/zero | tr '\0' 'x')"
 check "save oversized envelope" 413 "$(status "${JAR_A}" PUT "/characters/${CHARACTER_ID}/save" "{\"envelope\":$(echo "${ENVELOPE}" | sed "s/{\"probe\":true}/{\"probe\":\"${BIG_BLOB}\"}/"),\"level\":3}")"
 
 check "ownership: B reads A's character" 404 "$(status "${JAR_B}" GET "/characters/${CHARACTER_ID}")"
-check "ownership: B saves A's character" 404 "$(status "${JAR_B}" PUT "/characters/${CHARACTER_ID}/save" "{\"envelope\":${ENVELOPE},\"level\":9}")"
+# Content validation precedes the ownership lookup, so an unsigned probe gets
+# 422 here too; B-with-a-VALID-envelope 404 is pinned by the contract suite.
+check "ownership: B saves A's character (unsigned probe)" 422 "$(status "${JAR_B}" PUT "/characters/${CHARACTER_ID}/save" "{\"envelope\":${ENVELOPE},\"level\":9}")"
 check "ownership: B deletes A's character" 404 "$(status "${JAR_B}" DELETE "/characters/${CHARACTER_ID}")"
 
 # Slot limit: A already has 1; three more fill the account, the fifth fails.

@@ -8,6 +8,21 @@ import type {
   UserRecord,
 } from "./store.js";
 
+/**
+ * Reads the envelope's client-side generation counter from a stored blob.
+ * Every stored blob passed the save route's validation (integer `revision`),
+ * so a null here only means "no save yet".
+ */
+function envelopeRevisionOf(envelope: unknown): number | null {
+  if (typeof envelope !== "object" || envelope === null) {
+    return null;
+  }
+  const revision = (envelope as Record<string, unknown>).revision;
+  return typeof revision === "number" && Number.isInteger(revision)
+    ? revision
+    : null;
+}
+
 interface MemoryCharacter {
   readonly id: string;
   readonly userId: string;
@@ -146,10 +161,19 @@ export class MemoryStore implements DataStore {
     characterId: string,
     envelope: unknown,
     level: number,
-  ): Promise<SaveResult | null> {
+    _formatVersion: number,
+    _checksum: string,
+    envelopeRevision: number,
+  ): Promise<SaveResult | "stale-revision" | null> {
     const character = this.#characters.get(characterId);
     if (character === undefined || character.userId !== userId) {
       return Promise.resolve(null);
+    }
+    // DEC-043 monotonicity guard, mirroring PgStore's SQL predicate: the
+    // stored blob's own `revision` field must be strictly below the new one.
+    const storedRevision = envelopeRevisionOf(character.envelope);
+    if (storedRevision !== null && envelopeRevision <= storedRevision) {
+      return Promise.resolve("stale-revision");
     }
     character.previousEnvelope = character.envelope;
     character.previousRevision =

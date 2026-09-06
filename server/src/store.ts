@@ -73,10 +73,13 @@ export interface DataStore {
     characterId: string,
   ): Promise<CharacterRecord | null>;
   /**
-   * Last-write-wins save. Rotates the current blob into the one-deep
-   * previous slot, stores the new envelope verbatim, bumps the server
-   * revision. Returns null when the character does not exist or is not
-   * owned by userId.
+   * Last-write-wins save with a monotonicity guard (TASK-717/DEC-043):
+   * when the stored blob already carries an envelope `revision` greater
+   * than or equal to `envelopeRevision`, the write is refused with
+   * "stale-revision" and nothing changes. Otherwise rotates the current
+   * blob into the one-deep previous slot, stores the new envelope
+   * verbatim, bumps the server revision. Returns null when the character
+   * does not exist or is not owned by userId.
    */
   saveCharacter(
     userId: string,
@@ -85,7 +88,8 @@ export interface DataStore {
     level: number,
     formatVersion: number,
     checksum: string,
-  ): Promise<SaveResult | null>;
+    envelopeRevision: number,
+  ): Promise<SaveResult | "stale-revision" | null>;
   /** Returns false when the character does not exist or is not owned. */
   deleteCharacter(userId: string, characterId: string): Promise<boolean>;
 

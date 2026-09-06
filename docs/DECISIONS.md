@@ -3275,3 +3275,135 @@ Continue, even on origins where no local play exists.
 - Copy that promised local play ("account server isn't available yet —
   you can still play") is gone; the unavailable message now says an
   account is needed.
+
+---
+
+# DEC-043
+
+## Server-side save validation: the API validates saves with the client's own core/persistence code
+
+Date: 2026-09-05 (TASK-717. DEC-042 lands with the parallel TASK-716 —
+entry numbers are planning-time IDs kept in numeric order, as with
+DEC-035/036/037 and DEC-040/041.)
+
+## Context
+
+Since TASK-707 the save endpoint stored an opaque client blob behind
+shape-and-size checks only, under DEC-032's explicit single-player trust
+model ("anti-cheat and server-side validation of save contents are out of
+scope until shared state exists"). DEC-040 then made accounts mandatory
+and server characters the only player-reachable progress, so any
+authenticated user could PUT a fabricated `CharacterSave` — a billion
+gold, level 999, impossible items — and the server would store and serve
+it. The owner wants forged saves rejected at the API boundary.
+
+## Decision
+
+1. **Every save write is decoded and validated server-side; rejections
+   are 4xx before storage.** `PUT /characters/:id/save` now runs three
+   layers after the existing shape/size checks (the TASK-707 1 MiB cap is
+   kept):
+   - **Envelope integrity:** the DEC-034 character codec verifies the
+     canonical-JSON SHA-256 checksum, the envelope shell, and the format
+     version (known versions only; v2+ → 422 `unsupported-version`,
+     tampered bytes → 422 `checksum-mismatch`).
+   - **State validity:** core's `parseCharacterSave` re-validates every
+     field against the content catalogs and bounds — gold 0..GOLD_MAX_TOTAL,
+     known zone/quest/tutorial enums, XP below the level's requirement,
+     profession curves, the 48-slot inventory layout and legal
+     equipment/flask slots, catalog-legal items (rarity, affix tiers,
+     unique-affix rules), non-negative integer generator positions —
+     plus one server-only plausibility invariant the client parser
+     leaves open: attribute and passive points held (allocated + unspent)
+     must not exceed the points the recorded level has earned under the
+     core progression formulas. Failures → 422 `invalid-save`. The `level`
+     list-metadata field must equal the save's progression level
+     (422 `level-mismatch`).
+   - **Revision monotonicity:** the envelope's client generation counter
+     must be strictly greater than the stored blob's (TASK-707 never
+     compared them). Enforced atomically inside the store write (SQL
+     predicate on `blob->>'revision'`; mirrored in `MemoryStore`);
+     violations → 409 `stale-revision`.
+2. **The validation code is the client's own, imported — not duplicated.**
+   `server/src/save-validation.ts` imports `src/core` and
+   `src/persistence` directly (option "a" of the task's seam choices).
+   This is sound because those two layers are already DOM-free by
+   CI-enforced construction: the root `tsconfig.core.json` /
+   `tsconfig.persistence.json` purity gates compile them with
+   `lib: ES2023, types: []`. The server supplies the one platform seam
+   the codec asks for: a `node:crypto` SHA-256 `ChecksumProvider`
+   byte-identical to the client's WebCrypto provider. There is no second
+   validator to drift; the contract suite proves client-signed saves
+   built with the real core simulation and codec are accepted, and each
+   tampered dimension (gold over cap, unearned points, illegal item
+   affix, forged checksum, unknown version, stale revision) is rejected.
+3. **Build consequence: the server ships as an esbuild bundle.** The
+   client sources use extensionless/`.ts` relative imports that tsc's
+   NodeNext emit cannot consume, so the server workspace switched from
+   `tsc` emit to `esbuild --bundle --packages=external` (dependencies
+   stay in `node_modules`; only repo-relative sources are bundled).
+   `tsc` remains the typecheck gate with `moduleResolution: Bundler`.
+   The Docker build context widened from `server/` to the repo root so
+   the image build can read `src/`; `server/Dockerfile`,
+   `server/docker-compose.yml`, the CI docker step, and a root
+   `.dockerignore` (allowlist) carry the change. Runtime layout, the
+   migrations autorun, and the deploy flow are unchanged.
+4. **Storage stays verbatim (DEC-032 unchanged on the read path).**
+   Validation happens on write only; accepted blobs are stored and
+   returned byte-for-byte, and migrations still run client-side. The
+   server never rewrites an envelope.
+
+## v1 anti-cheat boundary (explicit)
+
+This validates state **plausibility, not gameplay authenticity**. A
+client that simulates legal play offline — grinding kills, XP, gold at
+the core formulas' rates — can produce any legal state and the server
+will accept it, because the server does not witness the gameplay that
+earned it. What this closes is the trivial forgery class (impossible
+values, catalog-illegal items, unearned points, save rewinds). Full
+server authority (server-simulated combat/economy, or the DEC-032
+ledger extraction for gold) is a separate epic and remains deferred;
+whichever feature first introduces shared state must introduce
+server-authoritative handling of that state.
+
+## Alternatives Considered
+
+- **(b) Extracting a shared validation package:** rejected — the
+  validation surface is `parseCharacterSave` plus the codec, whose
+  import graph is effectively all of `src/core` (catalogs, progression,
+  professions, items, zones). "Extracting" it means moving core
+  wholesale into a package for zero behavioral gain; the purity gates
+  already guarantee the property a package boundary would add.
+- **(c) Duplicating the rules server-side with a drift-guard test:**
+  rejected — hundreds of bounds and catalog rules that change with every
+  content addition; the drift guard would be the whole validator again.
+- **Keeping tsc emit and porting core to NodeNext specifiers:** rejected
+  — churn across dozens of core files owned by other tasks, for the sake
+  of a build tool the bundle replaces anyway.
+- **Enforcing monotonicity on the server's own revision counter instead
+  of the envelope's:** rejected — the server counter is bumped by the
+  server itself, so it cannot detect a client replaying an old envelope;
+  the envelope's counter is what the DEC-014 machinery increments per
+  client write.
+
+## Consequences
+
+- A forged save is rejected with the contract error shape; the client's
+  `HttpSaveRepository` already maps 422 to a `corrupt` persistence error
+  (fire-and-forget saves warn on console, DEC-034 stance).
+- The stale-revision check closes cross-device rewind replays, but a
+  client whose successful PUT response is lost keeps re-sending the same
+  revision and gets 409 until its next load or reload resyncs
+  `#lastEnvelope` — at hobby scale an accepted, self-healing loss mode
+  (the DEC-032 one-deep history remains the recovery hatch).
+- `scripts/curl-conformance.sh` cannot sign a real envelope from bash;
+  its save rows now document the 422 rejection path, and the
+  accepted-save path is pinned by the contract suite instead.
+- Save-route latency gains one decode + parse of a ≤ 1 MiB envelope —
+  negligible against the argon2/IO costs the route already carries.
+- The server's dev script lost `--watch` (the strip-types runner cannot
+  resolve the client sources); `npm run dev` now bundles then runs.
+- Content additions that widen the catalogs automatically widen what the
+  server accepts — one validator, no server release skew risk beyond
+  ordinary deploy ordering (deploy the API before or with a client that
+  saves new content).

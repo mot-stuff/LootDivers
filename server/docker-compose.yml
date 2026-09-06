@@ -28,7 +28,11 @@ services:
       retries: 12
 
   api:
-    build: .
+    # Repo root context (TASK-717/DEC-043): the image bundles the client's
+    # src/core + src/persistence validation sources alongside server/src.
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     environment:
       NODE_ENV: production
