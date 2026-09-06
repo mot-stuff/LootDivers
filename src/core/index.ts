@@ -71,10 +71,7 @@ export {
   type CharacterSave,
   type CharacterSaveGenerators,
 } from "./character-save";
-export {
-  DISPLAYED_CLEAVE_BASE_DAMAGE,
-  displayedCleaveDamage,
-} from "./combat-power";
+export { displayedTotalDps } from "./combat-power";
 export {
   HIGHSCORE_LIMIT,
   rankHighscores,

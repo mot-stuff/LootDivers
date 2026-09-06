@@ -193,7 +193,7 @@ export function runContractSuite(
       expect(response.json()).toEqual({ status: "ok" });
     });
 
-    it("GET /highscores ranks by level then damage and hides banned accounts", async () => {
+    it("GET /highscores ranks by level then kit DPS and hides banned accounts", async () => {
       const empty = await app.inject({ method: "GET", url: "/highscores" });
       expect(empty.statusCode).toBe(200);
       expect(empty.json()).toEqual([]);
@@ -280,7 +280,7 @@ export function runContractSuite(
           name: string;
           class: string;
           level: number;
-          damage: number;
+          dps: number;
         }[]
       >();
       expect(rows.map((row) => row.name)).toEqual([
@@ -293,7 +293,7 @@ export function runContractSuite(
         class: "barbarian",
         level: 5,
       });
-      expect(rows[0]?.damage).toBeGreaterThan(rows[1]?.damage ?? 0);
+      expect(rows[0]?.dps).toBeGreaterThan(rows[1]?.dps ?? 0);
       expect(rows.some((row) => row.name === "Banned Boss")).toBe(false);
     });
 

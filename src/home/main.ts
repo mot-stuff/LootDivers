@@ -337,7 +337,7 @@ interface HighscoreRow {
   readonly name: string;
   readonly class: string;
   readonly level: number;
-  readonly damage: number;
+  readonly dps: number;
 }
 
 function isHighscoreRow(value: unknown): value is HighscoreRow {
@@ -348,7 +348,7 @@ function isHighscoreRow(value: unknown): value is HighscoreRow {
     typeof row["name"] === "string" &&
     typeof row["class"] === "string" &&
     typeof row["level"] === "number" &&
-    typeof row["damage"] === "number"
+    typeof row["dps"] === "number"
   );
 }
 
@@ -385,7 +385,7 @@ function renderHighscores(
     status.textContent = "No divers on the board yet. Be the first.";
     return;
   }
-  status.textContent = "Top 100 — ranked by level, then Cleave damage.";
+  status.textContent = "Top 100 — ranked by level, then total kit DPS.";
   for (const row of rows) {
     const item = document.createElement("li");
     item.className = "home-highscore-row";
@@ -404,7 +404,7 @@ function renderHighscores(
 
     const damage = document.createElement("span");
     damage.className = "home-highscore-damage";
-    damage.textContent = `${row.damage.toLocaleString("en-US")} dmg`;
+    damage.textContent = `${row.dps.toLocaleString("en-US")} DPS`;
 
     item.append(rank, name, level, damage);
     list.append(item);
