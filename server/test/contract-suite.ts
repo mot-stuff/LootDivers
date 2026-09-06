@@ -302,6 +302,7 @@ export function runContractSuite(
       expect(probe.json()).toEqual({
         userId: session.userId,
         email: "probe@example.test",
+        isAdmin: false,
       });
 
       const anonymous = await app.inject({
@@ -1089,6 +1090,543 @@ export function runContractSuite(
         headers: { cookie: session.cookie },
       });
       expect(unknown.statusCode).toBe(404);
+    });
+
+    // --- TASK-720 (DEC-046): admin surface, news, and the delete/CORS fix --
+
+    async function signupAdmin(email: string): Promise<Session> {
+      const session = await signup(email);
+      expect(await harness.store.setAdmin(session.userId, true)).toBe(true);
+      return session;
+    }
+
+    // The CORS preflight regression pin lives earlier in this suite (the
+    // main-branch hotfix and TASK-720 found the same bug independently).
+
+    it("deletes a character and its stored save for good (TASK-720 check)", async () => {
+      const session = await signup("deleter@example.test");
+      const id = await createCharacter(session, "Doomed Diver");
+      const seeded = await app.inject({
+        method: "PUT",
+        url: `/characters/${id}/save`,
+        headers: { cookie: session.cookie },
+        payload: {
+          envelope: await signedEnvelope(
+            simulationAtLevel(2).captureCharacterSave(),
+            1,
+          ),
+          level: 2,
+        },
+      });
+      expect(seeded.statusCode).toBe(200);
+
+      const removed = await app.inject({
+        method: "DELETE",
+        url: `/characters/${id}`,
+        headers: { cookie: session.cookie },
+      });
+      expect(removed.statusCode).toBe(204);
+
+      const gone = await app.inject({
+        method: "GET",
+        url: `/characters/${id}`,
+        headers: { cookie: session.cookie },
+      });
+      expect(gone.statusCode).toBe(404);
+
+      const list = await app.inject({
+        method: "GET",
+        url: "/characters",
+        headers: { cookie: session.cookie },
+      });
+      expect(list.json<readonly unknown[]>()).toHaveLength(0);
+
+      const again = await app.inject({
+        method: "DELETE",
+        url: `/characters/${id}`,
+        headers: { cookie: session.cookie },
+      });
+      expect(again.statusCode).toBe(404);
+    });
+
+    it("gates every admin route: 401 anonymous, 403 non-admin (TASK-720)", async () => {
+      const outsider = await signup("not-an-admin@example.test");
+      const zeroId = "00000000-0000-4000-8000-000000000000";
+      const routes = [
+        { method: "GET" as const, url: "/admin/accounts?email=x@example.test" },
+        { method: "POST" as const, url: `/admin/accounts/${zeroId}/ban` },
+        { method: "POST" as const, url: `/admin/accounts/${zeroId}/unban` },
+        { method: "GET" as const, url: "/admin/save-rejections" },
+        { method: "POST" as const, url: "/admin/news" },
+        { method: "PUT" as const, url: `/admin/news/${zeroId}` },
+        { method: "DELETE" as const, url: `/admin/news/${zeroId}` },
+      ];
+      for (const route of routes) {
+        const label = `${route.method} ${route.url}`;
+        const needsBody = route.method === "POST" || route.method === "PUT";
+        const anonymous = await app.inject(
+          needsBody ? { ...route, payload: {} } : route,
+        );
+        expect(anonymous.statusCode, label).toBe(401);
+
+        const forbidden = await app.inject({
+          ...(needsBody ? { ...route, payload: {} } : route),
+          headers: { cookie: outsider.cookie },
+        });
+        expect(forbidden.statusCode, label).toBe(403);
+        expect(
+          forbidden.json<{ error: { code: string } }>().error.code,
+          label,
+        ).toBe("admin-required");
+      }
+    });
+
+    it("exposes isAdmin through /auth/session; demotion closes the gate (TASK-720)", async () => {
+      const session = await signupAdmin("promoted@example.test");
+      const probe = await app.inject({
+        method: "GET",
+        url: "/auth/session",
+        headers: { cookie: session.cookie },
+      });
+      expect(probe.statusCode).toBe(200);
+      expect(probe.json()).toEqual({
+        userId: session.userId,
+        email: "promoted@example.test",
+        isAdmin: true,
+      });
+      const open = await app.inject({
+        method: "GET",
+        url: "/admin/save-rejections",
+        headers: { cookie: session.cookie },
+      });
+      expect(open.statusCode).toBe(200);
+
+      // Demotion (the CLI path) takes effect on the very next request.
+      expect(await harness.store.setAdmin(session.userId, false)).toBe(true);
+      const closed = await app.inject({
+        method: "GET",
+        url: "/admin/save-rejections",
+        headers: { cookie: session.cookie },
+      });
+      expect(closed.statusCode).toBe(403);
+      const demotedProbe = await app.inject({
+        method: "GET",
+        url: "/auth/session",
+        headers: { cookie: session.cookie },
+      });
+      expect(demotedProbe.json<{ isAdmin: boolean }>().isAdmin).toBe(false);
+    });
+
+    it("admin ban/unban endpoints mirror the CLI semantics (TASK-720)", async () => {
+      const admin = await signupAdmin("panel-admin@example.test");
+      const target = await signup(
+        "panel-target@example.test",
+        "panel target pw",
+      );
+
+      const emptyReason = await app.inject({
+        method: "POST",
+        url: `/admin/accounts/${target.userId}/ban`,
+        headers: { cookie: admin.cookie },
+        payload: { reason: "   " },
+      });
+      expect(emptyReason.statusCode).toBe(422);
+      expect(emptyReason.json<{ error: { code: string } }>().error.code).toBe(
+        "invalid-ban-reason",
+      );
+
+      const unknownAccount = await app.inject({
+        method: "POST",
+        url: "/admin/accounts/00000000-0000-4000-8000-000000000000/ban",
+        headers: { cookie: admin.cookie },
+        payload: { reason: "nobody" },
+      });
+      expect(unknownAccount.statusCode).toBe(404);
+
+      const banned = await app.inject({
+        method: "POST",
+        url: `/admin/accounts/${target.userId}/ban`,
+        headers: { cookie: admin.cookie },
+        payload: { reason: "panel test ban" },
+      });
+      expect(banned.statusCode).toBe(200);
+      const banBody = banned.json<{
+        id: string;
+        email: string;
+        bannedAt: string | null;
+        banReason: string | null;
+      }>();
+      expect(banBody.id).toBe(target.userId);
+      expect(banBody.email).toBe("panel-target@example.test");
+      expect(banBody.bannedAt).not.toBeNull();
+      expect(banBody.banReason).toBe("panel test ban");
+
+      // Same enforcement as the CLI ban: live session dies, login blocked.
+      const liveSession = await app.inject({
+        method: "GET",
+        url: "/characters",
+        headers: { cookie: target.cookie },
+      });
+      expect(liveSession.statusCode).toBe(403);
+      const login = await app.inject({
+        method: "POST",
+        url: "/auth/login",
+        payload: {
+          email: "panel-target@example.test",
+          password: "panel target pw",
+        },
+      });
+      expect(login.statusCode).toBe(403);
+      expect(login.json<{ error: { code: string } }>().error.code).toBe(
+        "account-banned",
+      );
+
+      // Admin accounts are immune over HTTP (demote via CLI first): a
+      // stolen admin session cannot lock the owner out.
+      const banAdmin = await app.inject({
+        method: "POST",
+        url: `/admin/accounts/${admin.userId}/ban`,
+        headers: { cookie: admin.cookie },
+        payload: { reason: "self-destruct" },
+      });
+      expect(banAdmin.statusCode).toBe(409);
+      expect(banAdmin.json<{ error: { code: string } }>().error.code).toBe(
+        "target-is-admin",
+      );
+
+      const unbanned = await app.inject({
+        method: "POST",
+        url: `/admin/accounts/${target.userId}/unban`,
+        headers: { cookie: admin.cookie },
+      });
+      expect(unbanned.statusCode).toBe(200);
+      expect(
+        unbanned.json<{ id: string; bannedAt: string | null }>(),
+      ).toMatchObject({ id: target.userId, bannedAt: null });
+
+      const loginAgain = await app.inject({
+        method: "POST",
+        url: "/auth/login",
+        payload: {
+          email: "panel-target@example.test",
+          password: "panel target pw",
+        },
+      });
+      expect(loginAgain.statusCode).toBe(200);
+      const sessionAgain = await app.inject({
+        method: "GET",
+        url: "/characters",
+        headers: { cookie: target.cookie },
+      });
+      expect(sessionAgain.statusCode).toBe(200);
+
+      const unbanUnknown = await app.inject({
+        method: "POST",
+        url: "/admin/accounts/00000000-0000-4000-8000-000000000000/unban",
+        headers: { cookie: admin.cookie },
+      });
+      expect(unbanUnknown.statusCode).toBe(404);
+    });
+
+    it("serves the save-rejection log with per-account counts (TASK-720)", async () => {
+      const admin = await signupAdmin("log-reader@example.test");
+      const target = await signup("logged-cheater@example.test");
+      const characterId = await createCharacter(target, "Logged Forger");
+      const base = await signedEnvelope(
+        simulationAtLevel(1).captureCharacterSave(),
+        1,
+      );
+      const rejected = await app.inject({
+        method: "PUT",
+        url: `/characters/${characterId}/save`,
+        headers: { cookie: target.cookie },
+        payload: {
+          envelope: await tamperedResigned(base, (draft) => {
+            characterOf(draft).gold = GOLD_MAX_TOTAL + 1;
+          }),
+          level: 1,
+        },
+      });
+      expect(rejected.statusCode).toBe(422);
+
+      const log = await app.inject({
+        method: "GET",
+        url: "/admin/save-rejections",
+        headers: { cookie: admin.cookie },
+      });
+      expect(log.statusCode).toBe(200);
+      const body = log.json<{
+        recent: readonly {
+          userId: string;
+          email: string;
+          characterId: string;
+          code: string;
+          createdAt: string;
+        }[];
+        counts: readonly { userId: string; email: string; count: number }[];
+      }>();
+      const row = body.recent.find((r) => r.userId === target.userId);
+      expect(row).toMatchObject({
+        email: "logged-cheater@example.test",
+        characterId,
+        code: "invalid-save",
+      });
+      expect(typeof row?.createdAt).toBe("string");
+      expect(body.counts.find((c) => c.userId === target.userId)).toMatchObject(
+        { email: "logged-cheater@example.test", count: 1 },
+      );
+
+      const limited = await app.inject({
+        method: "GET",
+        url: "/admin/save-rejections?limit=1",
+        headers: { cookie: admin.cookie },
+      });
+      expect(
+        limited.json<{ recent: readonly unknown[] }>().recent,
+      ).toHaveLength(1);
+      for (const bad of ["0", "-3", "abc", "9999"]) {
+        const invalid = await app.inject({
+          method: "GET",
+          url: `/admin/save-rejections?limit=${bad}`,
+          headers: { cookie: admin.cookie },
+        });
+        expect(invalid.statusCode, `limit=${bad}`).toBe(422);
+      }
+    });
+
+    it("admin account lookup returns flags and characters, never secrets (TASK-720)", async () => {
+      const admin = await signupAdmin("account-reader@example.test");
+      const player = await signup("sought-after@example.test");
+      const characterId = await createCharacter(player, "Zone Walker");
+
+      // Pre-save: the character line exists with a null zone.
+      const fresh = await app.inject({
+        method: "GET",
+        // Mixed case + uriencoding: the route normalizes like auth does.
+        url: "/admin/accounts?email=Sought-After%40Example.Test",
+        headers: { cookie: admin.cookie },
+      });
+      expect(fresh.statusCode).toBe(200);
+      interface LookupBody {
+        id: string;
+        email: string;
+        createdAt: string;
+        bannedAt: string | null;
+        banReason: string | null;
+        isAdmin: boolean;
+        characters: readonly {
+          id: string;
+          name: string;
+          level: number;
+          zoneId: string | null;
+          updatedAt: string;
+        }[];
+      }
+      const before = fresh.json<LookupBody>();
+      expect(before).toMatchObject({
+        id: player.userId,
+        email: "sought-after@example.test",
+        bannedAt: null,
+        banReason: null,
+        isAdmin: false,
+      });
+      expect(typeof before.createdAt).toBe("string");
+      expect(before.characters).toHaveLength(1);
+      expect(before.characters[0]).toMatchObject({
+        id: characterId,
+        name: "Zone Walker",
+        level: 1,
+        zoneId: null,
+      });
+      // The password hash never crosses the wire in any spelling.
+      const raw = fresh.body.toLowerCase();
+      expect(raw).not.toContain("password");
+      expect(raw).not.toContain("hash");
+
+      const save = simulationAtLevel(2).captureCharacterSave();
+      const seeded = await app.inject({
+        method: "PUT",
+        url: `/characters/${characterId}/save`,
+        headers: { cookie: player.cookie },
+        payload: { envelope: await signedEnvelope(save, 1), level: 2 },
+      });
+      expect(seeded.statusCode).toBe(200);
+
+      const after = await app.inject({
+        method: "GET",
+        url: "/admin/accounts?email=sought-after@example.test",
+        headers: { cookie: admin.cookie },
+      });
+      expect(after.json<LookupBody>().characters[0]).toMatchObject({
+        level: 2,
+        zoneId: save.zoneId,
+      });
+
+      const unknown = await app.inject({
+        method: "GET",
+        url: "/admin/accounts?email=nobody-here@example.test",
+        headers: { cookie: admin.cookie },
+      });
+      expect(unknown.statusCode).toBe(404);
+
+      for (const badQuery of ["", "?email=", "?email=not-an-email"]) {
+        const invalid = await app.inject({
+          method: "GET",
+          url: `/admin/accounts${badQuery}`,
+          headers: { cookie: admin.cookie },
+        });
+        expect(invalid.statusCode, badQuery).toBe(422);
+      }
+    });
+
+    it("news: public feed, admin CRUD, newest-first (TASK-720/DEC-046)", async () => {
+      const admin = await signupAdmin("news-editor@example.test");
+
+      const invalidCases: readonly {
+        label: string;
+        payload: Record<string, unknown>;
+        code: string;
+      }[] = [
+        { label: "empty body object", payload: {}, code: "invalid-news" },
+        {
+          label: "blank title",
+          payload: { title: "   ", body: "text" },
+          code: "invalid-news-title",
+        },
+        {
+          label: "blank body",
+          payload: { title: "Title", body: "" },
+          code: "invalid-news-body",
+        },
+        {
+          label: "oversized body",
+          payload: { title: "Title", body: "x".repeat(20_001) },
+          code: "invalid-news-body",
+        },
+        {
+          label: "bad publishedAt",
+          payload: { title: "Title", body: "text", publishedAt: "not-a-date" },
+          code: "invalid-news-published-at",
+        },
+        {
+          label: "blank author",
+          payload: { title: "Title", body: "text", author: " " },
+          code: "invalid-news-author",
+        },
+      ];
+      for (const testCase of invalidCases) {
+        const response = await app.inject({
+          method: "POST",
+          url: "/admin/news",
+          headers: { cookie: admin.cookie },
+          payload: testCase.payload,
+        });
+        expect(response.statusCode, testCase.label).toBe(422);
+        expect(
+          response.json<{ error: { code: string } }>().error.code,
+          testCase.label,
+        ).toBe(testCase.code);
+      }
+
+      interface NewsBody {
+        id: string;
+        date: string;
+        title: string;
+        body: string;
+        author: string;
+        publishedAt: string;
+      }
+      const olderResponse = await app.inject({
+        method: "POST",
+        url: "/admin/news",
+        headers: { cookie: admin.cookie },
+        payload: {
+          title: "Older patch notes",
+          body: "The **older** entry.",
+          publishedAt: "2026-09-01T00:00:00.000Z",
+        },
+      });
+      expect(olderResponse.statusCode).toBe(201);
+      const older = olderResponse.json<NewsBody>();
+      // Response stays close to the static news.json shape (date/title/body)
+      // so the TASK-721 homepage swap is mechanical.
+      expect(older).toMatchObject({
+        date: "2026-09-01",
+        title: "Older patch notes",
+        body: "The **older** entry.",
+        author: "Loot Divers Team",
+        publishedAt: "2026-09-01T00:00:00.000Z",
+      });
+
+      const newerResponse = await app.inject({
+        method: "POST",
+        url: "/admin/news",
+        headers: { cookie: admin.cookie },
+        payload: {
+          title: "Newer patch notes",
+          body: "The newer entry.",
+          author: "The Owner",
+          publishedAt: "2026-09-03T00:00:00.000Z",
+        },
+      });
+      expect(newerResponse.statusCode).toBe(201);
+      const newer = newerResponse.json<NewsBody>();
+      expect(newer.author).toBe("The Owner");
+
+      // The public feed needs no session and sorts newest-first.
+      const publicFeed = await app.inject({ method: "GET", url: "/news" });
+      expect(publicFeed.statusCode).toBe(200);
+      const mine = publicFeed
+        .json<readonly NewsBody[]>()
+        .filter((entry) => entry.id === older.id || entry.id === newer.id);
+      expect(mine.map((entry) => entry.title)).toEqual([
+        "Newer patch notes",
+        "Older patch notes",
+      ]);
+
+      // Update replaces title/body, keeps author/publishedAt when omitted.
+      const updated = await app.inject({
+        method: "PUT",
+        url: `/admin/news/${older.id}`,
+        headers: { cookie: admin.cookie },
+        payload: { title: "Older, revised", body: "Edited body." },
+      });
+      expect(updated.statusCode).toBe(200);
+      expect(updated.json<NewsBody>()).toMatchObject({
+        id: older.id,
+        title: "Older, revised",
+        body: "Edited body.",
+        author: "Loot Divers Team",
+        publishedAt: "2026-09-01T00:00:00.000Z",
+      });
+
+      const zeroId = "00000000-0000-4000-8000-000000000000";
+      const updateMissing = await app.inject({
+        method: "PUT",
+        url: `/admin/news/${zeroId}`,
+        headers: { cookie: admin.cookie },
+        payload: { title: "Ghost", body: "Ghost." },
+      });
+      expect(updateMissing.statusCode).toBe(404);
+      const deleteMissing = await app.inject({
+        method: "DELETE",
+        url: `/admin/news/${zeroId}`,
+        headers: { cookie: admin.cookie },
+      });
+      expect(deleteMissing.statusCode).toBe(404);
+
+      const removed = await app.inject({
+        method: "DELETE",
+        url: `/admin/news/${newer.id}`,
+        headers: { cookie: admin.cookie },
+      });
+      expect(removed.statusCode).toBe(204);
+      const afterDelete = await app.inject({ method: "GET", url: "/news" });
+      const ids = afterDelete
+        .json<readonly NewsBody[]>()
+        .map((entry) => entry.id);
+      expect(ids).not.toContain(newer.id);
+      expect(ids).toContain(older.id);
     });
   });
 }

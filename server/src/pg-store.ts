@@ -1,10 +1,15 @@
 import type pg from "pg";
 import type {
+  AccountSummary,
   AuditableCharacter,
   CharacterListRow,
   CharacterRecord,
   DataStore,
+  NewsDraft,
+  NewsEntryRecord,
+  NewsPatch,
   SaveRejectionCount,
+  SaveRejectionRow,
   SaveResult,
   SessionRecord,
   UserRecord,
@@ -29,6 +34,7 @@ interface UserRow {
   readonly password_hash: string;
   readonly banned_at: Date | null;
   readonly ban_reason: string | null;
+  readonly is_admin: boolean;
 }
 
 function toUserRecord(row: UserRow): UserRecord {
@@ -38,6 +44,25 @@ function toUserRecord(row: UserRow): UserRecord {
     passwordHash: row.password_hash,
     bannedAt: row.banned_at === null ? null : row.banned_at.toISOString(),
     banReason: row.ban_reason,
+    isAdmin: row.is_admin,
+  };
+}
+
+interface NewsRow {
+  readonly id: string;
+  readonly title: string;
+  readonly body: string;
+  readonly author: string;
+  readonly published_at: Date;
+}
+
+function toNewsRecord(row: NewsRow): NewsEntryRecord {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    author: row.author,
+    publishedAt: row.published_at.toISOString(),
   };
 }
 
@@ -76,6 +101,7 @@ export class PgStore implements DataStore {
         passwordHash,
         bannedAt: null,
         banReason: null,
+        isAdmin: false,
       };
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -87,7 +113,7 @@ export class PgStore implements DataStore {
 
   public async findUserByEmail(email: string): Promise<UserRecord | null> {
     const result = await this.#pool.query<UserRow>(
-      `select id, email, password_hash, banned_at, ban_reason
+      `select id, email, password_hash, banned_at, ban_reason, is_admin
        from users where email = $1`,
       [email],
     );
@@ -97,7 +123,7 @@ export class PgStore implements DataStore {
 
   public async findUserById(id: string): Promise<UserRecord | null> {
     const result = await this.#pool.query<UserRow>(
-      `select id, email, password_hash, banned_at, ban_reason
+      `select id, email, password_hash, banned_at, ban_reason, is_admin
        from users where id = $1`,
       [id],
     );
@@ -322,6 +348,136 @@ export class PgStore implements DataStore {
       email: row.email,
       count: Number.parseInt(row.count, 10),
     }));
+  }
+
+  public async setAdmin(userId: string, isAdmin: boolean): Promise<boolean> {
+    const result = await this.#pool.query(
+      `update users set is_admin = $2 where id = $1`,
+      [userId, isAdmin],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  public async listRecentSaveRejections(
+    limit: number,
+  ): Promise<readonly SaveRejectionRow[]> {
+    const result = await this.#pool.query<{
+      user_id: string;
+      email: string;
+      character_id: string;
+      code: string;
+      created_at: Date;
+    }>(
+      `select r.user_id, u.email, r.character_id, r.code, r.created_at
+       from save_rejections r
+       join users u on u.id = r.user_id
+       order by r.created_at desc, r.id desc
+       limit $1`,
+      [limit],
+    );
+    return result.rows.map((row) => ({
+      userId: row.user_id,
+      email: row.email,
+      characterId: row.character_id,
+      code: row.code,
+      createdAt: row.created_at.toISOString(),
+    }));
+  }
+
+  public async getAccountSummary(
+    email: string,
+  ): Promise<AccountSummary | null> {
+    const userResult = await this.#pool.query<{
+      id: string;
+      email: string;
+      created_at: Date;
+      banned_at: Date | null;
+      ban_reason: string | null;
+      is_admin: boolean;
+    }>(
+      `select id, email, created_at, banned_at, ban_reason, is_admin
+       from users where email = $1`,
+      [email],
+    );
+    const user = userResult.rows[0];
+    if (user === undefined) {
+      return null;
+    }
+    const characterResult = await this.#pool.query<{
+      id: string;
+      name: string;
+      level: number;
+      zone_id: string | null;
+      updated_at: Date;
+    }>(
+      `select id, name, level,
+              blob->'payload'->'character'->>'zoneId' as zone_id,
+              updated_at
+       from characters where user_id = $1 order by lower(name)`,
+      [user.id],
+    );
+    return {
+      id: user.id,
+      email: user.email,
+      createdAt: user.created_at.toISOString(),
+      bannedAt: user.banned_at === null ? null : user.banned_at.toISOString(),
+      banReason: user.ban_reason,
+      isAdmin: user.is_admin,
+      characters: characterResult.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        level: row.level,
+        zoneId: row.zone_id,
+        updatedAt: row.updated_at.toISOString(),
+      })),
+    };
+  }
+
+  public async listNews(): Promise<readonly NewsEntryRecord[]> {
+    const result = await this.#pool.query<NewsRow>(
+      `select id, title, body, author, published_at
+       from news order by published_at desc, created_at desc`,
+    );
+    return result.rows.map((row) => toNewsRecord(row));
+  }
+
+  public async createNews(draft: NewsDraft): Promise<NewsEntryRecord> {
+    const result = await this.#pool.query<NewsRow>(
+      `insert into news (title, body, author, published_at)
+       values ($1, $2, $3, coalesce($4::timestamptz, now()))
+       returning id, title, body, author, published_at`,
+      [draft.title, draft.body, draft.author, draft.publishedAt],
+    );
+    const row = result.rows[0];
+    if (row === undefined) {
+      throw new Error("Insert returned no row.");
+    }
+    return toNewsRecord(row);
+  }
+
+  public async updateNews(
+    id: string,
+    patch: NewsPatch,
+  ): Promise<NewsEntryRecord | null> {
+    const result = await this.#pool.query<NewsRow>(
+      `update news set
+         title        = $2,
+         body         = $3,
+         author       = coalesce($4, author),
+         published_at = coalesce($5::timestamptz, published_at)
+       where id = $1
+       returning id, title, body, author, published_at`,
+      [id, patch.title, patch.body, patch.author, patch.publishedAt],
+    );
+    const row = result.rows[0];
+    return row === undefined ? null : toNewsRecord(row);
+  }
+
+  public async deleteNews(id: string): Promise<boolean> {
+    const result = await this.#pool.query(`delete from news where id = $1`, [
+      id,
+    ]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   public async listCharactersForAudit(): Promise<

@@ -26,11 +26,10 @@ import {
   validateCharacterName,
 } from "./validation.js";
 import { validateSaveEnvelope } from "./save-validation.js";
+import { sendError, UUID_PATTERN } from "./http.js";
+import { registerAdminRoutes, registerNewsRoutes } from "./admin-routes.js";
 
 export const SESSION_COOKIE = "sid";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * PUT /characters/:id/save carries the enveloped character (≤ 1 MB by
@@ -60,15 +59,6 @@ function bannedMessage(user: UserRecord): string {
   return user.banReason === null || user.banReason === ""
     ? "This account has been banned."
     : `This account has been banned: ${user.banReason}`;
-}
-
-function sendError(
-  reply: FastifyReply,
-  status: number,
-  code: string,
-  message: string,
-): FastifyReply {
-  return reply.status(status).send({ error: { code, message } });
 }
 
 /**
@@ -209,6 +199,31 @@ export async function buildApp(
     return { userId: session.userId, tokenHash, user };
   }
 
+  /**
+   * TASK-720 (DEC-046): the admin gate on top of the session hook. The
+   * role comes from the user row the hook already loaded — never from
+   * anything the client sends. Non-admins get 403 admin-required.
+   */
+  async function requireAdmin(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<SessionInfo | null> {
+    const session = await requireSession(request, reply);
+    if (session === null) {
+      return null;
+    }
+    if (!session.user.isAdmin) {
+      await sendError(
+        reply,
+        403,
+        "admin-required",
+        "This action requires an administrator account.",
+      );
+      return null;
+    }
+    return session;
+  }
+
   interface CredentialsBody {
     readonly email?: unknown;
     readonly password?: unknown;
@@ -312,9 +327,13 @@ export async function buildApp(
     if (session === null) {
       return reply;
     }
-    return reply
-      .status(200)
-      .send({ userId: session.user.id, email: session.user.email });
+    return reply.status(200).send({
+      userId: session.user.id,
+      email: session.user.email,
+      // The UI uses this to show/hide the admin entry point; the real gate
+      // stays server-side in requireAdmin (DEC-046).
+      isAdmin: session.user.isAdmin,
+    });
   });
 
   app.get("/characters", async (request, reply) => {
@@ -545,6 +564,11 @@ export async function buildApp(
     await store.ping();
     return reply.status(200).send({ status: "ok" });
   });
+
+  // TASK-720 (DEC-046): public news feed + the admin panel API, kept in
+  // their own module so app.ts churn stays low for parallel tasks.
+  registerNewsRoutes(app, store);
+  registerAdminRoutes(app, { store, requireAdmin });
 
   return app;
 }

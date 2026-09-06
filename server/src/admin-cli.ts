@@ -1,16 +1,19 @@
 /**
- * Shared plumbing for the DEC-044 admin scripts (ban/unban). Scripts only —
- * there are deliberately NO admin HTTP endpoints, so banning adds zero
- * network attack surface (TASK-718).
+ * Shared plumbing for the admin CLIs (ban/unban per DEC-044,
+ * promote-admin/demote-admin per DEC-046).
+ *
+ * Since TASK-720 (DEC-046, amending DEC-044) ban/unban also exist as
+ * admin-gated HTTP endpoints for the owner's web panel — but GRANTING the
+ * admin role itself stays CLI-only, forever: these scripts run over SSH on
+ * infrastructure the owner controls, so a compromised admin session can
+ * never mint more admins.
  */
 import { createPool } from "./db.js";
 import { PgStore } from "./pg-store.js";
 import type { UserRecord } from "./store.js";
 import { normalizeEmail } from "./validation.js";
+import { UUID_PATTERN } from "./http.js";
 import type pg from "pg";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface AdminContext {
   readonly pool: pg.Pool;

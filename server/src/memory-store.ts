@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type {
+  AccountSummary,
+  AdminCharacterInfo,
   AuditableCharacter,
   CharacterListRow,
   CharacterRecord,
   DataStore,
+  NewsDraft,
+  NewsEntryRecord,
+  NewsPatch,
   SaveRejectionCount,
+  SaveRejectionRow,
   SaveResult,
   SessionRecord,
   UserRecord,
@@ -23,6 +29,26 @@ function envelopeRevisionOf(envelope: unknown): number | null {
   return typeof revision === "number" && Number.isInteger(revision)
     ? revision
     : null;
+}
+
+/**
+ * Reads payload.character.zoneId out of a stored blob for the admin account
+ * lookup — same navigation PgStore does with a jsonb path expression.
+ */
+function envelopeZoneOf(envelope: unknown): string | null {
+  if (typeof envelope !== "object" || envelope === null) {
+    return null;
+  }
+  const payload = (envelope as Record<string, unknown>).payload;
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+  const character = (payload as Record<string, unknown>).character;
+  if (typeof character !== "object" || character === null) {
+    return null;
+  }
+  const zoneId = (character as Record<string, unknown>).zoneId;
+  return typeof zoneId === "string" ? zoneId : null;
 }
 
 interface MemoryCharacter {
@@ -52,11 +78,22 @@ interface MemorySaveRejection {
   readonly createdAt: string;
 }
 
+interface MemoryUser extends UserRecord {
+  readonly createdAt: string;
+}
+
+interface MemoryNewsEntry extends NewsEntryRecord {
+  /** Insertion counter breaking publishedAt ties deterministically. */
+  readonly sequence: number;
+}
+
 export class MemoryStore implements DataStore {
-  readonly #users = new Map<string, UserRecord>();
+  readonly #users = new Map<string, MemoryUser>();
   readonly #sessions = new Map<string, SessionRecord>();
   readonly #characters = new Map<string, MemoryCharacter>();
   readonly #saveRejections: MemorySaveRejection[] = [];
+  readonly #news = new Map<string, MemoryNewsEntry>();
+  #newsSequence = 0;
   #now: () => string;
 
   public constructor(now: () => string = () => new Date().toISOString()) {
@@ -72,12 +109,14 @@ export class MemoryStore implements DataStore {
         return Promise.resolve("email-taken");
       }
     }
-    const record: UserRecord = {
+    const record: MemoryUser = {
       id: randomUUID(),
       email,
       passwordHash,
       bannedAt: null,
       banReason: null,
+      isAdmin: false,
+      createdAt: this.#now(),
     };
     this.#users.set(record.id, record);
     return Promise.resolve(record);
@@ -264,6 +303,108 @@ export class MemoryStore implements DataStore {
     return Promise.resolve(rows);
   }
 
+  public setAdmin(userId: string, isAdmin: boolean): Promise<boolean> {
+    const user = this.#users.get(userId);
+    if (user === undefined) {
+      return Promise.resolve(false);
+    }
+    this.#users.set(userId, { ...user, isAdmin });
+    return Promise.resolve(true);
+  }
+
+  public listRecentSaveRejections(
+    limit: number,
+  ): Promise<readonly SaveRejectionRow[]> {
+    const rows = [...this.#saveRejections]
+      .reverse()
+      .slice(0, limit)
+      .map((rejection) => ({
+        userId: rejection.userId,
+        email:
+          this.#users.get(rejection.userId)?.email ?? "(deleted account)",
+        characterId: rejection.characterId,
+        code: rejection.code,
+        createdAt: rejection.createdAt,
+      }));
+    return Promise.resolve(rows);
+  }
+
+  public getAccountSummary(email: string): Promise<AccountSummary | null> {
+    for (const user of this.#users.values()) {
+      if (user.email !== email) {
+        continue;
+      }
+      const characters: AdminCharacterInfo[] = [...this.#characters.values()]
+        .filter((character) => character.userId === user.id)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((character) => ({
+          id: character.id,
+          name: character.name,
+          level: character.level,
+          zoneId: envelopeZoneOf(character.envelope),
+          updatedAt: character.updatedAt,
+        }));
+      return Promise.resolve({
+        id: user.id,
+        email: user.email,
+        createdAt: user.createdAt,
+        bannedAt: user.bannedAt,
+        banReason: user.banReason,
+        isAdmin: user.isAdmin,
+        characters,
+      });
+    }
+    return Promise.resolve(null);
+  }
+
+  public listNews(): Promise<readonly NewsEntryRecord[]> {
+    const rows = [...this.#news.values()]
+      .sort(
+        (a, b) =>
+          b.publishedAt.localeCompare(a.publishedAt) ||
+          b.sequence - a.sequence,
+      )
+      .map((entry) => this.#toNewsRecord(entry));
+    return Promise.resolve(rows);
+  }
+
+  public createNews(draft: NewsDraft): Promise<NewsEntryRecord> {
+    this.#newsSequence += 1;
+    const entry: MemoryNewsEntry = {
+      id: randomUUID(),
+      title: draft.title,
+      body: draft.body,
+      author: draft.author,
+      publishedAt: draft.publishedAt ?? this.#now(),
+      sequence: this.#newsSequence,
+    };
+    this.#news.set(entry.id, entry);
+    return Promise.resolve(this.#toNewsRecord(entry));
+  }
+
+  public updateNews(
+    id: string,
+    patch: NewsPatch,
+  ): Promise<NewsEntryRecord | null> {
+    const entry = this.#news.get(id);
+    if (entry === undefined) {
+      return Promise.resolve(null);
+    }
+    const updated: MemoryNewsEntry = {
+      ...entry,
+      title: patch.title,
+      body: patch.body,
+      author: patch.author ?? entry.author,
+      publishedAt: patch.publishedAt ?? entry.publishedAt,
+    };
+    this.#news.set(id, updated);
+    return Promise.resolve(this.#toNewsRecord(updated));
+  }
+
+  public deleteNews(id: string): Promise<boolean> {
+    return Promise.resolve(this.#news.delete(id));
+  }
+
   public listCharactersForAudit(): Promise<readonly AuditableCharacter[]> {
     const rows = [...this.#characters.values()]
       .filter((character) => character.envelope !== null)
@@ -303,6 +444,16 @@ export class MemoryStore implements DataStore {
       userId: character.userId,
       envelope: character.envelope,
       revision: character.revision,
+    };
+  }
+
+  #toNewsRecord(entry: MemoryNewsEntry): NewsEntryRecord {
+    return {
+      id: entry.id,
+      title: entry.title,
+      body: entry.body,
+      author: entry.author,
+      publishedAt: entry.publishedAt,
     };
   }
 }
